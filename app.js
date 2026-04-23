@@ -203,6 +203,7 @@
   function entrarModoShell(user) {
     mostrarEstado("shell");
     topbarData.textContent = dataHoje();
+    window._terraUser = user;
 
     // Setup DOM roda APENAS UMA VEZ — evita listeners duplicados
     // (Supabase pode disparar SIGNED_IN mais de uma vez no carregamento)
@@ -285,9 +286,18 @@
     }
 
     // Carregamento sob demanda
-    if (pageId === "faturamento") carregarOrcamentosSeNecessario();
-    if (pageId === "vendas")      carregarVendasSeNecessario();
-    if (pageId === "consolidado") carregarConsolidadoSeNecessario();
+    if (pageId === "faturamento")  carregarOrcamentosSeNecessario();
+    if (pageId === "vendas")       carregarVendasSeNecessario();
+    if (pageId === "consolidado")  carregarConsolidadoSeNecessario();
+    if (pageId === "notas")        esperarOrcamentosCarregados(renderNotas);
+    if (pageId === "recebimentos") esperarOrcamentosCarregados(renderRecebimentos);
+    if (pageId === "despesas")     carregarDespesasSeNecessario();
+    if (pageId === "movimentos")   esperarOrcamentosCarregados(renderLancamentos);
+    if (pageId === "custos_os")    esperarOrcamentosCarregados(renderCustosOS);
+    if (pageId === "entregas")     carregarEntregasSeNecessario();
+    if (pageId === "cfg_plano")      carregarPlanoContasSeNecessario();
+    if (pageId === "cfg_cfop")       carregarCfopSeNecessario();
+    if (pageId === "cfg_parametros") carregarParametros(window._terraUser);
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -390,6 +400,59 @@
     if (consAno) {
       consAno.addEventListener("change", renderConsolidado);
     }
+
+    // 4c/4d — filtros de telas baseadas em movimentos
+    ligarFiltros("nf-",  renderNotas);
+    ligarFiltros("rec-", renderRecebimentos);
+    ligarFiltros("mov-", renderLancamentos);
+    ligarFiltros("os-",  renderCustosOS);
+    ligarFiltros("ent-", renderEntregas);
+    ligarFiltros("desp-", renderDespesas);
+    ligarFiltros("pc-",  renderPlanoContas);
+    ligarFiltros("cf-",  renderCfop);
+
+    // Sub-navegação em Configuração
+    document.querySelectorAll(".config-card[data-subpage]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var alvo = btn.getAttribute("data-subpage");
+        if (alvo) showPage(alvo);
+      });
+    });
+    document.querySelectorAll("[data-goto]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        showPage(btn.getAttribute("data-goto"));
+      });
+    });
+
+    // Limpar Dados
+    document.querySelectorAll("[data-limpar]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        limparTabela(btn.getAttribute("data-limpar"));
+      });
+    });
+  }
+
+  function ligarFiltros(prefixo, renderFn) {
+    var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel"];
+    ids.forEach(function (suf) {
+      var el = document.getElementById(prefixo + suf);
+      if (!el) return;
+      var evt = el.tagName === "INPUT" && el.type !== "month" ? "input" : "change";
+      el.addEventListener(evt, renderFn);
+    });
+    var btn = document.getElementById(prefixo + "btn-limpar");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        ids.forEach(function (suf) {
+          var el = document.getElementById(prefixo + suf);
+          if (el) {
+            if (el.tagName === "SELECT") el.selectedIndex = 0;
+            else el.value = "";
+          }
+        });
+        renderFn();
+      });
+    }
   }
 
   function carregarOrcamentosSeNecessario() {
@@ -402,9 +465,10 @@
       .select("data, orcamento, nome, parceiro, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento")
       .order("data", { ascending: false });
 
-    // Puxa só o necessário para derivar Tipo por orçamento
+    // Puxa movimentos completos — serve 4a (derivação de Tipo) e 4c/4d
     var qMov = client.from("movimentos")
-      .select("orcamento, tipo, valor");
+      .select("id, data, orcamento, nome, tipo, natureza, valor, nota_fiscal, os, item, custo")
+      .order("data", { ascending: false });
 
     Promise.all([qOrc, qMov]).then(function (respostas) {
       var rOrc = respostas[0], rMov = respostas[1];
@@ -416,11 +480,25 @@
       }
 
       orcamentosLista = rOrc.data || [];
-      tipoPorOrcamento = derivarTipoPorOrcamento((rMov && rMov.data) || []);
+      movimentosCompletos = (rMov && rMov.data) || [];
+      tipoPorOrcamento = derivarTipoPorOrcamento(movimentosCompletos);
+      clientePorOrcamento = {};
+      orcamentosLista.forEach(function (r) { clientePorOrcamento[r.orcamento] = r.nome || null; });
       orcamentosCarregados = true;
       orcamentosCarregando = false;
       renderOrcamentos();
     });
+  }
+
+  var movimentosCompletos = [];
+  var clientePorOrcamento = {};
+
+  function esperarOrcamentosCarregados(cb) {
+    if (orcamentosCarregados) { cb(); return; }
+    if (!orcamentosCarregando) carregarOrcamentosSeNecessario();
+    var iv = setInterval(function () {
+      if (orcamentosCarregados) { clearInterval(iv); cb(); }
+    }, 150);
   }
 
   // Derivação: para cada orçamento, soma os valores de movimentos por tipo
@@ -709,6 +787,511 @@
       '</tr>'
     );
     consTbody.innerHTML = linhas.join("");
+  }
+
+  // =========================================================================
+  // 9. HELPERS comuns às telas 4c/4d/5
+  // =========================================================================
+
+  function matchBusca(busca, campos) {
+    if (!busca) return true;
+    var alvo = campos.map(function (c) { return c || ""; }).join(" ").toLowerCase();
+    return alvo.indexOf(busca) !== -1;
+  }
+
+  function valText(el, v) { if (el) el.textContent = v; }
+
+  function preencherTbody(tbody, linhas, colspan, vazio) {
+    if (!linhas.length) {
+      tbody.innerHTML = '<tr><td colspan="' + colspan + '" class="tbl-vazio">' + (vazio || "Nada bate com os filtros.") + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = linhas.join("");
+  }
+
+  // =========================================================================
+  // 10. NOTAS FISCAIS (4c) — movimentos natureza='Nota Fiscal'
+  // =========================================================================
+
+  function renderNotas() {
+    var tbody = document.getElementById("nf-tbody");
+    var busca = (document.getElementById("nf-busca").value || "").trim().toLowerCase();
+    var mes   = document.getElementById("nf-mes").value;
+
+    var filtrados = movimentosCompletos.filter(function (m) {
+      if (m.natureza !== "Nota Fiscal") return false;
+      if (mes && String(m.data || "").slice(0,7) !== mes) return false;
+      return matchBusca(busca, [m.orcamento, m.nome, m.nota_fiscal, m.os]);
+    });
+
+    var soma = 0;
+    filtrados.forEach(function (m) { soma += Number(m.valor || 0); });
+
+    valText(document.getElementById("nf-m-qtd"), fmtInt(filtrados.length));
+    valText(document.getElementById("nf-m-valor"), fmtBRL(soma));
+    valText(document.getElementById("nf-lbl"), filtrados.length + " NF");
+
+    preencherTbody(tbody, filtrados.map(function (m) {
+      return '<tr>' +
+        '<td>' + fmtData(m.data) + '</td>' +
+        '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
+        '<td>' + escHtml(m.nome || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.nota_fiscal || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.os || "—") + '</td>' +
+        '<td>' + escHtml(m.item || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+      '</tr>';
+    }), 7);
+  }
+
+  // =========================================================================
+  // 11. RECEBIMENTOS (4c) — movimentos natureza='Recebimento'
+  // =========================================================================
+
+  function renderRecebimentos() {
+    var tbody = document.getElementById("rec-tbody");
+    var busca = (document.getElementById("rec-busca").value || "").trim().toLowerCase();
+    var mes   = document.getElementById("rec-mes").value;
+
+    var filtrados = movimentosCompletos.filter(function (m) {
+      if (m.natureza !== "Recebimento") return false;
+      if (mes && String(m.data || "").slice(0,7) !== mes) return false;
+      return matchBusca(busca, [m.orcamento, m.nome, m.os]);
+    });
+
+    var soma = 0;
+    filtrados.forEach(function (m) { soma += Number(m.valor || 0); });
+
+    valText(document.getElementById("rec-m-qtd"), fmtInt(filtrados.length));
+    valText(document.getElementById("rec-m-valor"), fmtBRL(soma));
+    valText(document.getElementById("rec-lbl"), filtrados.length + " recebimentos");
+
+    preencherTbody(tbody, filtrados.map(function (m) {
+      return '<tr>' +
+        '<td>' + fmtData(m.data) + '</td>' +
+        '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
+        '<td>' + escHtml(m.nome || "—") + '</td>' +
+        '<td>' + badgeTipo(m.tipo || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.os || "—") + '</td>' +
+        '<td>' + escHtml(m.item || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+      '</tr>';
+    }), 7);
+  }
+
+  // =========================================================================
+  // 12. DESPESAS (4c) — receitas_custos categoria='custo'
+  // =========================================================================
+
+  function carregarDespesasSeNecessario() {
+    if (rcCarregado) { renderDespesas(); return; }
+    if (rcCarregando) return;
+    carregarConsolidadoSeNecessario();
+    var iv = setInterval(function () {
+      if (rcCarregado) { clearInterval(iv); renderDespesas(); }
+    }, 150);
+  }
+
+  function renderDespesas() {
+    var tbody = document.getElementById("desp-tbody");
+    var busca = (document.getElementById("desp-busca").value || "").trim().toLowerCase();
+    var ano   = document.getElementById("desp-ano").value;
+    var mes   = document.getElementById("desp-mes").value;
+
+    var filtrados = rcLista.filter(function (r) {
+      if (r.categoria !== "custo") return false;
+      if (ano && String(r.ano) !== ano) return false;
+      if (mes && String(r.mes) !== mes) return false;
+      return matchBusca(busca, [r.subcategoria]);
+    });
+
+    var soma = 0;
+    filtrados.forEach(function (r) { soma += Number(r.valor || 0); });
+
+    valText(document.getElementById("desp-m-qtd"), fmtInt(filtrados.length));
+    valText(document.getElementById("desp-m-valor"), fmtBRL(soma));
+    valText(document.getElementById("desp-lbl"), filtrados.length + " lançamentos");
+
+    filtrados.sort(function (a, b) {
+      if (a.ano !== b.ano) return b.ano - a.ano;
+      return b.mes - a.mes;
+    });
+
+    var nomeMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+    preencherTbody(tbody, filtrados.map(function (r) {
+      return '<tr>' +
+        '<td>' + r.ano + '</td>' +
+        '<td>' + nomeMes[r.mes - 1] + '</td>' +
+        '<td>' + escHtml(r.subcategoria || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(r.valor) + '</td>' +
+      '</tr>';
+    }), 4);
+  }
+
+  // =========================================================================
+  // 13. LANÇAMENTOS (4c) — todos os movimentos
+  // =========================================================================
+
+  function renderLancamentos() {
+    var tbody = document.getElementById("mov-tbody");
+    var busca     = (document.getElementById("mov-busca").value || "").trim().toLowerCase();
+    var natureza  = document.getElementById("mov-natureza").value;
+    var tipo      = document.getElementById("mov-tipo").value;
+    var mes       = document.getElementById("mov-mes").value;
+
+    var filtrados = movimentosCompletos.filter(function (m) {
+      if (natureza && m.natureza !== natureza) return false;
+      if (tipo && m.tipo !== tipo) return false;
+      if (mes && String(m.data || "").slice(0,7) !== mes) return false;
+      return matchBusca(busca, [m.orcamento, m.nome, m.os, m.nota_fiscal, m.item]);
+    });
+
+    var soma = 0;
+    filtrados.forEach(function (m) { soma += Number(m.valor || 0); });
+
+    valText(document.getElementById("mov-m-qtd"), fmtInt(filtrados.length));
+    valText(document.getElementById("mov-m-valor"), fmtBRL(soma));
+    valText(document.getElementById("mov-lbl"), filtrados.length + " de " + movimentosCompletos.length);
+
+    var linhas = filtrados.slice(0, 500).map(function (m) {
+      return '<tr>' +
+        '<td>' + fmtData(m.data) + '</td>' +
+        '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
+        '<td>' + escHtml(m.nome || "—") + '</td>' +
+        '<td>' + badgeTipo(m.tipo || "—") + '</td>' +
+        '<td>' + escHtml(m.natureza || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.nota_fiscal || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.os || "—") + '</td>' +
+        '<td>' + escHtml(m.item || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+      '</tr>';
+    });
+    if (filtrados.length > 500) {
+      linhas.push('<tr><td colspan="9" class="tbl-vazio">… exibindo as primeiras 500 de ' + filtrados.length + '. Refine os filtros.</td></tr>');
+    }
+    preencherTbody(tbody, linhas, 9);
+  }
+
+  // =========================================================================
+  // 14. CUSTO POR OS (4d)
+  // =========================================================================
+
+  function renderCustosOS() {
+    var tbody = document.getElementById("os-tbody");
+    var busca = (document.getElementById("os-busca").value || "").trim().toLowerCase();
+
+    var porOS = {};
+    movimentosCompletos.forEach(function (m) {
+      var custo = Number(m.custo || 0);
+      if (!m.os || !custo) return;
+      var chave = m.os;
+      if (!porOS[chave]) porOS[chave] = { os: m.os, orcamento: m.orcamento, cliente: m.nome, count: 0, total: 0 };
+      porOS[chave].count++;
+      porOS[chave].total += custo;
+    });
+
+    var lista = Object.keys(porOS).map(function (k) { return porOS[k]; });
+    lista = lista.filter(function (o) {
+      return matchBusca(busca, [o.os, o.orcamento, o.cliente]);
+    });
+    lista.sort(function (a, b) { return b.total - a.total; });
+
+    var soma = 0;
+    lista.forEach(function (o) { soma += o.total; });
+
+    valText(document.getElementById("os-m-qtd"), fmtInt(lista.length));
+    valText(document.getElementById("os-m-valor"), fmtBRL(soma));
+    valText(document.getElementById("os-lbl"), lista.length + " OS");
+
+    preencherTbody(tbody, lista.map(function (o) {
+      return '<tr>' +
+        '<td class="mono">' + escHtml(o.os) + '</td>' +
+        '<td class="mono">' + escHtml(o.orcamento || "—") + '</td>' +
+        '<td>' + escHtml(o.cliente || "—") + '</td>' +
+        '<td class="num">' + fmtInt(o.count) + '</td>' +
+        '<td class="num destaque">' + fmtBRL(o.total) + '</td>' +
+      '</tr>';
+    }), 5, "Nenhum movimento com custo cadastrado.");
+  }
+
+  // =========================================================================
+  // 15. ENTREGAS PENDENTES (4d) — reconciliação Entrega S/ NF ↔ NF
+  // =========================================================================
+
+  var entregasVincCache = [];
+  var entregasVincCarregado = false;
+
+  function carregarEntregasSeNecessario() {
+    esperarOrcamentosCarregados(function () {
+      if (entregasVincCarregado) { renderEntregas(); return; }
+      client.from("entregas_vinc").select("mov_key, nf").then(function (r) {
+        entregasVincCache = (r.data || []);
+        entregasVincCarregado = true;
+        renderEntregas();
+      });
+    });
+  }
+
+  function movKey(m) {
+    // Conforme v9: orcamento|data|natureza|valor|os|item
+    return [m.orcamento || "", String(m.data || "").slice(0,10), m.natureza || "", String(Number(m.valor || 0)), m.os || "", m.item || ""].join("|");
+  }
+
+  function renderEntregas() {
+    var tbody = document.getElementById("ent-tbody");
+    var busca  = (document.getElementById("ent-busca").value || "").trim().toLowerCase();
+    var status = document.getElementById("ent-status").value;
+
+    var vincPorKey = {};
+    entregasVincCache.forEach(function (v) { vincPorKey[v.mov_key] = v.nf || "—"; });
+
+    var entregas = movimentosCompletos.filter(function (m) { return m.natureza === "Entrega S/ NF"; });
+
+    var enriquecidas = entregas.map(function (m) {
+      var k = movKey(m);
+      return {
+        mov: m,
+        key: k,
+        nf_vinculada: vincPorKey[k] || null
+      };
+    });
+
+    var pendentes = enriquecidas.filter(function (e) { return !e.nf_vinculada; });
+    var vinculadas = enriquecidas.filter(function (e) { return e.nf_vinculada; });
+
+    var filtrados = enriquecidas.filter(function (e) {
+      if (status === "pendente" && e.nf_vinculada) return false;
+      if (status === "vinculada" && !e.nf_vinculada) return false;
+      return matchBusca(busca, [e.mov.orcamento, e.mov.nome, e.mov.os, e.mov.item]);
+    });
+
+    var somaPendente = 0;
+    pendentes.forEach(function (e) { somaPendente += Number(e.mov.valor || 0); });
+
+    valText(document.getElementById("ent-m-pend"), fmtInt(pendentes.length));
+    valText(document.getElementById("ent-m-vinc"), fmtInt(vinculadas.length));
+    valText(document.getElementById("ent-m-valor"), fmtBRL(somaPendente));
+    valText(document.getElementById("ent-lbl"), filtrados.length + " de " + enriquecidas.length);
+
+    preencherTbody(tbody, filtrados.map(function (e) {
+      var m = e.mov;
+      var stTxt = e.nf_vinculada
+        ? '<span class="badge-tipo solta">vinculada</span>'
+        : '<span class="badge-tipo outras">pendente</span>';
+      return '<tr>' +
+        '<td>' + fmtData(m.data) + '</td>' +
+        '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
+        '<td>' + escHtml(m.nome || "—") + '</td>' +
+        '<td class="mono">' + escHtml(m.os || "—") + '</td>' +
+        '<td>' + escHtml(m.item || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+        '<td>' + stTxt + '</td>' +
+        '<td class="mono">' + escHtml(e.nf_vinculada || "—") + '</td>' +
+      '</tr>';
+    }), 8);
+  }
+
+  // =========================================================================
+  // 16. PLANO DE CONTAS (5)
+  // =========================================================================
+
+  var planoContas = [];
+  var pcCarregado = false;
+
+  function carregarPlanoContasSeNecessario() {
+    if (pcCarregado) { renderPlanoContas(); return; }
+    document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio">Carregando 510 contas…</td></tr>';
+    client.from("plano_contas").select("*").order("seq", { ascending: true }).then(function (r) {
+      if (r.error) {
+        document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      planoContas = r.data || [];
+      pcCarregado = true;
+
+      // Popular dropdown de grupos
+      var grupos = {};
+      planoContas.forEach(function (p) { if (p.grupo) grupos[p.grupo] = true; });
+      var sel = document.getElementById("pc-grupo");
+      Object.keys(grupos).sort().forEach(function (g) {
+        var opt = document.createElement("option");
+        opt.value = g; opt.textContent = g;
+        sel.appendChild(opt);
+      });
+
+      renderPlanoContas();
+    });
+  }
+
+  function renderPlanoContas() {
+    var tbody = document.getElementById("pc-tbody");
+    var busca = (document.getElementById("pc-busca").value || "").trim().toLowerCase();
+    var grupo = document.getElementById("pc-grupo").value;
+    var nivel = document.getElementById("pc-nivel").value;
+
+    var filtrados = planoContas.filter(function (p) {
+      if (grupo && p.grupo !== grupo) return false;
+      if (nivel && String(p.nivel) !== nivel) return false;
+      return matchBusca(busca, [p.cod_conta, p.descritivo, p.grupo, p.numero_conta]);
+    });
+
+    valText(document.getElementById("pc-lbl"), filtrados.length + " de " + planoContas.length);
+
+    preencherTbody(tbody, filtrados.map(function (p) {
+      return '<tr>' +
+        '<td class="num">' + fmtInt(p.seq) + '</td>' +
+        '<td class="num">' + fmtInt(p.nivel) + '</td>' +
+        '<td class="mono">' + escHtml(p.cod_conta) + '</td>' +
+        '<td class="mono">' + escHtml(p.numero_conta || "—") + '</td>' +
+        '<td>' + escHtml(p.descritivo) + '</td>' +
+        '<td>' + escHtml(p.grupo || "—") + '</td>' +
+        '<td>' + escHtml(p.dre || "—") + '</td>' +
+      '</tr>';
+    }), 7);
+  }
+
+  // =========================================================================
+  // 17. CFOP (5) — com toggle aplicavel
+  // =========================================================================
+
+  var cfopLista = [];
+  var cfopCarregado = false;
+
+  function carregarCfopSeNecessario() {
+    if (cfopCarregado) { renderCfop(); return; }
+    document.getElementById("cf-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando 590 CFOPs…</td></tr>';
+    client.from("cfop").select("*").order("cfop", { ascending: true }).then(function (r) {
+      if (r.error) {
+        document.getElementById("cf-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      cfopLista = r.data || [];
+      cfopCarregado = true;
+      renderCfop();
+    });
+  }
+
+  function renderCfop() {
+    var tbody = document.getElementById("cf-tbody");
+    var busca  = (document.getElementById("cf-busca").value || "").trim().toLowerCase();
+    var filtro = document.getElementById("cf-filtro").value;
+
+    var filtrados = cfopLista.filter(function (c) {
+      if (filtro === "aplicaveis" && !c.aplicavel) return false;
+      if (filtro === "nao" && c.aplicavel) return false;
+      return matchBusca(busca, [c.cfop, c.cfop_formatado, c.descricao, c.grupo]);
+    });
+
+    var apl = 0;
+    cfopLista.forEach(function (c) { if (c.aplicavel) apl++; });
+
+    valText(document.getElementById("cf-m-tot"), fmtInt(cfopLista.length));
+    valText(document.getElementById("cf-m-apl"), fmtInt(apl));
+    valText(document.getElementById("cf-m-nao"), fmtInt(cfopLista.length - apl));
+    valText(document.getElementById("cf-lbl"), filtrados.length + " códigos");
+
+    preencherTbody(tbody, filtrados.map(function (c) {
+      var checked = c.aplicavel ? "checked" : "";
+      return '<tr>' +
+        '<td class="mono">' + escHtml(c.cfop) + '</td>' +
+        '<td class="mono">' + escHtml(c.cfop_formatado || "—") + '</td>' +
+        '<td>' + escHtml(c.grupo || "—") + '</td>' +
+        '<td>' + escHtml(c.descricao || "—") + '</td>' +
+        '<td class="num"><input type="checkbox" class="cf-chk" data-id="' + c.id + '" ' + checked + ' /></td>' +
+      '</tr>';
+    }), 5);
+
+    // Ligar toggles
+    tbody.querySelectorAll(".cf-chk").forEach(function (chk) {
+      chk.addEventListener("change", function () {
+        var id = Number(chk.getAttribute("data-id"));
+        var novo = chk.checked;
+        chk.disabled = true;
+        client.from("cfop").update({ aplicavel: novo }).eq("id", id).then(function (r) {
+          chk.disabled = false;
+          if (r.error) {
+            chk.checked = !novo;
+            alert("Erro ao atualizar CFOP: " + r.error.message);
+            return;
+          }
+          // Atualiza cache local e métricas
+          cfopLista.forEach(function (c) { if (c.id === id) c.aplicavel = novo; });
+          var apl = 0;
+          cfopLista.forEach(function (c) { if (c.aplicavel) apl++; });
+          valText(document.getElementById("cf-m-apl"), fmtInt(apl));
+          valText(document.getElementById("cf-m-nao"), fmtInt(cfopLista.length - apl));
+        });
+      });
+    });
+  }
+
+  // =========================================================================
+  // 18. PARÂMETROS (5)
+  // =========================================================================
+
+  function carregarParametros(user) {
+    valText(document.getElementById("par-user"), (user && user.email) || "—");
+    valText(document.getElementById("par-email"), (user && user.email) || "—");
+    valText(document.getElementById("par-uid"),   (user && user.id) || "—");
+    valText(document.getElementById("par-url"),   cfg.SUPABASE_URL);
+    var host = window.location.hostname || "";
+    var env = host.indexOf("vercel.app") !== -1 ? "Produção (Vercel)" :
+              host === "localhost" || host === "127.0.0.1" ? "Local (dev)" :
+              host ? host : "Arquivo local";
+    valText(document.getElementById("par-env"), env);
+
+    // Perfil (já foi carregado na topbar)
+    var nomeTopbar = topbarNome.textContent || "";
+    var mPerfil = nomeTopbar.split("·")[1];
+    valText(document.getElementById("par-perfil"), (mPerfil || "—").trim());
+
+    // Contagens
+    valText(document.getElementById("par-cnt-orc"), orcamentosCarregados ? fmtInt(orcamentosLista.length) : "—");
+    valText(document.getElementById("par-cnt-mov"), orcamentosCarregados ? fmtInt(movimentosCompletos.length) : "—");
+    valText(document.getElementById("par-cnt-pc"), pcCarregado ? fmtInt(planoContas.length) : "—");
+    valText(document.getElementById("par-cnt-cf"), cfopCarregado ? fmtInt(cfopLista.length) : "—");
+  }
+
+  // =========================================================================
+  // 19. LIMPAR DADOS (5) — confirmação dupla
+  // =========================================================================
+
+  function limparTabela(tabela) {
+    var labels = {
+      movimentos:            "todos os movimentos",
+      notas_fiscais:         "todas as notas fiscais",
+      receitas_custos:       "todas as receitas e custos",
+      entregas_vinc:         "todos os vínculos Entrega↔NF",
+      classif_faturamento:   "todas as classificações manuais",
+      orcamentos:            "TODOS os orçamentos (cascata em movimentos, receitas/custos etc.)"
+    };
+
+    var lim = document.getElementById("lim-status");
+    function setSt(msg, tipo) {
+      lim.hidden = false;
+      lim.textContent = msg;
+      lim.className = "status " + (tipo || "");
+    }
+
+    if (!confirm("Tem certeza que quer apagar " + labels[tabela] + "?\n\nEsta ação é IRREVERSÍVEL."))  return;
+    var confirma = prompt('Digite exatamente a palavra APAGAR para confirmar.');
+    if (confirma !== "APAGAR") { setSt("Operação cancelada.", "alerta"); return; }
+
+    setSt("Apagando " + tabela + "…", "carregando");
+    client.from(tabela).delete().gt("id", 0).then(function (r) {
+      if (r.error) {
+        setSt("Erro: " + r.error.message, "erro");
+        return;
+      }
+      setSt("Tabela " + tabela + " limpa. Recarregue as páginas afetadas.", "ok");
+
+      // Invalidar caches relevantes
+      if (tabela === "movimentos" || tabela === "orcamentos") {
+        orcamentosCarregados = false; movimentosCompletos = []; orcamentosLista = [];
+      }
+      if (tabela === "receitas_custos") { rcCarregado = false; rcLista = []; }
+      if (tabela === "entregas_vinc") { entregasVincCarregado = false; entregasVincCache = []; }
+    });
   }
 
 })();

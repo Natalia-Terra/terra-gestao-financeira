@@ -309,13 +309,182 @@
             </div>
           </div>
         </section>
-        <section class="page" data-page="notas"         hidden><div class="page-header"><h1 class="page-title">Notas Fiscais</h1><p class="page-sub">NF emitidas</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="recebimentos"  hidden><div class="page-header"><h1 class="page-title">Recebimentos</h1><p class="page-sub">Entradas de caixa por orçamento</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="despesas"      hidden><div class="page-header"><h1 class="page-title">Despesas</h1><p class="page-sub">Custos lançados</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="movimentos"    hidden><div class="page-header"><h1 class="page-title">Lançamentos</h1><p class="page-sub">Movimentos financeiros</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="custos_os"     hidden><div class="page-header"><h1 class="page-title">Custo por OS</h1><p class="page-sub">Custo total agregado por Ordem de Serviço</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="entregas"      hidden><div class="page-header"><h1 class="page-title">Entregas pendentes</h1><p class="page-sub">Reconciliação Entrega S/NF ↔ NF</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="importacoes"   hidden><div class="page-header"><h1 class="page-title">Importar</h1><p class="page-sub">Carregar planilhas da Terra</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <!-- Notas Fiscais — 4c -->
+        <section class="page" data-page="notas" hidden>
+          <div class="page-header"><h1 class="page-title">Notas Fiscais</h1><p class="page-sub">NF emitidas — origem: movimentos com natureza "Nota Fiscal"</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="nf-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
+            <div class="metric-card"><div class="metric-label">Valor emitido</div><div class="metric-value" id="nf-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="nf-busca" placeholder="Buscar cliente, orçamento, NF ou OS…" />
+              <input type="month" id="nf-mes" />
+              <button class="btn-limpar" id="nf-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="nf-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>NF</th><th>OS</th><th>Item</th><th class="num">Valor</th></tr></thead>
+                <tbody id="nf-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Recebimentos — 4c -->
+        <section class="page" data-page="recebimentos" hidden>
+          <div class="page-header"><h1 class="page-title">Recebimentos</h1><p class="page-sub">Entradas de caixa — origem: movimentos com natureza "Recebimento"</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="rec-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
+            <div class="metric-card"><div class="metric-label">Valor recebido</div><div class="metric-value" id="rec-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="rec-busca" placeholder="Buscar cliente, orçamento ou OS…" />
+              <input type="month" id="rec-mes" />
+              <button class="btn-limpar" id="rec-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="rec-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>Tipo</th><th>OS</th><th>Item</th><th class="num">Valor</th></tr></thead>
+                <tbody id="rec-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Despesas — 4c -->
+        <section class="page" data-page="despesas" hidden>
+          <div class="page-header"><h1 class="page-title">Despesas</h1><p class="page-sub">Custos mensais — origem: receitas_custos com categoria "custo"</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Lançamentos</div><div class="metric-value" id="desp-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="desp-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="desp-busca" placeholder="Buscar subcategoria…" />
+              <select id="desp-ano">
+                <option value="">Todos os anos</option>
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+              <select id="desp-mes">
+                <option value="">Todos os meses</option>
+                <option value="1">Jan</option><option value="2">Fev</option><option value="3">Mar</option>
+                <option value="4">Abr</option><option value="5">Mai</option><option value="6">Jun</option>
+                <option value="7">Jul</option><option value="8">Ago</option><option value="9">Set</option>
+                <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
+              </select>
+              <button class="btn-limpar" id="desp-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="desp-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Ano</th><th>Mês</th><th>Subcategoria</th><th class="num">Valor</th></tr></thead>
+                <tbody id="desp-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Lançamentos (todos os movimentos) — 4c -->
+        <section class="page" data-page="movimentos" hidden>
+          <div class="page-header"><h1 class="page-title">Lançamentos</h1><p class="page-sub">Todos os movimentos financeiros registrados</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="mov-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
+            <div class="metric-card"><div class="metric-label">Soma</div><div class="metric-value" id="mov-m-valor">—</div><div class="metric-sub">valor no filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="mov-busca" placeholder="Buscar cliente, orçamento, OS, NF…" />
+              <select id="mov-natureza">
+                <option value="">Todas as naturezas</option>
+                <option value="Venda">Venda</option>
+                <option value="Adiantamento">Adiantamento</option>
+                <option value="Nota Fiscal">Nota Fiscal</option>
+                <option value="Recebimento">Recebimento</option>
+                <option value="Entrega S/ NF">Entrega S/ NF</option>
+                <option value="Venda S/ NF">Venda S/ NF</option>
+                <option value="Resultado Financeiro">Resultado Financeiro</option>
+                <option value="Outras Receitas">Outras Receitas</option>
+              </select>
+              <select id="mov-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Mobília Fixa">Mobília Fixa</option>
+                <option value="Mobília Solta">Mobília Solta</option>
+                <option value="Assistência Técnica">Assistência Técnica</option>
+                <option value="Outras Receitas">Outras Receitas</option>
+              </select>
+              <input type="month" id="mov-mes" />
+              <button class="btn-limpar" id="mov-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="mov-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>Tipo</th><th>Natureza</th><th>NF</th><th>OS</th><th>Item</th><th class="num">Valor</th></tr></thead>
+                <tbody id="mov-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Custo por OS — 4d -->
+        <section class="page" data-page="custos_os" hidden>
+          <div class="page-header"><h1 class="page-title">Custo por OS</h1><p class="page-sub">Custo agregado por Ordem de Serviço</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">OS distintas</div><div class="metric-value" id="os-m-qtd">—</div><div class="metric-sub">com custo &gt; 0</div></div>
+            <div class="metric-card"><div class="metric-label">Custo total</div><div class="metric-value" id="os-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="os-busca" placeholder="Buscar OS, orçamento ou cliente…" />
+              <button class="btn-limpar" id="os-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="os-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>OS</th><th>Orçamento</th><th>Cliente</th><th class="num">Movimentos</th><th class="num">Custo total</th></tr></thead>
+                <tbody id="os-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Entregas pendentes — 4d -->
+        <section class="page" data-page="entregas" hidden>
+          <div class="page-header"><h1 class="page-title">Entregas pendentes</h1><p class="page-sub">Entregas Sem NF — reconciliação com a emissão de NF</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="ent-m-pend">—</div><div class="metric-sub">sem NF vinculada</div></div>
+            <div class="metric-card"><div class="metric-label">Vinculadas</div><div class="metric-value" id="ent-m-vinc">—</div><div class="metric-sub">com NF em entregas_vinc</div></div>
+            <div class="metric-card"><div class="metric-label">Valor pendente</div><div class="metric-value" id="ent-m-valor">—</div><div class="metric-sub">das pendentes</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="ent-busca" placeholder="Buscar cliente, orçamento ou OS…" />
+              <select id="ent-status">
+                <option value="pendente">Apenas pendentes</option>
+                <option value="vinculada">Apenas vinculadas</option>
+                <option value="">Todas</option>
+              </select>
+              <button class="btn-limpar" id="ent-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="ent-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>OS</th><th>Item</th><th class="num">Valor</th><th>Status</th><th>NF vinc.</th></tr></thead>
+                <tbody id="ent-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Importar — placeholder, 4e próxima rodada -->
+        <section class="page" data-page="importacoes" hidden>
+          <div class="page-header"><h1 class="page-title">Importar</h1><p class="page-sub">Carregar planilhas da Terra</p></div>
+          <div class="stub">Upload e parse de planilhas virão na próxima rodada (Entrega 4e). Por enquanto, novos dados são carregados via chunks SQL.</div>
+        </section>
 
         <!-- Páginas stubs: RH (4) -->
         <section class="page" data-page="rh_funcionarios" hidden><div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro e histórico</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
@@ -323,8 +492,144 @@
         <section class="page" data-page="rh_folha"        hidden><div class="page-header"><h1 class="page-title">Folha de Pagamento</h1><p class="page-sub">Cálculo mensal</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
         <section class="page" data-page="rh_impostos"     hidden><div class="page-header"><h1 class="page-title">Impostos</h1><p class="page-sub">INSS, FGTS, IRRF, contribuições</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
 
-        <!-- Página stub: Configuração -->
-        <section class="page" data-page="configuracao" hidden><div class="page-header"><h1 class="page-title">Configuração</h1><p class="page-sub">Plano de Contas, CFOP, Usuários, Parâmetros</p></div><div class="stub">Conteúdo previsto para a Entrega 5.</div></section>
+        <!-- Configuração — hub com 5 sub-telas -->
+        <section class="page" data-page="configuracao" hidden>
+          <div class="page-header"><h1 class="page-title">Configuração</h1><p class="page-sub">Plano de Contas, CFOP, Parâmetros, Limpar Dados, Usuários</p></div>
+          <div class="config-grid">
+            <button class="config-card" type="button" data-subpage="cfg_plano">
+              <div class="config-card-title">Plano de Contas</div>
+              <div class="config-card-desc">Árvore contábil (510 contas, 5 níveis)</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_cfop">
+              <div class="config-card-title">CFOP</div>
+              <div class="config-card-desc">590 códigos fiscais · flag aplicável editável</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_parametros">
+              <div class="config-card-title">Parâmetros</div>
+              <div class="config-card-desc">Informações do sistema e sessão</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_limpar">
+              <div class="config-card-title">Limpar Dados</div>
+              <div class="config-card-desc">Apagar tabelas da Terra com confirmação</div>
+            </button>
+            <button class="config-card disabled" type="button" data-subpage="" disabled title="Próxima rodada">
+              <div class="config-card-title">Usuários</div>
+              <div class="config-card-desc">CRUD de logins (próxima rodada)</div>
+            </button>
+          </div>
+        </section>
+
+        <!-- Configuração > Plano de Contas — Entrega 5 -->
+        <section class="page" data-page="cfg_plano" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Plano de Contas</h1>
+            <p class="page-sub">510 contas · 5 níveis hierárquicos</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="pc-busca" placeholder="Buscar por código, descritivo ou grupo…" />
+              <select id="pc-grupo">
+                <option value="">Todos os grupos</option>
+              </select>
+              <select id="pc-nivel">
+                <option value="">Todos os níveis</option>
+                <option value="1">Nível 1</option>
+                <option value="2">Nível 2</option>
+                <option value="3">Nível 3</option>
+                <option value="4">Nível 4</option>
+                <option value="5">Nível 5</option>
+              </select>
+              <button class="btn-limpar" id="pc-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="pc-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Seq</th><th>Nível</th><th>Código</th><th>Nº Conta</th><th>Descritivo</th><th>Grupo</th><th>DRE</th></tr></thead>
+                <tbody id="pc-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > CFOP — Entrega 5 -->
+        <section class="page" data-page="cfg_cfop" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">CFOP</h1>
+            <p class="page-sub">590 códigos · marque os aplicáveis à Terra</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="cf-m-tot">—</div><div class="metric-sub">códigos no cadastro</div></div>
+            <div class="metric-card"><div class="metric-label">Aplicáveis</div><div class="metric-value" id="cf-m-apl">—</div><div class="metric-sub">flag TRUE</div></div>
+            <div class="metric-card"><div class="metric-label">Não aplicáveis</div><div class="metric-value" id="cf-m-nao">—</div><div class="metric-sub">flag FALSE</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="cf-busca" placeholder="Buscar código ou descrição…" />
+              <select id="cf-filtro">
+                <option value="">Todos</option>
+                <option value="aplicaveis">Apenas aplicáveis</option>
+                <option value="nao">Apenas não aplicáveis</option>
+              </select>
+              <button class="btn-limpar" id="cf-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="cf-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Código</th><th>Formatado</th><th>Grupo</th><th>Descrição</th><th class="num">Aplicável</th></tr></thead>
+                <tbody id="cf-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > Parâmetros — Entrega 5 -->
+        <section class="page" data-page="cfg_parametros" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Parâmetros</h1>
+            <p class="page-sub">Informações do sistema e da sessão atual</p>
+          </div>
+          <div class="card fat-card">
+            <dl class="param-list" id="par-dl">
+              <dt>Usuário logado</dt><dd id="par-user">—</dd>
+              <dt>Perfil</dt><dd id="par-perfil">—</dd>
+              <dt>Email</dt><dd id="par-email">—</dd>
+              <dt>User ID</dt><dd id="par-uid">—</dd>
+              <dt>Ambiente</dt><dd id="par-env">—</dd>
+              <dt>URL Supabase</dt><dd id="par-url">—</dd>
+              <dt>Registros — Orçamentos</dt><dd id="par-cnt-orc">—</dd>
+              <dt>Registros — Movimentos</dt><dd id="par-cnt-mov">—</dd>
+              <dt>Registros — Plano de Contas</dt><dd id="par-cnt-pc">—</dd>
+              <dt>Registros — CFOP</dt><dd id="par-cnt-cf">—</dd>
+              <dt>Versão do app</dt><dd>Entrega 4c+4d+5 (2026-04-23)</dd>
+            </dl>
+          </div>
+        </section>
+
+        <!-- Configuração > Limpar Dados — Entrega 5 -->
+        <section class="page" data-page="cfg_limpar" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Limpar Dados</h1>
+            <p class="page-sub">Ações destrutivas — cada uma exige confirmação dupla</p>
+          </div>
+          <div class="card fat-card">
+            <div class="danger-box">
+              <p><strong>Atenção.</strong> As ações abaixo apagam dados de forma permanente no Supabase da Terra. Não há lixeira — é irreversível. Não afeta <code>perfis</code> nem <code>auth.users</code>.</p>
+            </div>
+            <div class="limpar-grid">
+              <button class="btn-perigo" type="button" data-limpar="movimentos">Limpar Movimentos</button>
+              <button class="btn-perigo" type="button" data-limpar="notas_fiscais">Limpar Notas Fiscais</button>
+              <button class="btn-perigo" type="button" data-limpar="receitas_custos">Limpar Receitas/Custos</button>
+              <button class="btn-perigo" type="button" data-limpar="entregas_vinc">Limpar Vínculos Entrega↔NF</button>
+              <button class="btn-perigo" type="button" data-limpar="classif_faturamento">Limpar Classificações Manuais</button>
+              <button class="btn-perigo" type="button" data-limpar="orcamentos">Limpar Orçamentos</button>
+            </div>
+            <div id="lim-status" class="status" hidden role="status" aria-live="polite"></div>
+          </div>
+        </section>
 
       </main>
     </div>

@@ -609,6 +609,127 @@ h3 { font-size: 16px; }
 }
 
 /* =========================================================
+   CONFIGURAÇÃO — hub + sub-páginas
+   ========================================================= */
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.config-card {
+  background: var(--bg2);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  display: block;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.config-card:hover:not(.disabled) {
+  border-color: var(--ouro);
+  box-shadow: 0 2px 8px rgba(184, 134, 11, 0.08);
+  transform: translateY(-1px);
+}
+.config-card.disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.config-card-title {
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.config-card-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+.btn-voltar {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+/* =========================================================
+   PARÂMETROS — lista definição
+   ========================================================= */
+
+.param-list {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+.param-list dt {
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.param-list dd {
+  color: var(--text);
+  font-size: 13px;
+  margin: 0;
+  font-family: 'Menlo', 'Consolas', monospace;
+  word-break: break-word;
+}
+
+/* =========================================================
+   LIMPAR DADOS
+   ========================================================= */
+
+.danger-box {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.danger-box code {
+  background: rgba(139, 32, 32, .08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.limpar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.btn-perigo {
+  background: var(--bg2);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  transition: background .15s;
+}
+.btn-perigo:hover {
+  background: var(--danger-bg);
+}
+
+/* CFOP — checkbox inline */
+.cf-chk {
+  cursor: pointer;
+  accent-color: var(--ouro);
+  width: 16px;
+  height: 16px;
+}
+
+/* =========================================================
    TABELA
    ========================================================= */
 
