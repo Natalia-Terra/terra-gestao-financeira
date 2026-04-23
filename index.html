@@ -159,9 +159,99 @@
           </details>
         </section>
 
-        <!-- Páginas stubs: Financeiro (9 — tudo menos dashboard) -->
-        <section class="page" data-page="consolidado"   hidden><div class="page-header"><h1 class="page-title">Visão Consolidada</h1><p class="page-sub">Faturamento, receita e custo — ano a ano e mês a mês</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
-        <section class="page" data-page="vendas"        hidden><div class="page-header"><h1 class="page-title">Vendas</h1><p class="page-sub">Orçamentos aprovados por parceiro</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <!-- Páginas stubs: Financeiro (7 restantes) -->
+        <!-- Página: Consolidado — Entrega 4b -->
+        <section class="page" data-page="consolidado" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Visão Consolidada</h1>
+            <p class="page-sub">Receita e custo mês a mês — fonte receitas_custos</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Ano:
+              <select id="cons-ano">
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+            </label>
+            <span class="toolbar-label" id="cons-lbl"></span>
+          </div>
+
+          <div class="grid-metrics" id="cons-metrics">
+            <div class="metric-card"><div class="metric-label">Receita do ano</div><div class="metric-value" id="cons-m-receita">—</div><div class="metric-sub">soma de receitas_custos</div></div>
+            <div class="metric-card"><div class="metric-label">Custo do ano</div><div class="metric-value" id="cons-m-custo">—</div><div class="metric-sub">soma de receitas_custos</div></div>
+            <div class="metric-card"><div class="metric-label">Resultado</div><div class="metric-value" id="cons-m-resultado">—</div><div class="metric-sub">receita − custo</div></div>
+            <div class="metric-card"><div class="metric-label">Margem</div><div class="metric-value" id="cons-m-margem">—</div><div class="metric-sub">resultado / receita</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th class="num">Receita</th>
+                    <th class="num">Custo</th>
+                    <th class="num">Resultado</th>
+                    <th class="num">Margem</th>
+                  </tr>
+                </thead>
+                <tbody id="cons-tbody">
+                  <tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Vendas — Entrega 4b -->
+        <section class="page" data-page="vendas" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Vendas</h1>
+            <p class="page-sub">Listagem de orçamentos — busca, mês e tipo</p>
+          </div>
+
+          <div class="grid-metrics" id="vend-metrics">
+            <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="vend-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
+            <div class="metric-card"><div class="metric-label">Vendido</div><div class="metric-value" id="vend-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
+            <div class="metric-card"><div class="metric-label">Ticket médio</div><div class="metric-value" id="vend-m-ticket">—</div><div class="metric-sub">vendido / qtd</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="vend-busca" placeholder="Buscar cliente, orçamento ou parceiro…" />
+              <input type="month" id="vend-mes" />
+              <select id="vend-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Mobília Fixa">Mobília Fixa</option>
+                <option value="Mobília Solta">Mobília Solta</option>
+                <option value="Assistência Técnica">Assistência Técnica</option>
+                <option value="Outras Receitas">Outras Receitas</option>
+              </select>
+              <button class="btn-limpar" id="vend-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="vend-lbl"></span>
+            </div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Orçamento</th>
+                    <th>Cliente</th>
+                    <th>Parceiro</th>
+                    <th>Tipo</th>
+                    <th class="num">Valor</th>
+                    <th>Mês Ref.</th>
+                  </tr>
+                </thead>
+                <tbody id="vend-tbody">
+                  <tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
         <!-- Página: Orçamentos (Gestão de Faturamento) — Entrega 4a -->
         <section class="page" data-page="faturamento" hidden>
           <div class="page-header">

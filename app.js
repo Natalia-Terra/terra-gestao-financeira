@@ -286,6 +286,8 @@
 
     // Carregamento sob demanda
     if (pageId === "faturamento") carregarOrcamentosSeNecessario();
+    if (pageId === "vendas")      carregarVendasSeNecessario();
+    if (pageId === "consolidado") carregarConsolidadoSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -365,6 +367,29 @@
       fatTipo.value = "";
       renderOrcamentos();
     });
+
+    // Vendas (reutiliza orcamentosLista carregado pela página Orçamentos)
+    var vendBusca     = document.getElementById("vend-busca");
+    var vendMes       = document.getElementById("vend-mes");
+    var vendTipo      = document.getElementById("vend-tipo");
+    var vendBtnLimpar = document.getElementById("vend-btn-limpar");
+    if (vendBusca) {
+      vendBusca.addEventListener("input",  renderVendas);
+      vendMes.addEventListener("change",   renderVendas);
+      vendTipo.addEventListener("change",  renderVendas);
+      vendBtnLimpar.addEventListener("click", function () {
+        vendBusca.value = "";
+        vendMes.value = "";
+        vendTipo.value = "";
+        renderVendas();
+      });
+    }
+
+    // Consolidado
+    var consAno = document.getElementById("cons-ano");
+    if (consAno) {
+      consAno.addEventListener("change", renderConsolidado);
+    }
   }
 
   function carregarOrcamentosSeNecessario() {
@@ -374,7 +399,7 @@
     fatTbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio">Carregando orçamentos e movimentos…</td></tr>';
 
     var qOrc = client.from("orcamentos")
-      .select("data, orcamento, nome, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento")
+      .select("data, orcamento, nome, parceiro, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento")
       .order("data", { ascending: false });
 
     // Puxa só o necessário para derivar Tipo por orçamento
@@ -512,6 +537,178 @@
     else if (/solta/i.test(tipo))    classe = "solta";
     else if (/assist/i.test(tipo))   classe = "assist";
     return '<span class="badge-tipo ' + classe + '">' + escHtml(tipo) + '</span>';
+  }
+
+  function mesRef(iso) {
+    // "2025-10-15" → "10/2025"
+    if (!iso) return "—";
+    var p = String(iso).slice(0,10).split("-");
+    if (p.length !== 3) return iso;
+    return p[1] + "/" + p[0];
+  }
+
+  // =========================================================================
+  // 7. PÁGINA VENDAS (Entrega 4b) — listagem + filtros
+  // =========================================================================
+
+  function carregarVendasSeNecessario() {
+    // Depende da mesma lista de orçamentos da página Orçamentos.
+    if (orcamentosCarregados) { renderVendas(); return; }
+    if (orcamentosCarregando) return;
+    // Dispara a carga (já cuida de chamar renderOrcamentos, mas não renderVendas).
+    carregarOrcamentosSeNecessario();
+    // Espera a carga concluir para renderizar Vendas.
+    var intervalo = setInterval(function () {
+      if (orcamentosCarregados) { clearInterval(intervalo); renderVendas(); }
+    }, 150);
+  }
+
+  function renderVendas() {
+    var vendBusca = document.getElementById("vend-busca");
+    var vendMes   = document.getElementById("vend-mes");
+    var vendTipo  = document.getElementById("vend-tipo");
+    var vendTbody = document.getElementById("vend-tbody");
+    var vendLbl   = document.getElementById("vend-lbl");
+    var mQtd      = document.getElementById("vend-m-qtd");
+    var mValor    = document.getElementById("vend-m-valor");
+    var mTicket   = document.getElementById("vend-m-ticket");
+
+    var busca = (vendBusca.value || "").trim().toLowerCase();
+    var mes   = vendMes.value;   // formato "YYYY-MM" ou ""
+    var tipo  = vendTipo.value;
+
+    var filtrados = orcamentosLista.filter(function (r) {
+      if (busca) {
+        var alvo = ((r.nome || "") + " " + (r.orcamento || "") + " " + (r.parceiro || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      if (mes && String(r.data || "").slice(0,7) !== mes) return false;
+      if (tipo && tipoPorOrcamento[r.orcamento] !== tipo) return false;
+      return true;
+    });
+
+    var soma = 0;
+    filtrados.forEach(function (r) { soma += Number(r.venda || 0); });
+
+    mQtd.textContent   = fmtInt(filtrados.length);
+    mValor.textContent = fmtBRL(soma);
+    mTicket.textContent = filtrados.length ? fmtBRL(soma / filtrados.length) : "—";
+    vendLbl.textContent = filtrados.length + " de " + orcamentosLista.length;
+
+    if (!filtrados.length) {
+      vendTbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhum orçamento bate com os filtros.</td></tr>';
+      return;
+    }
+
+    vendTbody.innerHTML = filtrados.map(function (r) {
+      var tipo = tipoPorOrcamento[r.orcamento] || "—";
+      return (
+        '<tr>' +
+          '<td>' + fmtData(r.data) + '</td>' +
+          '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+          '<td>' + escHtml(r.nome || "—") + '</td>' +
+          '<td>' + escHtml(r.parceiro || "—") + '</td>' +
+          '<td>' + badgeTipo(tipo) + '</td>' +
+          '<td class="num">' + fmtBRL(r.venda) + '</td>' +
+          '<td class="mono">' + mesRef(r.data) + '</td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  // =========================================================================
+  // 8. PÁGINA CONSOLIDADO (Entrega 4b) — receita × custo mês a mês
+  // =========================================================================
+
+  var rcCarregado = false;
+  var rcCarregando = false;
+  var rcLista = [];   // linhas de receitas_custos
+
+  function carregarConsolidadoSeNecessario() {
+    if (rcCarregado) { renderConsolidado(); return; }
+    if (rcCarregando) return;
+    rcCarregando = true;
+
+    var consTbody = document.getElementById("cons-tbody");
+    consTbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando receitas e custos…</td></tr>';
+
+    client.from("receitas_custos")
+      .select("ano, mes, categoria, valor")
+      .then(function (r) {
+        if (r.error) {
+          consTbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+          rcCarregando = false;
+          return;
+        }
+        rcLista = r.data || [];
+        rcCarregado = true;
+        rcCarregando = false;
+        renderConsolidado();
+      });
+  }
+
+  function renderConsolidado() {
+    var consAno = document.getElementById("cons-ano");
+    var consTbody = document.getElementById("cons-tbody");
+    var consLbl  = document.getElementById("cons-lbl");
+    var mReceita = document.getElementById("cons-m-receita");
+    var mCusto   = document.getElementById("cons-m-custo");
+    var mResult  = document.getElementById("cons-m-resultado");
+    var mMargem  = document.getElementById("cons-m-margem");
+
+    var ano = Number(consAno.value);
+    var doAno = rcLista.filter(function (r) { return Number(r.ano) === ano; });
+
+    // Agrupar por mês
+    var porMes = {};
+    for (var m = 1; m <= 12; m++) porMes[m] = { receita: 0, custo: 0 };
+    doAno.forEach(function (r) {
+      var m = Number(r.mes);
+      if (!porMes[m]) return;
+      if (r.categoria === "receita") porMes[m].receita += Number(r.valor || 0);
+      else if (r.categoria === "custo") porMes[m].custo += Number(r.valor || 0);
+    });
+
+    // Totais do ano
+    var totR = 0, totC = 0;
+    for (var mm = 1; mm <= 12; mm++) { totR += porMes[mm].receita; totC += porMes[mm].custo; }
+    var resultado = totR - totC;
+    var margem = totR > 0 ? (resultado / totR) : null;
+
+    mReceita.textContent = fmtBRL(totR);
+    mCusto.textContent   = fmtBRL(totC);
+    mResult.textContent  = fmtBRL(resultado);
+    mMargem.textContent  = margem === null ? "—" : (margem * 100).toFixed(1).replace(".", ",") + "%";
+    consLbl.textContent  = rcLista.length + " lançamento" + (rcLista.length === 1 ? "" : "s") + " em receitas_custos";
+
+    // Tabela mensal
+    var nomeMes = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    var linhas = [];
+    for (var i = 1; i <= 12; i++) {
+      var rr = porMes[i].receita, cc = porMes[i].custo;
+      var res = rr - cc;
+      var mrg = rr > 0 ? (res / rr * 100).toFixed(1).replace(".", ",") + "%" : "—";
+      linhas.push(
+        '<tr>' +
+          '<td>' + nomeMes[i-1] + '/' + String(ano).slice(2) + '</td>' +
+          '<td class="num">' + (rr ? fmtBRL(rr) : '—') + '</td>' +
+          '<td class="num">' + (cc ? fmtBRL(cc) : '—') + '</td>' +
+          '<td class="num ' + (res > 0 ? 'destaque' : '') + '">' + (rr || cc ? fmtBRL(res) : '—') + '</td>' +
+          '<td class="num">' + mrg + '</td>' +
+        '</tr>'
+      );
+    }
+    // Linha total
+    linhas.push(
+      '<tr class="tot">' +
+        '<td><strong>Ano ' + ano + '</strong></td>' +
+        '<td class="num"><strong>' + fmtBRL(totR) + '</strong></td>' +
+        '<td class="num"><strong>' + fmtBRL(totC) + '</strong></td>' +
+        '<td class="num destaque"><strong>' + fmtBRL(resultado) + '</strong></td>' +
+        '<td class="num"><strong>' + (margem === null ? "—" : (margem * 100).toFixed(1).replace(".", ",") + "%") + '</strong></td>' +
+      '</tr>'
+    );
+    consTbody.innerHTML = linhas.join("");
   }
 
 })();
