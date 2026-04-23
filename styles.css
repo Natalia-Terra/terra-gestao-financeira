@@ -525,3 +525,139 @@ h3 { font-size: 16px; }
   font-style: italic;
   text-align: center;
 }
+
+/* =========================================================
+   TOOLBAR (busca + filtros + ações)
+   ========================================================= */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.input-search {
+  flex: 1 1 260px;
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-search:focus {
+  outline: none;
+  border-color: var(--ouro);
+  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.15);
+}
+.toolbar select {
+  padding: 8px 10px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.toolbar select:focus { outline: none; border-color: var(--ouro); }
+.btn-limpar {
+  padding: 6px 12px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-limpar:hover {
+  color: var(--text);
+  background: var(--bg3);
+  border-color: var(--text3);
+}
+.toolbar-label {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+}
+
+/* =========================================================
+   TABELA
+   ========================================================= */
+
+.fat-card { padding: 16px 18px; }
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.tabela thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg3);
+  color: var(--text2);
+  font-weight: 700;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--borda2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tabela tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--borda);
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tabela tbody tr:nth-child(even) td { background: var(--bg2); }
+.tabela tbody tr:hover td { background: var(--bg3); }
+
+.tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabela .num.destaque { color: var(--ouro-esc); font-weight: 700; }
+.tabela .mono {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 11.5px;
+  color: var(--text2);
+}
+.tbl-vazio {
+  text-align: center;
+  color: var(--text3);
+  font-style: italic;
+  padding: 24px 10px;
+}
+.tbl-vazio.erro { color: var(--danger); font-style: normal; }
+
+/* Badge de Tipo */
+.badge-tipo {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge-tipo.fixa   { background: #E4D9C8; color: #6B4C1E; border-color: #C9B79A; }
+.badge-tipo.solta  { background: #FEF3E2; color: #7A4800; border-color: #E9C899; }
+.badge-tipo.assist { background: #E6EFF8; color: #1A4A7A; border-color: #AFC8DE; }
+.badge-tipo.outras { background: #EDE4D8; color: #A07840; border-color: var(--borda2); }
+.badge-tipo.vazio  { background: transparent; color: var(--text3); border-color: var(--borda); font-weight: 400; }

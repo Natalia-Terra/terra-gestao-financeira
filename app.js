@@ -204,6 +204,7 @@
 
     aplicarPreferenciaSidebar();
     ativarNavegacao();
+    ativarPaginaOrcamentos();
 
     // Busca perfil (nome + tipo) e preenche topbar
     client.from("perfis").select("nome, perfil").eq("id", user.id).single()
@@ -275,6 +276,9 @@
       var grupo = alvo.closest(".sb-group");
       if (grupo) grupo.classList.add("aberto");
     }
+
+    // Carregamento sob demanda
+    if (pageId === "faturamento") carregarOrcamentosSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -321,6 +325,186 @@
       setDashStatus(null);
       setDebug(debug);
     });
+  }
+
+  // =========================================================================
+  // 6. PÁGINA ORÇAMENTOS (Entrega 4a) — Gestão de Faturamento
+  // =========================================================================
+
+  var orcamentosCarregados = false;
+  var orcamentosCarregando = false;
+  var orcamentosLista = [];        // linhas da tabela orcamentos
+  var tipoPorOrcamento = {};       // { "24-001": "Mobília Fixa", ... }
+
+  var fatBusca     = document.getElementById("fat-busca");
+  var fatStatus    = document.getElementById("fat-status");
+  var fatTipo      = document.getElementById("fat-tipo");
+  var fatBtnLimpar = document.getElementById("fat-btn-limpar");
+  var fatTbody     = document.getElementById("fat-tbody");
+  var fatLbl       = document.getElementById("fat-lbl");
+  var fatMQtd      = document.getElementById("fat-m-qtd");
+  var fatMVenda    = document.getElementById("fat-m-venda");
+  var fatMAFat     = document.getElementById("fat-m-afaturar");
+  var fatMARec     = document.getElementById("fat-m-areceber");
+
+  function ativarPaginaOrcamentos() {
+    if (!fatBusca) return;
+    fatBusca.addEventListener("input",  renderOrcamentos);
+    fatStatus.addEventListener("change", renderOrcamentos);
+    fatTipo.addEventListener("change",   renderOrcamentos);
+    fatBtnLimpar.addEventListener("click", function () {
+      fatBusca.value = "";
+      fatStatus.value = "abertos";
+      fatTipo.value = "";
+      renderOrcamentos();
+    });
+  }
+
+  function carregarOrcamentosSeNecessario() {
+    if (orcamentosCarregados || orcamentosCarregando) return;
+    orcamentosCarregando = true;
+
+    fatTbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio">Carregando orçamentos e movimentos…</td></tr>';
+
+    var qOrc = client.from("orcamentos")
+      .select("data, orcamento, nome, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento")
+      .order("data", { ascending: false });
+
+    // Puxa só o necessário para derivar Tipo por orçamento
+    var qMov = client.from("movimentos")
+      .select("orcamento, tipo, valor");
+
+    Promise.all([qOrc, qMov]).then(function (respostas) {
+      var rOrc = respostas[0], rMov = respostas[1];
+
+      if (rOrc.error) {
+        fatTbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio erro">Erro ao carregar orçamentos: ' + rOrc.error.message + '</td></tr>';
+        orcamentosCarregando = false;
+        return;
+      }
+
+      orcamentosLista = rOrc.data || [];
+      tipoPorOrcamento = derivarTipoPorOrcamento((rMov && rMov.data) || []);
+      orcamentosCarregados = true;
+      orcamentosCarregando = false;
+      renderOrcamentos();
+    });
+  }
+
+  // Derivação: para cada orçamento, soma os valores de movimentos por tipo
+  // e o Tipo dominante (maior soma) vence. Ignora tipos vazios.
+  function derivarTipoPorOrcamento(movimentos) {
+    var somaPorOrcTipo = {};
+    movimentos.forEach(function (m) {
+      if (!m.orcamento || !m.tipo) return;
+      if (!somaPorOrcTipo[m.orcamento]) somaPorOrcTipo[m.orcamento] = {};
+      somaPorOrcTipo[m.orcamento][m.tipo] = (somaPorOrcTipo[m.orcamento][m.tipo] || 0) + Number(m.valor || 0);
+    });
+
+    var mapa = {};
+    Object.keys(somaPorOrcTipo).forEach(function (orc) {
+      var tipos = somaPorOrcTipo[orc];
+      var melhor = null, melhorValor = -Infinity;
+      Object.keys(tipos).forEach(function (t) {
+        if (tipos[t] > melhorValor) { melhor = t; melhorValor = tipos[t]; }
+      });
+      mapa[orc] = melhor;
+    });
+    return mapa;
+  }
+
+  function filtrarOrcamentos() {
+    var busca  = (fatBusca.value || "").trim().toLowerCase();
+    var status = fatStatus.value;
+    var tipo   = fatTipo.value;
+
+    return orcamentosLista.filter(function (r) {
+      // Busca
+      if (busca) {
+        var alvo = ((r.nome || "") + " " + (r.orcamento || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      // Tipo
+      if (tipo) {
+        if (tipoPorOrcamento[r.orcamento] !== tipo) return false;
+      }
+      // Status
+      var areceber = Number(r.a_receber || 0);
+      var afaturar = Number(r.a_faturar || 0);
+      if (status === "abertos") {
+        if (areceber <= 0.01 && afaturar <= 0.01) return false;
+      } else if (status === "ambos_liq") {
+        if (areceber > 0.01 || afaturar > 0.01) return false;
+      } else if (status === "rec_aberto") {
+        if (areceber <= 0.01) return false;
+      } else if (status === "fat_aberto") {
+        if (afaturar <= 0.01) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderOrcamentos() {
+    var filtrados = filtrarOrcamentos();
+
+    // Métricas
+    var mQtd = filtrados.length;
+    var mV = 0, mF = 0, mR = 0;
+    filtrados.forEach(function (r) {
+      mV += Number(r.venda || 0);
+      mF += Number(r.a_faturar || 0);
+      mR += Number(r.a_receber || 0);
+    });
+    fatMQtd.textContent   = fmtInt(mQtd);
+    fatMVenda.textContent = fmtBRL(mV);
+    fatMAFat.textContent  = fmtBRL(mF);
+    fatMARec.textContent  = fmtBRL(mR);
+    fatLbl.textContent    = mQtd + " de " + orcamentosLista.length + " orçamento" + (orcamentosLista.length === 1 ? "" : "s");
+
+    // Tabela
+    if (!filtrados.length) {
+      fatTbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio">Nenhum orçamento bate com os filtros.</td></tr>';
+      return;
+    }
+
+    var html = filtrados.map(function (r) {
+      var tipo = tipoPorOrcamento[r.orcamento] || "—";
+      return (
+        '<tr>' +
+          '<td>' + fmtData(r.data) + '</td>' +
+          '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+          '<td>' + escHtml(r.nome || "—") + '</td>' +
+          '<td>' + badgeTipo(tipo) + '</td>' +
+          '<td class="num">' + fmtBRL(r.venda) + '</td>' +
+          '<td class="num">' + fmtBRL(r.recebimento) + '</td>' +
+          '<td class="num ' + (Number(r.a_receber) > 0 ? 'destaque' : '') + '">' + fmtBRL(r.a_receber) + '</td>' +
+          '<td class="num">' + fmtBRL(r.nota_fiscal) + '</td>' +
+          '<td class="num ' + (Number(r.a_faturar) > 0 ? 'destaque' : '') + '">' + fmtBRL(r.a_faturar) + '</td>' +
+        '</tr>'
+      );
+    }).join("");
+    fatTbody.innerHTML = html;
+  }
+
+  function fmtData(iso) {
+    if (!iso) return "—";
+    var partes = String(iso).slice(0,10).split("-");
+    if (partes.length !== 3) return iso;
+    return partes[2] + "/" + partes[1] + "/" + partes[0];
+  }
+  function escHtml(s) {
+    if (s === null || s === undefined) return "";
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+  function badgeTipo(tipo) {
+    if (!tipo || tipo === "—") return '<span class="badge-tipo vazio">—</span>';
+    var classe = "outras";
+    if (/fixa/i.test(tipo))          classe = "fixa";
+    else if (/solta/i.test(tipo))    classe = "solta";
+    else if (/assist/i.test(tipo))   classe = "assist";
+    return '<span class="badge-tipo ' + classe + '">' + escHtml(tipo) + '</span>';
   }
 
 })();
