@@ -13,20 +13,63 @@
       <p class="subtitulo">Sistema de Gestão de Faturamento e Receita</p>
     </header>
 
-    <section class="card">
-      <h2>Scaffold inicial — Entrega 1</h2>
-      <p>
-        Este é o ponto de partida da adaptação do v11 para a nuvem
-        (GitHub + Vercel + Supabase). Antes de portar a interface,
-        vamos confirmar que o tripé está conversando.
+    <!-- Estado de carregamento inicial (enquanto checa sessão) -->
+    <section id="card-carregando" class="card" hidden>
+      <p class="status carregando">Verificando sessão…</p>
+    </section>
+
+    <!-- Tela de login -->
+    <section id="card-login" class="card" hidden>
+      <h2>Entrar</h2>
+      <p class="card-desc">
+        Use o email e a senha cadastrados no Supabase da Terra.
       </p>
 
-      <button id="btn-testar" class="btn-ouro" type="button">
-        Testar conexão com o Supabase
-      </button>
+      <form id="form-login" novalidate>
+        <div class="form-field">
+          <label for="login-email">Email</label>
+          <input
+            type="email"
+            id="login-email"
+            name="email"
+            autocomplete="username"
+            required
+          />
+        </div>
 
-      <div id="status" class="status" role="status" aria-live="polite">
-        Pronto para testar.
+        <div class="form-field">
+          <label for="login-senha">Senha</label>
+          <input
+            type="password"
+            id="login-senha"
+            name="senha"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+
+        <div id="login-erro" class="status erro" hidden role="alert"></div>
+
+        <button type="submit" id="btn-entrar" class="btn-ouro">
+          Entrar
+        </button>
+      </form>
+    </section>
+
+    <!-- Stub de dashboard pós-login (Entrega 3 substitui por dashboard real) -->
+    <section id="card-dashboard" class="card" hidden>
+      <div class="dashboard-head">
+        <div>
+          <h2 id="dash-saudacao">Olá</h2>
+          <p class="card-desc" id="dash-perfil">—</p>
+        </div>
+        <button id="btn-sair" class="btn-secundario" type="button">
+          Sair
+        </button>
+      </div>
+
+      <div id="dash-status" class="status" role="status" aria-live="polite">
+        Consultando plano_contas…
       </div>
 
       <details class="debug">
@@ -36,7 +79,7 @@
     </section>
 
     <footer class="shell-footer">
-      Versão scaffold · Entrega 1 · 2026-04-23
+      Versão Entrega 2 · login + stub · 2026-04-23
     </footer>
   </main>
 

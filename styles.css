@@ -30,8 +30,9 @@
   --warn:       #7A4800; --warn-bg:    #FEF3E2;
   --info:       #1A4A7A; --info-bg:    #E6EFF8;
 
-  /* Borda sutil */
-  --borda: #D9CCB5;
+  /* Borda sutil (valores exatos do v11) */
+  --borda:  rgba(139,105,20,0.15);
+  --borda2: rgba(139,105,20,0.30);
 
   /* Raios */
   --r-sm: 4px;
@@ -95,6 +96,83 @@ h3 { font-size: 16px; }
 .card h2 {
   color: var(--text);
   margin-top: 0;
+}
+
+.card-desc {
+  color: var(--text2);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+/* ---------- Formulário de login ---------- */
+
+.form-field {
+  margin: 0 0 14px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  margin: 0 0 4px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: var(--ouro);
+  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.15);
+}
+
+/* ---------- Dashboard stub ---------- */
+
+.dashboard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dashboard-head > div:first-child {
+  flex: 1;
+}
+
+.btn-secundario {
+  background: var(--bg2);
+  color: var(--text2);
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn-secundario:hover:not(:disabled) {
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--text3);
+}
+
+.btn-secundario:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .btn-ouro {
