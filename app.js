@@ -198,13 +198,20 @@
   // 5. SHELL (pós-login): topbar + sidebar + router + dashboard
   // =========================================================================
 
+  var shellJaInicializado = false;
+
   function entrarModoShell(user) {
     mostrarEstado("shell");
     topbarData.textContent = dataHoje();
 
-    aplicarPreferenciaSidebar();
-    ativarNavegacao();
-    ativarPaginaOrcamentos();
+    // Setup DOM roda APENAS UMA VEZ — evita listeners duplicados
+    // (Supabase pode disparar SIGNED_IN mais de uma vez no carregamento)
+    if (!shellJaInicializado) {
+      aplicarPreferenciaSidebar();
+      ativarNavegacao();
+      ativarPaginaOrcamentos();
+      shellJaInicializado = true;
+    }
 
     // Busca perfil (nome + tipo) e preenche topbar
     client.from("perfis").select("nome, perfil").eq("id", user.id).single()

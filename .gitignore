@@ -1,5 +1,7 @@
-# Configuração local com URL e chave do Supabase — NUNCA commitar.
-config.js
+# config.js contém URL do Supabase + publishable key.
+# A publishable key é desenhada para ficar pública no frontend
+# (a segurança vem da RLS, não de a chave ser secreta), então é
+# seguro versionar. A secret key (sb_secret_…) NUNCA deve aparecer aqui.
 
 # Variáveis de ambiente
 .env
