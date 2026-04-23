@@ -7,85 +7,189 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="shell">
-    <header class="shell-header">
-      <h1>Terra Conttemporânea</h1>
-      <p class="subtitulo">Sistema de Gestão de Faturamento e Receita</p>
+
+  <!-- =========================================================
+       ESTADO 1 — carregando (antes de decidir sessão)
+       ========================================================= -->
+  <div id="boot-carregando" class="boot-tela">
+    <div class="boot-inner">Verificando sessão…</div>
+  </div>
+
+  <!-- =========================================================
+       ESTADO 2 — login (sem sessão)
+       ========================================================= -->
+  <div id="boot-login" class="boot-tela" hidden>
+    <main class="login-wrap">
+      <div class="login-brand">
+        <h1>Terra Conttemporânea</h1>
+        <p class="subtitulo">Sistema de Gestão de Faturamento e Receita</p>
+      </div>
+
+      <section class="card login-card">
+        <h2>Entrar</h2>
+        <p class="card-desc">Use o email e a senha cadastrados no Supabase da Terra.</p>
+
+        <form id="form-login" novalidate>
+          <div class="form-field">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" name="email" autocomplete="username" required />
+          </div>
+          <div class="form-field">
+            <label for="login-senha">Senha</label>
+            <input type="password" id="login-senha" name="senha" autocomplete="current-password" required />
+          </div>
+
+          <div id="login-erro" class="status erro" hidden role="alert"></div>
+
+          <button type="submit" id="btn-entrar" class="btn-ouro">Entrar</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       ESTADO 3 — shell da aplicação (autenticado)
+       ========================================================= -->
+  <div id="shell" hidden>
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="topbar-logo"><div class="topbar-logo-inner"></div></div>
+        <div class="topbar-brand-text">
+          <span class="topbar-brand-name">Terra Conttemporânea</span>
+          <span class="topbar-brand-sub">m ó v e i s</span>
+        </div>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-user">
+        <div class="topbar-user-avatar" id="topbar-avatar">·</div>
+        <span id="topbar-nome">—</span>
+        <button class="btn-sair" id="btn-sair" type="button" title="Sair">⎋</button>
+      </div>
+      <div class="topbar-data" id="topbar-data">—</div>
     </header>
 
-    <!-- Estado de carregamento inicial (enquanto checa sessão) -->
-    <section id="card-carregando" class="card" hidden>
-      <p class="status carregando">Verificando sessão…</p>
-    </section>
+    <!-- Layout: sidebar + main -->
+    <div class="layout">
 
-    <!-- Tela de login -->
-    <section id="card-login" class="card" hidden>
-      <h2>Entrar</h2>
-      <p class="card-desc">
-        Use o email e a senha cadastrados no Supabase da Terra.
-      </p>
-
-      <form id="form-login" novalidate>
-        <div class="form-field">
-          <label for="login-email">Email</label>
-          <input
-            type="email"
-            id="login-email"
-            name="email"
-            autocomplete="username"
-            required
-          />
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <button class="sidebar-toggle" id="btn-toggle-sidebar" title="Recolher / expandir" type="button">‹</button>
         </div>
 
-        <div class="form-field">
-          <label for="login-senha">Senha</label>
-          <input
-            type="password"
-            id="login-senha"
-            name="senha"
-            autocomplete="current-password"
-            required
-          />
+        <nav class="sidebar-nav">
+          <button class="sb-item" data-page="dashboard" type="button" title="Dashboard">
+            <span class="sb-icon">📊</span><span class="sb-label">Dashboard</span>
+          </button>
+
+          <div class="sb-group" data-macro="financeiro">
+            <button class="sb-group-header" type="button" title="Financeiro">
+              <span class="sb-icon">💰</span><span class="sb-label">Financeiro</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="consolidado" type="button">Consolidado</button>
+              <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
+              <button class="sb-sub" data-page="faturamento" type="button">Orçamentos</button>
+              <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
+              <button class="sb-sub" data-page="recebimentos" type="button">Recebimentos</button>
+              <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
+              <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
+              <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
+              <button class="sb-sub" data-page="entregas" type="button">Entregas pendentes</button>
+              <button class="sb-sub" data-page="importacoes" type="button">↑ Importar</button>
+            </div>
+          </div>
+
+          <div class="sb-group" data-macro="rh">
+            <button class="sb-group-header" type="button" title="Dep. Pessoal e RH">
+              <span class="sb-icon">👥</span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="rh_funcionarios" type="button">Funcionários</button>
+              <button class="sb-sub" data-page="rh_beneficios" type="button">Benefícios</button>
+              <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
+              <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
+            </div>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="sb-item" data-page="configuracao" type="button" title="Configuração">
+            <span class="sb-icon">⚙</span><span class="sb-label">Configuração</span>
+          </button>
         </div>
+      </aside>
 
-        <div id="login-erro" class="status erro" hidden role="alert"></div>
+      <!-- Main content -->
+      <main class="main">
 
-        <button type="submit" id="btn-entrar" class="btn-ouro">
-          Entrar
-        </button>
-      </form>
-    </section>
+        <!-- Página: Dashboard (real) -->
+        <section class="page" data-page="dashboard">
+          <div class="page-header">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-sub">Visão rápida dos totais da Terra</p>
+          </div>
 
-    <!-- Stub de dashboard pós-login (Entrega 3 substitui por dashboard real) -->
-    <section id="card-dashboard" class="card" hidden>
-      <div class="dashboard-head">
-        <div>
-          <h2 id="dash-saudacao">Olá</h2>
-          <p class="card-desc" id="dash-perfil">—</p>
-        </div>
-        <button id="btn-sair" class="btn-secundario" type="button">
-          Sair
-        </button>
-      </div>
+          <div class="grid-metrics" id="dash-metrics">
+            <div class="metric-card" data-metric="orcamentos">
+              <div class="metric-label">Orçamentos</div>
+              <div class="metric-value" id="m-orcamentos">—</div>
+              <div class="metric-sub">total de registros</div>
+            </div>
+            <div class="metric-card" data-metric="vendido">
+              <div class="metric-label">Total vendido</div>
+              <div class="metric-value" id="m-vendido">—</div>
+              <div class="metric-sub">soma de orçamentos</div>
+            </div>
+            <div class="metric-card" data-metric="faturado">
+              <div class="metric-label">Total faturado</div>
+              <div class="metric-value" id="m-faturado">—</div>
+              <div class="metric-sub">NF emitidas (via orçamentos)</div>
+            </div>
+            <div class="metric-card" data-metric="recebido">
+              <div class="metric-label">Total recebido</div>
+              <div class="metric-value" id="m-recebido">—</div>
+              <div class="metric-sub">recebimentos consolidados</div>
+            </div>
+          </div>
 
-      <div id="dash-status" class="status" role="status" aria-live="polite">
-        Consultando plano_contas…
-      </div>
+          <div id="dash-status" class="status" role="status" aria-live="polite" hidden></div>
 
-      <details class="debug">
-        <summary>Detalhes técnicos</summary>
-        <pre id="debug-saida">—</pre>
-      </details>
-    </section>
+          <details class="debug">
+            <summary>Detalhes técnicos</summary>
+            <pre id="debug-saida">—</pre>
+          </details>
+        </section>
 
-    <footer class="shell-footer">
-      Versão Entrega 2 · login + stub · 2026-04-23
-    </footer>
-  </main>
+        <!-- Páginas stubs: Financeiro (9 — tudo menos dashboard) -->
+        <section class="page" data-page="consolidado"   hidden><div class="page-header"><h1 class="page-title">Visão Consolidada</h1><p class="page-sub">Faturamento, receita e custo — ano a ano e mês a mês</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="vendas"        hidden><div class="page-header"><h1 class="page-title">Vendas</h1><p class="page-sub">Orçamentos aprovados por parceiro</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="faturamento"   hidden><div class="page-header"><h1 class="page-title">Gestão de Faturamento</h1><p class="page-sub">Visão consolidada por orçamento</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="notas"         hidden><div class="page-header"><h1 class="page-title">Notas Fiscais</h1><p class="page-sub">NF emitidas</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="recebimentos"  hidden><div class="page-header"><h1 class="page-title">Recebimentos</h1><p class="page-sub">Entradas de caixa por orçamento</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="despesas"      hidden><div class="page-header"><h1 class="page-title">Despesas</h1><p class="page-sub">Custos lançados</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="movimentos"    hidden><div class="page-header"><h1 class="page-title">Lançamentos</h1><p class="page-sub">Movimentos financeiros</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="custos_os"     hidden><div class="page-header"><h1 class="page-title">Custo por OS</h1><p class="page-sub">Custo total agregado por Ordem de Serviço</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="entregas"      hidden><div class="page-header"><h1 class="page-title">Entregas pendentes</h1><p class="page-sub">Reconciliação Entrega S/NF ↔ NF</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+        <section class="page" data-page="importacoes"   hidden><div class="page-header"><h1 class="page-title">Importar</h1><p class="page-sub">Carregar planilhas da Terra</p></div><div class="stub">Conteúdo previsto para a Entrega 4.</div></section>
+
+        <!-- Páginas stubs: RH (4) -->
+        <section class="page" data-page="rh_funcionarios" hidden><div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro e histórico</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
+        <section class="page" data-page="rh_beneficios"   hidden><div class="page-header"><h1 class="page-title">Benefícios</h1><p class="page-sub">Vale-transporte, vale-refeição, plano de saúde</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
+        <section class="page" data-page="rh_folha"        hidden><div class="page-header"><h1 class="page-title">Folha de Pagamento</h1><p class="page-sub">Cálculo mensal</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
+        <section class="page" data-page="rh_impostos"     hidden><div class="page-header"><h1 class="page-title">Impostos</h1><p class="page-sub">INSS, FGTS, IRRF, contribuições</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
+
+        <!-- Página stub: Configuração -->
+        <section class="page" data-page="configuracao" hidden><div class="page-header"><h1 class="page-title">Configuração</h1><p class="page-sub">Plano de Contas, CFOP, Usuários, Parâmetros</p></div><div class="stub">Conteúdo previsto para a Entrega 5.</div></section>
+
+      </main>
+    </div>
+  </div>
 
   <!-- Supabase JS SDK v2 via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Configuração local (não versionada). Em deploy, vem de env vars. -->
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
