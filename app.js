@@ -67,7 +67,13 @@
     setStatus("Consultando o Supabase…", "carregando");
     setDebug("—");
 
-    // Conta registros em plano_contas (esperado: 510 conforme v9 handoff).
+    // Conta registros em plano_contas.
+    //
+    // Três cenários possíveis nesta fase do projeto:
+    //   • count === 510  → usuário autenticado; RLS libera leitura. Tripé 100% OK.
+    //   • count === 0    → anônimo; RLS bloqueia leitura, como deveria.
+    //                      Esperado até a Entrega 2 (login) existir. Também é OK.
+    //   • count !== 0 e !== 510 → divergência real, merece investigação.
     client
       .from("plano_contas")
       .select("*", { count: "exact", head: true })
@@ -85,21 +91,31 @@
 
         var total = resposta.count;
         var esperado = 510;
-        var bateu = total === esperado;
+        var cenario;
+        var msg;
+        var classe;
 
-        setStatus(
-          bateu
-            ? "Conexão OK. " + total + " registros em plano_contas (bate com o esperado)."
-            : "Conexão OK, mas contagem divergente: " + total + " (esperado " + esperado + ").",
-          bateu ? "ok" : "alerta"
-        );
+        if (total === esperado) {
+          cenario = "autenticado";
+          msg = "Conexão OK. " + total + " registros em plano_contas — usuário autenticado, RLS liberando leitura. Tripé validado de ponta a ponta.";
+          classe = "ok";
+        } else if (total === 0) {
+          cenario = "anonimo_rls";
+          msg = "Conexão OK. RLS ativa bloqueando leitura anônima (comportamento esperado). Os 510 registros aparecerão após o login da Entrega 2.";
+          classe = "ok";
+        } else {
+          cenario = "divergencia";
+          msg = "Conexão OK, mas contagem divergente: " + total + " (esperado 0 anônimo ou 510 autenticado).";
+          classe = "alerta";
+        }
 
+        setStatus(msg, classe);
         setDebug({
           url: cfg.SUPABASE_URL,
           tabela: "plano_contas",
           count: total,
-          esperado: esperado,
-          ok: bateu
+          esperado_autenticado: esperado,
+          cenario: cenario
         });
       })
       .catch(function (err) {
