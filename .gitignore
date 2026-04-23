@@ -1,0 +1,30 @@
+# Configuração local com URL e chave do Supabase — NUNCA commitar.
+config.js
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Dependências (caso venhamos a usar npm no futuro)
+node_modules/
+
+# Artefatos de build
+dist/
+build/
+.vercel/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*

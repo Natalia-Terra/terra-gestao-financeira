@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terra Conttemporânea — Gestão Financeira</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="shell-header">
+      <h1>Terra Conttemporânea</h1>
+      <p class="subtitulo">Sistema de Gestão de Faturamento e Receita</p>
+    </header>
+
+    <section class="card">
+      <h2>Scaffold inicial — Entrega 1</h2>
+      <p>
+        Este é o ponto de partida da adaptação do v11 para a nuvem
+        (GitHub + Vercel + Supabase). Antes de portar a interface,
+        vamos confirmar que o tripé está conversando.
+      </p>
+
+      <button id="btn-testar" class="btn-ouro" type="button">
+        Testar conexão com o Supabase
+      </button>
+
+      <div id="status" class="status" role="status" aria-live="polite">
+        Pronto para testar.
+      </div>
+
+      <details class="debug">
+        <summary>Detalhes técnicos</summary>
+        <pre id="debug-saida">—</pre>
+      </details>
+    </section>
+
+    <footer class="shell-footer">
+      Versão scaffold · Entrega 1 · 2026-04-23
+    </footer>
+  </main>
+
+  <!-- Supabase JS SDK v2 via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Configuração local (não versionada). Em deploy, vem de env vars. -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
