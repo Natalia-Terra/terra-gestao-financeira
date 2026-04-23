@@ -46,6 +46,9 @@
 
 * { box-sizing: border-box; }
 
+/* Garante que `display: flex/grid` no CSS não sobreponha o atributo hidden */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
