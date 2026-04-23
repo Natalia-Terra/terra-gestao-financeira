@@ -178,22 +178,24 @@
     setDebug("—");
 
     // Busca perfil do usuário na tabela perfis (nome + perfil).
+    // O email vive em auth.users, não em perfis, então pegamos de user.email.
     client
       .from("perfis")
-      .select("nome, perfil, email")
+      .select("nome, perfil")
       .eq("id", user.id)
       .single()
       .then(function (resposta) {
         if (resposta.error) {
           dashSaudacao.textContent = "Olá";
           dashPerfil.textContent =
-            "Sem perfil cadastrado (" + (user.email || "—") + ")";
+            "Sem perfil cadastrado (" + (user.email || "—") +
+            "). Detalhe: " + resposta.error.message;
           return;
         }
         var p = resposta.data || {};
         dashSaudacao.textContent = "Olá, " + (p.nome || user.email);
         dashPerfil.textContent =
-          "Perfil: " + (p.perfil || "—") + " · " + (p.email || user.email);
+          "Perfil: " + (p.perfil || "—") + " · " + (user.email || "—");
       });
 
     // Reconsulta plano_contas — agora autenticado, a RLS deve liberar leitura.
