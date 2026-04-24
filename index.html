@@ -131,6 +131,7 @@
               <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
               <button class="sb-sub" data-page="entregas" type="button">Entregas pendentes</button>
+              <button class="sb-sub" data-page="dre" type="button">DRE</button>
               <button class="sb-sub" data-page="importacoes" type="button">↑ Importar</button>
             </div>
           </div>
@@ -517,6 +518,40 @@
           </div>
         </section>
 
+        <!-- DRE — Demonstrativo de Resultado -->
+        <section class="page" data-page="dre" hidden>
+          <div class="page-header">
+            <h1 class="page-title">DRE — Demonstrativo de Resultado</h1>
+            <p class="page-sub">Receitas × custos mês a mês — fonte receitas_custos</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Ano:
+              <select id="dre-ano">
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+            </label>
+            <span class="toolbar-label" id="dre-lbl"></span>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Receita</div><div class="metric-value" id="dre-m-receita">—</div><div class="metric-sub">total do ano</div></div>
+            <div class="metric-card"><div class="metric-label">Outras Receitas</div><div class="metric-value" id="dre-m-outras">—</div><div class="metric-sub">subcategoria específica</div></div>
+            <div class="metric-card"><div class="metric-label">Custo total</div><div class="metric-value" id="dre-m-custo">—</div><div class="metric-sub">todas as subcategorias</div></div>
+            <div class="metric-card"><div class="metric-label">Resultado</div><div class="metric-value" id="dre-m-result">—</div><div class="metric-sub">(Receita + Outras) − Custo</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês</th><th class="num">Receita</th><th class="num">Outras Receitas</th><th class="num">Custo</th><th class="num">Resultado</th><th class="num">Margem</th></tr></thead>
+                <tbody id="dre-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- Importar — Entrega 4e -->
         <section class="page" data-page="importacoes" hidden>
           <div class="page-header">
@@ -556,11 +591,121 @@
           </div>
         </section>
 
-        <!-- Páginas stubs: RH (4) -->
-        <section class="page" data-page="rh_funcionarios" hidden><div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro e histórico</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
-        <section class="page" data-page="rh_beneficios"   hidden><div class="page-header"><h1 class="page-title">Benefícios</h1><p class="page-sub">Vale-transporte, vale-refeição, plano de saúde</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
-        <section class="page" data-page="rh_folha"        hidden><div class="page-header"><h1 class="page-title">Folha de Pagamento</h1><p class="page-sub">Cálculo mensal</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
-        <section class="page" data-page="rh_impostos"     hidden><div class="page-header"><h1 class="page-title">Impostos</h1><p class="page-sub">INSS, FGTS, IRRF, contribuições</p></div><div class="stub">Módulo de RH — modelo de dados a definir antes de codar.</div></section>
+        <!-- RH — Funcionários -->
+        <section class="page" data-page="rh_funcionarios" hidden>
+          <div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro da equipe da Terra</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Ativos</div><div class="metric-value" id="fn-m-ativos">—</div><div class="metric-sub">sem data de demissão</div></div>
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="fn-m-tot">—</div><div class="metric-sub">inclui desligados</div></div>
+            <div class="metric-card"><div class="metric-label">Folha mensal base</div><div class="metric-value" id="fn-m-folha">—</div><div class="metric-sub">soma salario_base (ativos)</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="fn-busca" placeholder="Buscar nome, cargo ou CPF…" />
+              <select id="fn-status">
+                <option value="ativos">Ativos</option>
+                <option value="desligados">Desligados</option>
+                <option value="">Todos</option>
+              </select>
+              <button class="btn-ouro" id="fn-btn-novo" type="button">+ Novo funcionário</button>
+              <span class="toolbar-label" id="fn-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
+                <tbody id="fn-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Benefícios -->
+        <section class="page" data-page="rh_beneficios" hidden>
+          <div class="page-header"><h1 class="page-title">Benefícios</h1><p class="page-sub">Vale-transporte, vale-refeição, plano de saúde e outros</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Vigentes</div><div class="metric-value" id="bn-m-vig">—</div><div class="metric-sub">sem data de fim</div></div>
+            <div class="metric-card"><div class="metric-label">Custo mensal</div><div class="metric-value" id="bn-m-custo">—</div><div class="metric-sub">soma dos vigentes</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="bn-busca" placeholder="Buscar funcionário ou tipo…" />
+              <select id="bn-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Vale-transporte">Vale-transporte</option>
+                <option value="Vale-refeição">Vale-refeição</option>
+                <option value="Plano de Saúde">Plano de Saúde</option>
+                <option value="Outro">Outro</option>
+              </select>
+              <button class="btn-ouro" id="bn-btn-novo" type="button">+ Novo benefício</button>
+              <span class="toolbar-label" id="bn-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Funcionário</th><th>Tipo</th><th>Descrição</th><th class="num">Valor</th><th>Início</th><th>Fim</th><th></th></tr></thead>
+                <tbody id="bn-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Folha de Pagamento -->
+        <section class="page" data-page="rh_folha" hidden>
+          <div class="page-header"><h1 class="page-title">Folha de Pagamento</h1><p class="page-sub">Cálculo mensal por funcionário</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Folhas lançadas</div><div class="metric-value" id="fl-m-qtd">—</div><div class="metric-sub">no filtro</div></div>
+            <div class="metric-card"><div class="metric-label">Total bruto</div><div class="metric-value" id="fl-m-bruto">—</div><div class="metric-sub">soma do filtro</div></div>
+            <div class="metric-card"><div class="metric-label">Total líquido</div><div class="metric-value" id="fl-m-liq">—</div><div class="metric-sub">soma do filtro</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="fl-busca" placeholder="Buscar funcionário…" />
+              <input type="month" id="fl-mes" />
+              <button class="btn-ouro" id="fl-btn-novo" type="button">+ Nova folha</button>
+              <span class="toolbar-label" id="fl-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês ref.</th><th>Funcionário</th><th class="num">Bruto</th><th class="num">INSS</th><th class="num">IRRF</th><th class="num">FGTS</th><th class="num">Líquido</th><th></th></tr></thead>
+                <tbody id="fl-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Impostos -->
+        <section class="page" data-page="rh_impostos" hidden>
+          <div class="page-header"><h1 class="page-title">Impostos</h1><p class="page-sub">INSS, FGTS, IRRF, contribuições</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="ir-m-qtd">—</div><div class="metric-sub">no filtro</div></div>
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="ir-m-total">—</div><div class="metric-sub">soma do filtro</div></div>
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="ir-m-pend">—</div><div class="metric-sub">sem data de pagamento</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="month" id="ir-mes" />
+              <select id="ir-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="INSS">INSS</option>
+                <option value="FGTS">FGTS</option>
+                <option value="IRRF">IRRF</option>
+                <option value="Outro">Outro</option>
+              </select>
+              <select id="ir-status">
+                <option value="">Todos</option>
+                <option value="pendente">Pendentes</option>
+                <option value="pago">Pagos</option>
+              </select>
+              <button class="btn-ouro" id="ir-btn-novo" type="button">+ Novo imposto</button>
+              <span class="toolbar-label" id="ir-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês ref.</th><th>Tipo</th><th class="num">Valor</th><th>Pagamento</th><th>Status</th><th></th></tr></thead>
+                <tbody id="ir-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
         <!-- Configuração — hub com 5 sub-telas -->
         <section class="page" data-page="configuracao" hidden>
@@ -590,9 +735,9 @@
               <div class="config-card-title">Trocar minha senha</div>
               <div class="config-card-desc">Atualize a senha da sua conta</div>
             </button>
-            <button class="config-card disabled" type="button" data-subpage="" disabled title="Próxima rodada">
+            <button class="config-card" type="button" data-subpage="cfg_usuarios">
               <div class="config-card-title">Usuários</div>
-              <div class="config-card-desc">CRUD de logins (próxima rodada)</div>
+              <div class="config-card-desc">Editar nome, perfil e flag de senha temporária (criação e exclusão no painel do Supabase)</div>
             </button>
           </div>
         </section>
@@ -613,6 +758,27 @@
               <table class="tabela">
                 <thead><tr><th>Orçamento</th><th>Cliente</th><th>Tipos detectados</th><th class="num">Valor total</th></tr></thead>
                 <tbody id="diag-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > Usuários -->
+        <section class="page" data-page="cfg_usuarios" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Usuários</h1>
+            <p class="page-sub">Editar nome e perfil de quem já tem login. Criar novos: Supabase → Authentication → Add user, depois INSERT em perfis</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="us-busca" placeholder="Buscar por nome ou UUID…" />
+              <span class="toolbar-label" id="us-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>UUID</th><th>Nome</th><th>Perfil</th><th>Senha temp?</th><th></th></tr></thead>
+                <tbody id="us-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -744,6 +910,21 @@
         </section>
 
       </main>
+    </div>
+  </div>
+
+  <!-- Modal genérico para CREATE/EDIT de entidades RH -->
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div class="modal-content">
+      <h2 id="modal-titulo">Título</h2>
+      <form id="modal-form">
+        <div id="modal-fields"></div>
+        <div id="modal-erro" class="status erro" hidden role="alert"></div>
+        <div class="modal-acoes">
+          <button type="button" class="btn-limpar" id="modal-cancelar">Cancelar</button>
+          <button type="submit" class="btn-ouro" id="modal-salvar">Salvar</button>
+        </div>
+      </form>
     </div>
   </div>
 

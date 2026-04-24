@@ -314,6 +314,12 @@
     if (pageId === "cfg_cfop")       carregarCfopSeNecessario();
     if (pageId === "cfg_parametros") carregarParametros(window._terraUser);
     if (pageId === "cfg_diag")       renderDiagnostico();
+    if (pageId === "cfg_usuarios")   carregarUsuariosSeNecessario();
+    if (pageId === "dre")            carregarDreSeNecessario();
+    if (pageId === "rh_funcionarios") carregarFuncionariosSeNecessario();
+    if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
+    if (pageId === "rh_folha")        carregarFolhaSeNecessario();
+    if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -416,6 +422,9 @@
     if (consAno) {
       consAno.addEventListener("change", renderConsolidado);
     }
+    // DRE
+    var dreAno = document.getElementById("dre-ano");
+    if (dreAno) dreAno.addEventListener("change", renderDre);
 
     // 4c/4d — filtros de telas baseadas em movimentos
     ligarFiltros("nf-",  renderNotas);
@@ -426,6 +435,21 @@
     ligarFiltros("desp-", renderDespesas);
     ligarFiltros("pc-",  renderPlanoContas);
     ligarFiltros("cf-",  renderCfop);
+    ligarFiltros("us-",  renderUsuarios);
+    ligarFiltros("fn-",  renderFuncionarios);
+    ligarFiltros("bn-",  renderBeneficios);
+    ligarFiltros("fl-",  renderFolha);
+    ligarFiltros("ir-",  renderImpostos);
+
+    // Botões "+ Novo" do RH
+    var btnNovoFun = document.getElementById("fn-btn-novo");
+    var btnNovoBen = document.getElementById("bn-btn-novo");
+    var btnNovoFol = document.getElementById("fl-btn-novo");
+    var btnNovoImp = document.getElementById("ir-btn-novo");
+    if (btnNovoFun) btnNovoFun.addEventListener("click", abrirModalFuncionario);
+    if (btnNovoBen) btnNovoBen.addEventListener("click", abrirModalBeneficio);
+    if (btnNovoFol) btnNovoFol.addEventListener("click", abrirModalFolha);
+    if (btnNovoImp) btnNovoImp.addEventListener("click", abrirModalImposto);
 
     // Sub-navegação em Configuração
     document.querySelectorAll(".config-card[data-subpage]").forEach(function (btn) {
@@ -1669,6 +1693,606 @@
     }).join("");
     impTotal.textContent = fmtInt(linhas.length);
     impPreview.hidden = false;
+  }
+
+  // =========================================================================
+  // 23. MODAL GENÉRICO (reaproveitado pelo RH)
+  // =========================================================================
+
+  var modalOverlay  = document.getElementById("modal-overlay");
+  var modalTitulo   = document.getElementById("modal-titulo");
+  var modalFields   = document.getElementById("modal-fields");
+  var modalForm     = document.getElementById("modal-form");
+  var modalErro     = document.getElementById("modal-erro");
+  var modalCancelar = document.getElementById("modal-cancelar");
+  var modalSalvar   = document.getElementById("modal-salvar");
+
+  var modalConfig = null;  // { titulo, fields:[{name,label,type,options?,required?}], onSubmit:fn(values, doneCallback) }
+
+  function abrirModal(config) {
+    modalConfig = config;
+    modalTitulo.textContent = config.titulo;
+    modalFields.innerHTML = config.fields.map(function (f) {
+      var id = "mf-" + f.name;
+      var req = f.required ? " required" : "";
+      var valor = f.valor !== undefined && f.valor !== null ? String(f.valor) : "";
+      if (f.type === "select") {
+        var opts = (f.options || []).map(function (o) {
+          var v = (typeof o === "object") ? o.value : o;
+          var t = (typeof o === "object") ? o.label : o;
+          var sel = String(v) === valor ? " selected" : "";
+          return '<option value="' + escHtml(v) + '"' + sel + '>' + escHtml(t) + '</option>';
+        }).join("");
+        return '<div class="form-field"><label for="' + id + '">' + escHtml(f.label) + '</label><select id="' + id + '" name="' + f.name + '"' + req + '>' + opts + '</select></div>';
+      }
+      return '<div class="form-field"><label for="' + id + '">' + escHtml(f.label) + '</label><input id="' + id + '" name="' + f.name + '" type="' + (f.type || "text") + '" value="' + escHtml(valor) + '"' + req + ' /></div>';
+    }).join("");
+    modalErro.hidden = true;
+    modalSalvar.disabled = false;
+    modalSalvar.textContent = "Salvar";
+    modalOverlay.hidden = false;
+    setTimeout(function () {
+      var first = modalFields.querySelector("input, select");
+      if (first) first.focus();
+    }, 0);
+  }
+
+  function fecharModal() {
+    modalOverlay.hidden = true;
+    modalConfig = null;
+  }
+
+  modalCancelar.addEventListener("click", fecharModal);
+  modalOverlay.addEventListener("click", function (ev) {
+    if (ev.target === modalOverlay) fecharModal();
+  });
+
+  modalForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (!modalConfig) return;
+    var values = {};
+    modalConfig.fields.forEach(function (f) {
+      var el = document.getElementById("mf-" + f.name);
+      if (!el) return;
+      var v = el.value;
+      if (v === "") { values[f.name] = null; return; }
+      if (f.type === "number") { var n = Number(v.replace(",", ".")); values[f.name] = isNaN(n) ? null : n; return; }
+      values[f.name] = v;
+    });
+    modalErro.hidden = true;
+    modalSalvar.disabled = true;
+    modalSalvar.textContent = "Salvando…";
+    modalConfig.onSubmit(values, function (err) {
+      if (err) {
+        modalErro.textContent = err;
+        modalErro.hidden = false;
+        modalSalvar.disabled = false;
+        modalSalvar.textContent = "Salvar";
+        return;
+      }
+      fecharModal();
+    });
+  });
+
+  // =========================================================================
+  // 24. DRE
+  // =========================================================================
+
+  var dreCarregado = false;
+
+  function carregarDreSeNecessario() {
+    if (rcCarregado) { dreCarregado = true; renderDre(); return; }
+    if (rcCarregando) return;
+    carregarConsolidadoSeNecessario();
+    var iv = setInterval(function () {
+      if (rcCarregado) { clearInterval(iv); dreCarregado = true; renderDre(); }
+    }, 150);
+  }
+
+  function renderDre() {
+    var ano = Number(document.getElementById("dre-ano").value);
+    var nomeMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+    var porMes = {};
+    for (var m = 1; m <= 12; m++) porMes[m] = { receita: 0, outras: 0, custo: 0 };
+
+    rcLista.filter(function (r) { return Number(r.ano) === ano; }).forEach(function (r) {
+      var m = Number(r.mes);
+      if (!porMes[m]) return;
+      if (r.categoria === "receita") {
+        var sub = (r.subcategoria || "").toLowerCase();
+        if (sub.indexOf("outras") !== -1) porMes[m].outras += Number(r.valor || 0);
+        else porMes[m].receita += Number(r.valor || 0);
+      } else if (r.categoria === "custo") {
+        porMes[m].custo += Number(r.valor || 0);
+      }
+    });
+
+    var totR = 0, totO = 0, totC = 0;
+    for (var mm = 1; mm <= 12; mm++) { totR += porMes[mm].receita; totO += porMes[mm].outras; totC += porMes[mm].custo; }
+    var resultado = (totR + totO) - totC;
+    var margem = (totR + totO) > 0 ? (resultado / (totR + totO) * 100).toFixed(1).replace(".", ",") + "%" : "—";
+
+    valText(document.getElementById("dre-m-receita"), fmtBRL(totR));
+    valText(document.getElementById("dre-m-outras"),  fmtBRL(totO));
+    valText(document.getElementById("dre-m-custo"),   fmtBRL(totC));
+    valText(document.getElementById("dre-m-result"),  fmtBRL(resultado));
+    valText(document.getElementById("dre-lbl"), "margem: " + margem);
+
+    var linhas = [];
+    for (var i = 1; i <= 12; i++) {
+      var rr = porMes[i].receita, oo = porMes[i].outras, cc = porMes[i].custo;
+      var tr = rr + oo;
+      var res = tr - cc;
+      var mrg = tr > 0 ? (res / tr * 100).toFixed(1).replace(".", ",") + "%" : "—";
+      linhas.push(
+        '<tr>' +
+          '<td>' + nomeMes[i-1] + '/' + String(ano).slice(2) + '</td>' +
+          '<td class="num">' + (rr ? fmtBRL(rr) : '—') + '</td>' +
+          '<td class="num">' + (oo ? fmtBRL(oo) : '—') + '</td>' +
+          '<td class="num">' + (cc ? fmtBRL(cc) : '—') + '</td>' +
+          '<td class="num ' + (res > 0 ? 'destaque' : '') + '">' + (tr || cc ? fmtBRL(res) : '—') + '</td>' +
+          '<td class="num">' + mrg + '</td>' +
+        '</tr>'
+      );
+    }
+    linhas.push(
+      '<tr class="tot"><td><strong>Ano ' + ano + '</strong></td>' +
+      '<td class="num"><strong>' + fmtBRL(totR) + '</strong></td>' +
+      '<td class="num"><strong>' + fmtBRL(totO) + '</strong></td>' +
+      '<td class="num"><strong>' + fmtBRL(totC) + '</strong></td>' +
+      '<td class="num destaque"><strong>' + fmtBRL(resultado) + '</strong></td>' +
+      '<td class="num"><strong>' + margem + '</strong></td></tr>'
+    );
+    document.getElementById("dre-tbody").innerHTML = linhas.join("");
+  }
+
+  // =========================================================================
+  // 25. USUÁRIOS (perfis)
+  // =========================================================================
+
+  var usuariosLista = [];
+  var usuariosCarregado = false;
+
+  function carregarUsuariosSeNecessario() {
+    usuariosCarregado = false;
+    client.from("perfis").select("id, nome, perfil, senha_temporaria, criado_em, ultimo_acesso")
+      .order("nome", { ascending: true })
+      .then(function (r) {
+        if (r.error) {
+          document.getElementById("us-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+          return;
+        }
+        usuariosLista = r.data || [];
+        usuariosCarregado = true;
+        renderUsuarios();
+      });
+  }
+
+  function renderUsuarios() {
+    var tbody = document.getElementById("us-tbody");
+    var busca = (document.getElementById("us-busca").value || "").trim().toLowerCase();
+    var filtrados = usuariosLista.filter(function (u) {
+      return matchBusca(busca, [u.id, u.nome]);
+    });
+    valText(document.getElementById("us-lbl"), filtrados.length + " de " + usuariosLista.length);
+
+    preencherTbody(tbody, filtrados.map(function (u) {
+      return '<tr>' +
+        '<td class="mono" title="' + escHtml(u.id) + '">' + escHtml(String(u.id).slice(0,8)) + '…</td>' +
+        '<td>' + escHtml(u.nome) + '</td>' +
+        '<td>' + escHtml(u.perfil) + '</td>' +
+        '<td>' + (u.senha_temporaria ? '<span class="badge-tipo outras">sim</span>' : '—') + '</td>' +
+        '<td><button class="btn-limpar" data-us-edit="' + escHtml(u.id) + '">Editar</button></td>' +
+      '</tr>';
+    }), 5, "Nenhum usuário.");
+
+    tbody.querySelectorAll("[data-us-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-us-edit");
+        var u = usuariosLista.find(function (x) { return x.id === id; });
+        if (u) abrirModalUsuario(u);
+      });
+    });
+  }
+
+  function abrirModalUsuario(u) {
+    abrirModal({
+      titulo: "Editar usuário",
+      fields: [
+        { name: "nome",            label: "Nome",                        type: "text",    valor: u.nome,    required: true },
+        { name: "perfil",          label: "Perfil",                      type: "select",  valor: u.perfil,  options: ["admin","operador","consulta"], required: true },
+        { name: "senha_temporaria",label: "Forçar troca no próximo login",type: "select", valor: u.senha_temporaria ? "true" : "false", options: [{value:"false",label:"Não"},{value:"true",label:"Sim"}] }
+      ],
+      onSubmit: function (v, done) {
+        client.from("perfis").update({
+          nome: v.nome,
+          perfil: v.perfil,
+          senha_temporaria: v.senha_temporaria === "true"
+        }).eq("id", u.id).then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          usuariosLista = usuariosLista.map(function (x) { return x.id === u.id ? Object.assign({}, x, { nome: v.nome, perfil: v.perfil, senha_temporaria: v.senha_temporaria === "true" }) : x; });
+          renderUsuarios();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // 26. RH — FUNCIONÁRIOS
+  // =========================================================================
+
+  var funcionariosLista = [];
+  var funcionariosCarregado = false;
+
+  function carregarFuncionariosSeNecessario() {
+    client.from("funcionarios").select("*").order("nome", { ascending: true }).then(function (r) {
+      if (r.error) {
+        document.getElementById("fn-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      funcionariosLista = r.data || [];
+      funcionariosCarregado = true;
+      renderFuncionarios();
+    });
+  }
+
+  function renderFuncionarios() {
+    var tbody  = document.getElementById("fn-tbody");
+    var busca  = (document.getElementById("fn-busca").value || "").trim().toLowerCase();
+    var status = document.getElementById("fn-status").value;
+
+    var filtrados = funcionariosLista.filter(function (f) {
+      if (status === "ativos" && f.data_demissao) return false;
+      if (status === "desligados" && !f.data_demissao) return false;
+      return matchBusca(busca, [f.nome, f.cargo, f.cpf]);
+    });
+
+    var ativos = funcionariosLista.filter(function (f) { return !f.data_demissao; });
+    var folha = 0;
+    ativos.forEach(function (f) { folha += Number(f.salario_base || 0); });
+
+    valText(document.getElementById("fn-m-ativos"), fmtInt(ativos.length));
+    valText(document.getElementById("fn-m-tot"),    fmtInt(funcionariosLista.length));
+    valText(document.getElementById("fn-m-folha"),  fmtBRL(folha));
+    valText(document.getElementById("fn-lbl"), filtrados.length + " de " + funcionariosLista.length);
+
+    preencherTbody(tbody, filtrados.map(function (f) {
+      return '<tr>' +
+        '<td>' + escHtml(f.nome) + '</td>' +
+        '<td class="mono">' + escHtml(f.cpf || "—") + '</td>' +
+        '<td>' + escHtml(f.cargo || "—") + '</td>' +
+        '<td>' + fmtData(f.data_admissao) + '</td>' +
+        '<td>' + (f.data_demissao ? fmtData(f.data_demissao) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
+        '<td class="num">' + fmtBRL(f.salario_base) + '</td>' +
+        '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 7);
+
+    tbody.querySelectorAll("[data-fn-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-fn-edit"));
+        var f = funcionariosLista.find(function (x) { return x.id === id; });
+        if (f) abrirModalFuncionario(f);
+      });
+    });
+  }
+
+  function abrirModalFuncionario(f) {
+    f = f || {};
+    var editar = !!f.id;
+    abrirModal({
+      titulo: editar ? "Editar funcionário" : "Novo funcionário",
+      fields: [
+        { name: "nome",          label: "Nome completo",       type: "text",   valor: f.nome,          required: true },
+        { name: "cpf",           label: "CPF",                 type: "text",   valor: f.cpf },
+        { name: "cargo",         label: "Cargo",               type: "text",   valor: f.cargo },
+        { name: "data_admissao", label: "Data de admissão",    type: "date",   valor: f.data_admissao },
+        { name: "data_demissao", label: "Data de demissão",    type: "date",   valor: f.data_demissao },
+        { name: "salario_base",  label: "Salário base (R$)",   type: "number", valor: f.salario_base },
+        { name: "observacoes",   label: "Observações",         type: "text",   valor: f.observacoes }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          nome: v.nome, cpf: v.cpf, cargo: v.cargo,
+          data_admissao: v.data_admissao, data_demissao: v.data_demissao,
+          salario_base: v.salario_base || 0, observacoes: v.observacoes
+        };
+        var q = editar
+          ? client.from("funcionarios").update(payload).eq("id", f.id)
+          : client.from("funcionarios").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarFuncionariosSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // 27. RH — BENEFÍCIOS
+  // =========================================================================
+
+  var beneficiosLista = [];
+
+  function carregarBeneficiosSeNecessario() {
+    // Garante funcionários para preencher os selects
+    if (!funcionariosCarregado) carregarFuncionariosSeNecessario();
+    client.from("beneficios").select("*").order("id", { ascending: false }).then(function (r) {
+      if (r.error) {
+        document.getElementById("bn-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      beneficiosLista = r.data || [];
+      renderBeneficios();
+    });
+  }
+
+  function renderBeneficios() {
+    var tbody = document.getElementById("bn-tbody");
+    var busca = (document.getElementById("bn-busca").value || "").trim().toLowerCase();
+    var tipo  = document.getElementById("bn-tipo").value;
+
+    var nomePorId = {};
+    funcionariosLista.forEach(function (f) { nomePorId[f.id] = f.nome; });
+
+    var filtrados = beneficiosLista.filter(function (b) {
+      if (tipo && b.tipo !== tipo) return false;
+      return matchBusca(busca, [nomePorId[b.funcionario_id], b.tipo, b.descricao]);
+    });
+
+    var vigentes = beneficiosLista.filter(function (b) { return !b.data_fim; });
+    var custo = 0;
+    vigentes.forEach(function (b) { custo += Number(b.valor || 0); });
+
+    valText(document.getElementById("bn-m-vig"),   fmtInt(vigentes.length));
+    valText(document.getElementById("bn-m-custo"), fmtBRL(custo));
+    valText(document.getElementById("bn-lbl"), filtrados.length + " de " + beneficiosLista.length);
+
+    preencherTbody(tbody, filtrados.map(function (b) {
+      return '<tr>' +
+        '<td>' + escHtml(nomePorId[b.funcionario_id] || ("#" + b.funcionario_id)) + '</td>' +
+        '<td>' + escHtml(b.tipo) + '</td>' +
+        '<td>' + escHtml(b.descricao || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(b.valor) + '</td>' +
+        '<td>' + fmtData(b.data_inicio) + '</td>' +
+        '<td>' + (b.data_fim ? fmtData(b.data_fim) : '<span class="badge-tipo solta">vigente</span>') + '</td>' +
+        '<td><button class="btn-limpar" data-bn-edit="' + b.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 7, "Nenhum benefício cadastrado.");
+
+    tbody.querySelectorAll("[data-bn-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bn-edit"));
+        var b = beneficiosLista.find(function (x) { return x.id === id; });
+        if (b) abrirModalBeneficio(b);
+      });
+    });
+  }
+
+  function abrirModalBeneficio(b) {
+    b = b || {};
+    var editar = !!b.id;
+    var opcoesFunc = funcionariosLista.map(function (f) { return { value: f.id, label: f.nome }; });
+    abrirModal({
+      titulo: editar ? "Editar benefício" : "Novo benefício",
+      fields: [
+        { name: "funcionario_id", label: "Funcionário", type: "select", valor: b.funcionario_id, options: opcoesFunc, required: true },
+        { name: "tipo",           label: "Tipo",        type: "select", valor: b.tipo || "Vale-transporte", options: ["Vale-transporte","Vale-refeição","Plano de Saúde","Outro"], required: true },
+        { name: "descricao",      label: "Descrição",   type: "text",   valor: b.descricao },
+        { name: "valor",          label: "Valor (R$)",  type: "number", valor: b.valor, required: true },
+        { name: "data_inicio",    label: "Início",      type: "date",   valor: b.data_inicio },
+        { name: "data_fim",       label: "Fim (deixe vazio se vigente)", type: "date", valor: b.data_fim }
+      ],
+      onSubmit: function (v, done) {
+        var payload = { funcionario_id: Number(v.funcionario_id), tipo: v.tipo, descricao: v.descricao, valor: Number(v.valor || 0), data_inicio: v.data_inicio, data_fim: v.data_fim };
+        var q = editar
+          ? client.from("beneficios").update(payload).eq("id", b.id)
+          : client.from("beneficios").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarBeneficiosSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // 28. RH — FOLHA DE PAGAMENTO
+  // =========================================================================
+
+  var folhaLista = [];
+
+  function carregarFolhaSeNecessario() {
+    if (!funcionariosCarregado) carregarFuncionariosSeNecessario();
+    client.from("folha_pagamento").select("*").order("mes_ref", { ascending: false }).then(function (r) {
+      if (r.error) {
+        document.getElementById("fl-tbody").innerHTML = '<tr><td colspan="8" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      folhaLista = r.data || [];
+      renderFolha();
+    });
+  }
+
+  function renderFolha() {
+    var tbody = document.getElementById("fl-tbody");
+    var busca = (document.getElementById("fl-busca").value || "").trim().toLowerCase();
+    var mes   = document.getElementById("fl-mes").value;
+
+    var nomePorId = {};
+    funcionariosLista.forEach(function (f) { nomePorId[f.id] = f.nome; });
+
+    var filtrados = folhaLista.filter(function (p) {
+      if (mes && p.mes_ref !== mes) return false;
+      return matchBusca(busca, [nomePorId[p.funcionario_id]]);
+    });
+
+    var totBruto = 0, totLiq = 0;
+    filtrados.forEach(function (p) { totBruto += Number(p.salario_bruto || 0); totLiq += Number(p.liquido || 0); });
+
+    valText(document.getElementById("fl-m-qtd"),   fmtInt(filtrados.length));
+    valText(document.getElementById("fl-m-bruto"), fmtBRL(totBruto));
+    valText(document.getElementById("fl-m-liq"),   fmtBRL(totLiq));
+    valText(document.getElementById("fl-lbl"), filtrados.length + " de " + folhaLista.length);
+
+    preencherTbody(tbody, filtrados.map(function (p) {
+      return '<tr>' +
+        '<td class="mono">' + escHtml(p.mes_ref) + '</td>' +
+        '<td>' + escHtml(nomePorId[p.funcionario_id] || ("#" + p.funcionario_id)) + '</td>' +
+        '<td class="num">' + fmtBRL(p.salario_bruto) + '</td>' +
+        '<td class="num">' + fmtBRL(p.inss) + '</td>' +
+        '<td class="num">' + fmtBRL(p.irrf) + '</td>' +
+        '<td class="num">' + fmtBRL(p.fgts) + '</td>' +
+        '<td class="num destaque">' + fmtBRL(p.liquido) + '</td>' +
+        '<td><button class="btn-limpar" data-fl-edit="' + p.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 8, "Nenhuma folha lançada.");
+
+    tbody.querySelectorAll("[data-fl-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-fl-edit"));
+        var p = folhaLista.find(function (x) { return x.id === id; });
+        if (p) abrirModalFolha(p);
+      });
+    });
+  }
+
+  function abrirModalFolha(p) {
+    p = p || {};
+    var editar = !!p.id;
+    var opcoesFunc = funcionariosLista.map(function (f) { return { value: f.id, label: f.nome }; });
+    abrirModal({
+      titulo: editar ? "Editar folha" : "Nova folha de pagamento",
+      fields: [
+        { name: "funcionario_id",   label: "Funcionário",        type: "select", valor: p.funcionario_id, options: opcoesFunc, required: true },
+        { name: "mes_ref",          label: "Mês ref. (YYYY-MM)", type: "text",   valor: p.mes_ref, required: true },
+        { name: "salario_bruto",    label: "Salário bruto (R$)", type: "number", valor: p.salario_bruto, required: true },
+        { name: "inss",             label: "INSS (R$)",          type: "number", valor: p.inss },
+        { name: "irrf",             label: "IRRF (R$)",          type: "number", valor: p.irrf },
+        { name: "fgts",             label: "FGTS (R$)",          type: "number", valor: p.fgts },
+        { name: "outros_descontos", label: "Outros descontos",   type: "number", valor: p.outros_descontos },
+        { name: "outros_proventos", label: "Outros proventos",   type: "number", valor: p.outros_proventos },
+        { name: "observacoes",      label: "Observações",        type: "text",   valor: p.observacoes }
+      ],
+      onSubmit: function (v, done) {
+        var bruto = Number(v.salario_bruto || 0);
+        var inss  = Number(v.inss || 0);
+        var irrf  = Number(v.irrf || 0);
+        var fgts  = Number(v.fgts || 0);
+        var outD  = Number(v.outros_descontos || 0);
+        var outP  = Number(v.outros_proventos || 0);
+        var liq = bruto - inss - irrf - outD + outP;  // FGTS não é desconto do contracheque
+        var payload = {
+          funcionario_id: Number(v.funcionario_id),
+          mes_ref: v.mes_ref,
+          salario_bruto: bruto, inss: inss, irrf: irrf, fgts: fgts,
+          outros_descontos: outD, outros_proventos: outP,
+          liquido: liq,
+          observacoes: v.observacoes
+        };
+        var q = editar
+          ? client.from("folha_pagamento").update(payload).eq("id", p.id)
+          : client.from("folha_pagamento").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarFolhaSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // 29. RH — IMPOSTOS
+  // =========================================================================
+
+  var impostosLista = [];
+
+  function carregarImpostosSeNecessario() {
+    client.from("impostos_rh").select("*").order("mes_ref", { ascending: false }).then(function (r) {
+      if (r.error) {
+        document.getElementById("ir-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      impostosLista = r.data || [];
+      renderImpostos();
+    });
+  }
+
+  function renderImpostos() {
+    var tbody = document.getElementById("ir-tbody");
+    var mes    = document.getElementById("ir-mes").value;
+    var tipo   = document.getElementById("ir-tipo").value;
+    var status = document.getElementById("ir-status").value;
+
+    var filtrados = impostosLista.filter(function (i) {
+      if (mes && i.mes_ref !== mes) return false;
+      if (tipo && i.tipo !== tipo) return false;
+      if (status === "pendente" && i.data_pagamento) return false;
+      if (status === "pago" && !i.data_pagamento) return false;
+      return true;
+    });
+
+    var tot = 0;
+    filtrados.forEach(function (i) { tot += Number(i.valor || 0); });
+    var pend = impostosLista.filter(function (i) { return !i.data_pagamento; }).length;
+
+    valText(document.getElementById("ir-m-qtd"),   fmtInt(filtrados.length));
+    valText(document.getElementById("ir-m-total"), fmtBRL(tot));
+    valText(document.getElementById("ir-m-pend"),  fmtInt(pend));
+    valText(document.getElementById("ir-lbl"), filtrados.length + " de " + impostosLista.length);
+
+    preencherTbody(tbody, filtrados.map(function (i) {
+      var st = i.data_pagamento
+        ? '<span class="badge-tipo solta">pago</span>'
+        : '<span class="badge-tipo outras">pendente</span>';
+      return '<tr>' +
+        '<td class="mono">' + escHtml(i.mes_ref) + '</td>' +
+        '<td>' + escHtml(i.tipo) + '</td>' +
+        '<td class="num">' + fmtBRL(i.valor) + '</td>' +
+        '<td>' + (i.data_pagamento ? fmtData(i.data_pagamento) : '—') + '</td>' +
+        '<td>' + st + '</td>' +
+        '<td><button class="btn-limpar" data-ir-edit="' + i.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 6, "Nenhum imposto lançado.");
+
+    tbody.querySelectorAll("[data-ir-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-ir-edit"));
+        var i = impostosLista.find(function (x) { return x.id === id; });
+        if (i) abrirModalImposto(i);
+      });
+    });
+  }
+
+  function abrirModalImposto(i) {
+    i = i || {};
+    var editar = !!i.id;
+    abrirModal({
+      titulo: editar ? "Editar imposto" : "Novo imposto RH",
+      fields: [
+        { name: "mes_ref",        label: "Mês ref. (YYYY-MM)", type: "text",   valor: i.mes_ref, required: true },
+        { name: "tipo",           label: "Tipo",               type: "select", valor: i.tipo || "INSS", options: ["INSS","FGTS","IRRF","Outro"], required: true },
+        { name: "valor",          label: "Valor (R$)",         type: "number", valor: i.valor, required: true },
+        { name: "data_pagamento", label: "Data de pagamento (deixe vazio se pendente)", type: "date", valor: i.data_pagamento },
+        { name: "observacoes",    label: "Observações",        type: "text",   valor: i.observacoes }
+      ],
+      onSubmit: function (v, done) {
+        var payload = { mes_ref: v.mes_ref, tipo: v.tipo, valor: Number(v.valor || 0), data_pagamento: v.data_pagamento, observacoes: v.observacoes };
+        var q = editar
+          ? client.from("impostos_rh").update(payload).eq("id", i.id)
+          : client.from("impostos_rh").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarImpostosSeNecessario();
+          done(null);
+        });
+      }
+    });
   }
 
   function confirmarImport() {
