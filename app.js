@@ -20,6 +20,7 @@
 
   var bootCarregando = document.getElementById("boot-carregando");
   var bootLogin      = document.getElementById("boot-login");
+  var bootTroca      = document.getElementById("boot-troca");
   var shell          = document.getElementById("shell");
 
   // Login
@@ -54,6 +55,7 @@
   function mostrarEstado(qual) {
     bootCarregando.hidden = qual !== "carregando";
     bootLogin.hidden      = qual !== "login";
+    bootTroca.hidden      = qual !== "troca";
     shell.hidden          = qual !== "shell";
   }
 
@@ -141,14 +143,27 @@
 
   client.auth.getSession().then(function (resp) {
     var session = resp && resp.data ? resp.data.session : null;
-    if (session) entrarModoShell(session.user);
+    if (session) verificarSenhaTempEEntrar(session.user);
     else         entrarModoLogin();
   });
 
   client.auth.onAuthStateChange(function (event, session) {
-    if (event === "SIGNED_IN" && session) entrarModoShell(session.user);
+    if (event === "SIGNED_IN" && session) verificarSenhaTempEEntrar(session.user);
     else if (event === "SIGNED_OUT")      entrarModoLogin();
   });
+
+  // Antes do shell, checar a flag senha_temporaria em perfis.
+  // Se true, empurrar o usuário para a tela de troca antes de deixar usar o sistema.
+  function verificarSenhaTempEEntrar(user) {
+    client.from("perfis").select("nome, perfil, senha_temporaria").eq("id", user.id).single()
+      .then(function (r) {
+        if (!r.error && r.data && r.data.senha_temporaria === true) {
+          entrarModoTrocaSenha(user, /*obrigatoria=*/true);
+        } else {
+          entrarModoShell(user);
+        }
+      });
+  }
 
   function entrarModoLogin() {
     setErroLogin(null);
@@ -298,6 +313,7 @@
     if (pageId === "cfg_plano")      carregarPlanoContasSeNecessario();
     if (pageId === "cfg_cfop")       carregarCfopSeNecessario();
     if (pageId === "cfg_parametros") carregarParametros(window._terraUser);
+    if (pageId === "cfg_diag")       renderDiagnostico();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -1292,6 +1308,420 @@
       if (tabela === "receitas_custos") { rcCarregado = false; rcLista = []; }
       if (tabela === "entregas_vinc") { entregasVincCarregado = false; entregasVincCache = []; }
     });
+  }
+
+  // =========================================================================
+  // 20. TROCA DE SENHA (primeiro login OU pedida pelo usuário)
+  // =========================================================================
+
+  var trocaUser = null;
+  var trocaObrigatoria = false;
+
+  function entrarModoTrocaSenha(user, obrigatoria) {
+    trocaUser = user;
+    trocaObrigatoria = !!obrigatoria;
+
+    document.getElementById("troca-titulo").textContent = obrigatoria ? "Defina sua nova senha" : "Trocar minha senha";
+    document.getElementById("troca-desc").textContent = obrigatoria
+      ? "Sua senha atual é temporária. Defina uma nova para continuar."
+      : "Escolha uma nova senha. Você vai continuar logada após salvar.";
+    document.getElementById("btn-troca-cancelar").hidden = obrigatoria;
+
+    document.getElementById("troca-nova").value = "";
+    document.getElementById("troca-confirma").value = "";
+    document.getElementById("troca-erro").hidden = true;
+    document.getElementById("troca-ok").hidden = true;
+
+    mostrarEstado("troca");
+    setTimeout(function () { document.getElementById("troca-nova").focus(); }, 0);
+  }
+
+  document.getElementById("form-troca").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var nova = document.getElementById("troca-nova").value;
+    var conf = document.getElementById("troca-confirma").value;
+    var erro = document.getElementById("troca-erro");
+    var ok   = document.getElementById("troca-ok");
+    var btn  = document.getElementById("btn-troca");
+
+    erro.hidden = true; ok.hidden = true;
+
+    if (nova.length < 6) { erro.textContent = "A senha precisa ter pelo menos 6 caracteres."; erro.hidden = false; return; }
+    if (nova !== conf)   { erro.textContent = "As duas senhas não coincidem."; erro.hidden = false; return; }
+
+    btn.disabled = true; btn.textContent = "Salvando…";
+
+    client.auth.updateUser({ password: nova }).then(function (r1) {
+      if (r1.error) {
+        btn.disabled = false; btn.textContent = "Salvar nova senha";
+        erro.textContent = "Erro ao atualizar senha: " + r1.error.message;
+        erro.hidden = false;
+        return;
+      }
+      // Marca senha_temporaria=false
+      return client.from("perfis")
+        .update({ senha_temporaria: false })
+        .eq("id", trocaUser.id)
+        .then(function () {
+          ok.textContent = "Senha atualizada com sucesso.";
+          ok.hidden = false;
+          btn.textContent = "Entrando…";
+          setTimeout(function () {
+            btn.disabled = false; btn.textContent = "Salvar nova senha";
+            entrarModoShell(trocaUser);
+          }, 900);
+        });
+    });
+  });
+
+  document.getElementById("btn-troca-cancelar").addEventListener("click", function () {
+    if (trocaObrigatoria) return;
+    if (trocaUser) entrarModoShell(trocaUser);
+  });
+
+  // Link dentro de Configuração → abre a tela de troca como voluntária
+  var btnAbrirTroca = document.getElementById("btn-abrir-troca");
+  if (btnAbrirTroca) {
+    btnAbrirTroca.addEventListener("click", function () {
+      if (window._terraUser) entrarModoTrocaSenha(window._terraUser, false);
+    });
+  }
+
+  // =========================================================================
+  // 21. DIAGNÓSTICO — orçamentos com ruído Fixa+Solta (Entrega 5)
+  // =========================================================================
+
+  function renderDiagnostico() {
+    esperarOrcamentosCarregados(function () {
+      var porOrc = {};
+      movimentosCompletos.forEach(function (m) {
+        if (!m.orcamento || !m.tipo) return;
+        if (!porOrc[m.orcamento]) porOrc[m.orcamento] = {};
+        porOrc[m.orcamento][m.tipo] = (porOrc[m.orcamento][m.tipo] || 0) + Number(m.valor || 0);
+      });
+
+      var comRuido = [];
+      var totalAnalisados = 0;
+      Object.keys(porOrc).forEach(function (orc) {
+        totalAnalisados++;
+        var tipos = porOrc[orc];
+        var ativos = Object.keys(tipos).filter(function (t) { return tipos[t] > 0.01; });
+        if (ativos.length > 1) {
+          var total = 0;
+          ativos.forEach(function (t) { total += tipos[t]; });
+          comRuido.push({
+            orcamento: orc,
+            cliente: clientePorOrcamento[orc] || "—",
+            tipos: ativos.map(function (t) { return t + " (" + fmtBRL(tipos[t]) + ")"; }).join(", "),
+            total: total
+          });
+        }
+      });
+      comRuido.sort(function (a, b) { return b.total - a.total; });
+
+      valText(document.getElementById("diag-m-qtd"), fmtInt(comRuido.length));
+      valText(document.getElementById("diag-m-tot"), fmtInt(totalAnalisados));
+
+      var tbody = document.getElementById("diag-tbody");
+      preencherTbody(tbody, comRuido.map(function (r) {
+        return '<tr>' +
+          '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+          '<td>' + escHtml(r.cliente) + '</td>' +
+          '<td>' + escHtml(r.tipos) + '</td>' +
+          '<td class="num">' + fmtBRL(r.total) + '</td>' +
+        '</tr>';
+      }), 4, "Nenhum orçamento com ruído de Tipo. 👍");
+    });
+  }
+
+  // =========================================================================
+  // 22. IMPORTAR PLANILHAS (Entrega 4e)
+  // =========================================================================
+
+  // Templates esperados por tipo de planilha.
+  // Chave = nome da coluna na planilha (case-insensitive, sem acento).
+  // Valor = nome da coluna no Supabase.
+  var impTemplates = {
+    orcamentos: {
+      nomeLegivel: "Orçamentos",
+      alvo: "orcamentos",
+      colunas: {
+        "data":               "data",
+        "orcamento":          "orcamento",
+        "nome":               "nome",
+        "cliente":            "nome",
+        "parceiro":           "parceiro",
+        "venda":              "venda",
+        "adiantamento":       "adiantamento",
+        "recebimento":        "recebimento",
+        "resultado financeiro":"resultado_financeiro",
+        "a receber":          "a_receber",
+        "status recebimento": "status_recebimento",
+        "nota fiscal":        "nota_fiscal",
+        "venda sem nf":       "venda_sem_nf",
+        "a faturar":          "a_faturar",
+        "status faturamento": "status_faturamento"
+      },
+      obrigatorias: ["orcamento"],
+      dicas: "Colunas esperadas: orcamento (obrigatória), data, nome/cliente, parceiro, venda, recebimento, nota_fiscal, a_receber, a_faturar, status_recebimento, status_faturamento."
+    },
+    movimentos: {
+      nomeLegivel: "Movimentos",
+      alvo: "movimentos",
+      colunas: {
+        "competencia": "competencia",
+        "data":        "data",
+        "orcamento":   "orcamento",
+        "nome":        "nome",
+        "cliente":     "nome",
+        "tipo":        "tipo",
+        "natureza":    "natureza",
+        "valor":       "valor",
+        "nota fiscal": "nota_fiscal",
+        "os":          "os",
+        "item":        "item",
+        "custo":       "custo",
+        "comentarios": "comentarios"
+      },
+      obrigatorias: ["orcamento", "natureza", "valor"],
+      dicas: "Colunas esperadas: orcamento, natureza e valor (obrigatórias); data, tipo, nota_fiscal, os, item, custo, comentarios (opcionais)."
+    },
+    notas_fiscais: {
+      nomeLegivel: "Notas Fiscais",
+      alvo: "notas_fiscais",
+      colunas: {
+        "emissao":          "emissao",
+        "numero nf":        "numero_nf",
+        "razao social":     "razao_social",
+        "numero orcamento": "numero_orcamento",
+        "valor nf":         "valor_nf",
+        "cfop":             "cfop",
+        "mes ref":          "mes_ref"
+      },
+      obrigatorias: ["numero_nf"],
+      dicas: "Colunas esperadas: numero_nf (obrigatória), emissao, razao_social, numero_orcamento, valor_nf, cfop, mes_ref."
+    },
+    receitas_custos: {
+      nomeLegivel: "Receitas e Custos",
+      alvo: "receitas_custos",
+      colunas: {
+        "ano":           "ano",
+        "mes":           "mes",
+        "categoria":     "categoria",
+        "subcategoria":  "subcategoria",
+        "valor":         "valor"
+      },
+      obrigatorias: ["ano", "mes", "categoria", "valor"],
+      dicas: "Colunas esperadas: ano, mes, categoria (receita|custo), valor (obrigatórias); subcategoria (opcional)."
+    }
+  };
+
+  var impArquivo  = document.getElementById("imp-arquivo");
+  var impTipo     = document.getElementById("imp-tipo");
+  var impBtnPrev  = document.getElementById("imp-btn-preview");
+  var impBtnConf  = document.getElementById("imp-btn-confirmar");
+  var impStatus   = document.getElementById("imp-status");
+  var impPreview  = document.getElementById("imp-preview");
+  var impColHint  = document.getElementById("imp-colunas-esperadas");
+  var impThead    = document.getElementById("imp-thead");
+  var impTbody    = document.getElementById("imp-tbody");
+  var impTotal    = document.getElementById("imp-total");
+
+  var impParsed = null;  // { linhas: [...], cabecalhos: [...] }
+
+  function setImpStatus(msg, tipo) {
+    if (!msg) { impStatus.hidden = true; return; }
+    impStatus.textContent = msg;
+    impStatus.className = "status " + (tipo || "");
+    impStatus.hidden = false;
+  }
+
+  function atualizarEstadoImport() {
+    var temTipo = !!impTipo.value;
+    var temArq  = impArquivo.files && impArquivo.files.length > 0;
+    impBtnPrev.disabled = !(temTipo && temArq);
+    impBtnConf.disabled = !(temTipo && temArq && impParsed);
+    if (temTipo && impTemplates[impTipo.value]) {
+      impColHint.innerHTML = impTemplates[impTipo.value].dicas;
+    } else {
+      impColHint.innerHTML = "";
+    }
+  }
+
+  if (impTipo) {
+    impTipo.addEventListener("change", function () {
+      impParsed = null;
+      impPreview.hidden = true;
+      setImpStatus(null);
+      atualizarEstadoImport();
+    });
+  }
+  if (impArquivo) {
+    impArquivo.addEventListener("change", function () {
+      impParsed = null;
+      impPreview.hidden = true;
+      setImpStatus(null);
+      atualizarEstadoImport();
+    });
+  }
+  if (impBtnPrev) {
+    impBtnPrev.addEventListener("click", function () {
+      previsualizarImport();
+    });
+  }
+  if (impBtnConf) {
+    impBtnConf.addEventListener("click", function () {
+      confirmarImport();
+    });
+  }
+
+  function normalizarCabecalho(nome) {
+    return String(nome || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // remove acentos
+      .replace(/[_\-.]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function previsualizarImport() {
+    if (typeof window.XLSX === "undefined") {
+      setImpStatus("Biblioteca XLSX ainda carregando. Aguarde alguns segundos e tente de novo.", "alerta");
+      return;
+    }
+    var arq = impArquivo.files[0];
+    if (!arq) return;
+    var tpl = impTemplates[impTipo.value];
+    if (!tpl) return;
+
+    setImpStatus("Lendo arquivo…", "carregando");
+
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+
+        if (!raw.length) { setImpStatus("Planilha vazia.", "erro"); return; }
+
+        // Mapear cabeçalhos → colunas do schema
+        var cabAlvo = {};  // { cabecalho_original: coluna_schema }
+        Object.keys(raw[0]).forEach(function (cab) {
+          var norm = normalizarCabecalho(cab);
+          if (tpl.colunas[norm]) cabAlvo[cab] = tpl.colunas[norm];
+        });
+        var alvoCols = Object.values(cabAlvo);
+        var faltando = tpl.obrigatorias.filter(function (c) { return alvoCols.indexOf(c) === -1; });
+        if (faltando.length) {
+          setImpStatus("Faltando colunas obrigatórias: " + faltando.join(", "), "erro");
+          impParsed = null;
+          atualizarEstadoImport();
+          return;
+        }
+
+        // Converter para objetos com nomes do schema
+        var linhas = raw.map(function (row) {
+          var out = {};
+          Object.keys(cabAlvo).forEach(function (cab) {
+            var col = cabAlvo[cab];
+            var v = row[cab];
+            if (v === "" || v === null || v === undefined) { out[col] = null; return; }
+            // Campos numéricos
+            if (["venda","adiantamento","recebimento","resultado_financeiro","a_receber","nota_fiscal","venda_sem_nf","a_faturar","valor","valor_nf","custo","ano","mes"].indexOf(col) !== -1 && col !== "nota_fiscal") {
+              var n = Number(String(v).replace(/\./g,"").replace(",", "."));
+              out[col] = isNaN(n) ? null : n;
+              return;
+            }
+            // Datas — SheetJS cellDates:true já entrega Date
+            if (["data","competencia","emissao"].indexOf(col) !== -1) {
+              if (v instanceof Date) { out[col] = v.toISOString().slice(0,10); return; }
+              out[col] = String(v).slice(0,10);
+              return;
+            }
+            out[col] = String(v);
+          });
+          return out;
+        });
+
+        impParsed = { linhas: linhas, cabs: alvoCols };
+        renderPreviewImport(linhas, alvoCols);
+
+        setImpStatus("Pré-visualização gerada. " + linhas.length + " linha(s) prontas para importar.", "ok");
+        atualizarEstadoImport();
+      } catch (e) {
+        setImpStatus("Erro lendo arquivo: " + e.message, "erro");
+      }
+    };
+    reader.onerror = function () { setImpStatus("Falha ao ler arquivo.", "erro"); };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  function renderPreviewImport(linhas, cabs) {
+    impThead.innerHTML = "<tr>" + cabs.map(function (c) { return "<th>" + escHtml(c) + "</th>"; }).join("") + "</tr>";
+    var slice = linhas.slice(0, 10);
+    impTbody.innerHTML = slice.map(function (row) {
+      return "<tr>" + cabs.map(function (c) {
+        var v = row[c];
+        if (v === null || v === undefined) return '<td class="tbl-vazio">—</td>';
+        return "<td>" + escHtml(v) + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    impTotal.textContent = fmtInt(linhas.length);
+    impPreview.hidden = false;
+  }
+
+  function confirmarImport() {
+    if (!impParsed) return;
+    var tpl = impTemplates[impTipo.value];
+    if (!tpl) return;
+
+    var confirma = confirm("Confirmar importação de " + impParsed.linhas.length + " linha(s) para " + tpl.nomeLegivel + "?\n\nRegistros serão adicionados à tabela " + tpl.alvo + ".");
+    if (!confirma) return;
+
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Inserindo registros em lotes de 200…", "carregando");
+
+    var lotes = [];
+    for (var i = 0; i < impParsed.linhas.length; i += 200) {
+      lotes.push(impParsed.linhas.slice(i, i + 200));
+    }
+
+    var inseridos = 0;
+    var erros = [];
+    var processarProximo = function (idx) {
+      if (idx >= lotes.length) {
+        terminar();
+        return;
+      }
+      client.from(tpl.alvo).insert(lotes[idx]).then(function (r) {
+        if (r.error) {
+          erros.push("Lote " + (idx + 1) + ": " + r.error.message);
+        } else {
+          inseridos += lotes[idx].length;
+          setImpStatus("Inseridos " + inseridos + " / " + impParsed.linhas.length + "…", "carregando");
+        }
+        processarProximo(idx + 1);
+      });
+    };
+    var terminar = function () {
+      impBtnConf.disabled = false;
+      impBtnPrev.disabled = false;
+      if (erros.length) {
+        setImpStatus("Importação terminou com avisos. Inseridos: " + inseridos + " · Erros em " + erros.length + " lote(s): " + erros.slice(0,3).join(" | "), "alerta");
+      } else {
+        setImpStatus("Importação concluída. " + inseridos + " registro(s) inseridos em " + tpl.alvo + ".", "ok");
+        // Invalida caches afetados para o usuário ver os dados novos
+        if (tpl.alvo === "orcamentos" || tpl.alvo === "movimentos") {
+          orcamentosCarregados = false;
+          movimentosCompletos = []; orcamentosLista = [];
+        }
+        if (tpl.alvo === "receitas_custos") { rcCarregado = false; rcLista = []; }
+      }
+      impParsed = null;
+    };
+    processarProximo(0);
   }
 
 })();

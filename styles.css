@@ -427,8 +427,14 @@ h3 { font-size: 16px; }
 .sb-icon {
   width: 20px;
   flex-shrink: 0;
-  text-align: center;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 /* Modo colapsado: esconde labels, carets e subitens */
@@ -727,6 +733,71 @@ h3 { font-size: 16px; }
   accent-color: var(--ouro);
   width: 16px;
   height: 16px;
+}
+
+/* =========================================================
+   TROCA DE SENHA
+   ========================================================= */
+
+.troca-acoes {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* =========================================================
+   IMPORTAR
+   ========================================================= */
+
+.toolbar input[type="file"] {
+  padding: 6px 10px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  max-width: 280px;
+}
+.toolbar input[type="file"]::file-selector-button {
+  background: var(--bg3);
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  margin-right: 8px;
+  color: var(--text2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.toolbar input[type="file"]::file-selector-button:hover {
+  background: var(--bg4);
+  color: var(--text);
+}
+
+.param-hint {
+  background: var(--bg3);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+.param-hint code {
+  background: var(--bg4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11.5px;
+}
+
+.imp-subtitle {
+  margin: 16px 0 8px;
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 15px;
+  color: var(--text);
 }
 
 /* =========================================================

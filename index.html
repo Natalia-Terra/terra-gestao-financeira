@@ -48,6 +48,43 @@
   </div>
 
   <!-- =========================================================
+       ESTADO 2.5 — troca de senha obrigatória (primeiro login)
+                    ou pedida pelo usuário
+       ========================================================= -->
+  <div id="boot-troca" class="boot-tela" hidden>
+    <main class="login-wrap">
+      <div class="login-brand">
+        <img class="login-logo" src="logo-terra.png" alt="Terra Conttemporânea — móveis" />
+        <p class="subtitulo">Sistema de Gestão de Faturamento e Receita</p>
+      </div>
+
+      <section class="card login-card">
+        <h2 id="troca-titulo">Defina sua nova senha</h2>
+        <p class="card-desc" id="troca-desc">Sua senha atual é temporária. Defina uma nova para continuar.</p>
+
+        <form id="form-troca" novalidate>
+          <div class="form-field">
+            <label for="troca-nova">Nova senha</label>
+            <input type="password" id="troca-nova" autocomplete="new-password" minlength="6" required />
+          </div>
+          <div class="form-field">
+            <label for="troca-confirma">Confirmar senha</label>
+            <input type="password" id="troca-confirma" autocomplete="new-password" minlength="6" required />
+          </div>
+
+          <div id="troca-erro" class="status erro" hidden role="alert"></div>
+          <div id="troca-ok" class="status ok" hidden role="status"></div>
+
+          <div class="troca-acoes">
+            <button type="submit" id="btn-troca" class="btn-ouro">Salvar nova senha</button>
+            <button type="button" id="btn-troca-cancelar" class="btn-limpar" hidden>Cancelar</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- =========================================================
        ESTADO 3 — shell da aplicação (autenticado)
        ========================================================= -->
   <div id="shell" hidden>
@@ -77,12 +114,12 @@
 
         <nav class="sidebar-nav">
           <button class="sb-item" data-page="dashboard" type="button" title="Dashboard">
-            <span class="sb-icon">📊</span><span class="sb-label">Dashboard</span>
+            <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg></span><span class="sb-label">Dashboard</span>
           </button>
 
           <div class="sb-group" data-macro="financeiro">
             <button class="sb-group-header" type="button" title="Financeiro">
-              <span class="sb-icon">💰</span><span class="sb-label">Financeiro</span><span class="sb-caret">▾</span>
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1-2-2 2 2 0 0 1 2-2h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-4"/><path d="M21 13v-2a2 2 0 0 0-2-2H15a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2Z"/><circle cx="16" cy="12" r=".8" fill="currentColor"/></svg></span><span class="sb-label">Financeiro</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
               <button class="sb-sub" data-page="consolidado" type="button">Consolidado</button>
@@ -100,7 +137,7 @@
 
           <div class="sb-group" data-macro="rh">
             <button class="sb-group-header" type="button" title="Dep. Pessoal e RH">
-              <span class="sb-icon">👥</span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
               <button class="sb-sub" data-page="rh_funcionarios" type="button">Funcionários</button>
@@ -113,7 +150,7 @@
 
         <div class="sidebar-footer">
           <button class="sb-item" data-page="configuracao" type="button" title="Configuração">
-            <span class="sb-icon">⚙</span><span class="sb-label">Configuração</span>
+            <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="sb-label">Configuração</span>
           </button>
         </div>
       </aside>
@@ -480,10 +517,43 @@
           </div>
         </section>
 
-        <!-- Importar — placeholder, 4e próxima rodada -->
+        <!-- Importar — Entrega 4e -->
         <section class="page" data-page="importacoes" hidden>
-          <div class="page-header"><h1 class="page-title">Importar</h1><p class="page-sub">Carregar planilhas da Terra</p></div>
-          <div class="stub">Upload e parse de planilhas virão na próxima rodada (Entrega 4e). Por enquanto, novos dados são carregados via chunks SQL.</div>
+          <div class="page-header">
+            <h1 class="page-title">Importar</h1>
+            <p class="page-sub">Carregue planilhas em lote — escolha o tipo, selecione o arquivo e confirme</p>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <label class="toolbar-inline">Tipo:
+                <select id="imp-tipo">
+                  <option value="">Selecione…</option>
+                  <option value="orcamentos">Orçamentos</option>
+                  <option value="movimentos">Movimentos</option>
+                  <option value="notas_fiscais">Notas Fiscais</option>
+                  <option value="receitas_custos">Receitas e Custos</option>
+                </select>
+              </label>
+              <input type="file" id="imp-arquivo" accept=".xlsx,.xls" />
+              <button id="imp-btn-preview" class="btn-limpar" type="button" disabled>Pré-visualizar</button>
+              <button id="imp-btn-confirmar" class="btn-ouro" type="button" disabled>Confirmar e importar</button>
+            </div>
+
+            <div id="imp-colunas-esperadas" class="param-hint"></div>
+
+            <div id="imp-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div id="imp-preview" hidden>
+              <h3 class="imp-subtitle">Pré-visualização (primeiras 10 linhas de <span id="imp-total">0</span>)</h3>
+              <div class="table-wrap">
+                <table class="tabela">
+                  <thead id="imp-thead"></thead>
+                  <tbody id="imp-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- Páginas stubs: RH (4) -->
@@ -512,10 +582,52 @@
               <div class="config-card-title">Limpar Dados</div>
               <div class="config-card-desc">Apagar tabelas da Terra com confirmação</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_diag">
+              <div class="config-card-title">Diagnóstico</div>
+              <div class="config-card-desc">Orçamentos com ruído de Tipo (Fixa + Solta simultâneos)</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_trocasenha">
+              <div class="config-card-title">Trocar minha senha</div>
+              <div class="config-card-desc">Atualize a senha da sua conta</div>
+            </button>
             <button class="config-card disabled" type="button" data-subpage="" disabled title="Próxima rodada">
               <div class="config-card-title">Usuários</div>
               <div class="config-card-desc">CRUD de logins (próxima rodada)</div>
             </button>
+          </div>
+        </section>
+
+        <!-- Configuração > Diagnóstico — orçamentos Fixa+Solta -->
+        <section class="page" data-page="cfg_diag" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Diagnóstico — orçamentos com ruído</h1>
+            <p class="page-sub">Orçamentos com movimentos classificados em dois ou mais Tipos simultaneamente</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Com ruído</div><div class="metric-value" id="diag-m-qtd">—</div><div class="metric-sub">Fixa + Solta (ou similar)</div></div>
+            <div class="metric-card"><div class="metric-label">Total analisado</div><div class="metric-value" id="diag-m-tot">—</div><div class="metric-sub">orçamentos com movimentos</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Orçamento</th><th>Cliente</th><th>Tipos detectados</th><th class="num">Valor total</th></tr></thead>
+                <tbody id="diag-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > Trocar minha senha -->
+        <section class="page" data-page="cfg_trocasenha" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Trocar minha senha</h1>
+            <p class="page-sub">Defina uma nova senha para sua conta</p>
+          </div>
+          <div class="card fat-card">
+            <p class="card-desc">Clique no botão abaixo para abrir a tela de troca de senha. Você vai ser deslogada ao salvar.</p>
+            <button type="button" class="btn-ouro" id="btn-abrir-troca">Abrir tela de troca de senha</button>
           </div>
         </section>
 
@@ -637,6 +749,8 @@
 
   <!-- Supabase JS SDK v2 via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- SheetJS (XLSX) para a tela de Importar — carrega com defer pois não é crítico no boot -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
