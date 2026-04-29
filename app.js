@@ -1355,10 +1355,60 @@
     document.getElementById("troca-confirma").value = "";
     document.getElementById("troca-erro").hidden = true;
     document.getElementById("troca-ok").hidden = true;
+    // Recolocar tipo dos campos para "password" (caso o olho tenha aberto antes)
+    document.getElementById("troca-nova").type = "password";
+    document.getElementById("troca-confirma").type = "password";
+    // Reseta o estado visual dos requisitos
+    atualizarRequisitos();
 
     mostrarEstado("troca");
     setTimeout(function () { document.getElementById("troca-nova").focus(); }, 0);
   }
+
+  // ---- Botões de olho (mostrar/ocultar senha) — delegação global ----
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest(".btn-eye");
+    if (!btn) return;
+    var alvo = document.getElementById(btn.getAttribute("data-eye"));
+    if (!alvo) return;
+    var visivel = alvo.type === "text";
+    alvo.type = visivel ? "password" : "text";
+    var iShow = btn.querySelector(".eye-show");
+    var iHide = btn.querySelector(".eye-hide");
+    if (iShow && iHide) {
+      iShow.hidden = !visivel;   // se estava visível, agora oculta → mostra olho aberto
+      iHide.hidden = visivel;
+    }
+  });
+
+  // ---- Validação ao vivo dos requisitos de senha ----
+  function avaliarSenha(senha, conf) {
+    return {
+      len:     senha.length >= 8,
+      upper:   /[A-Z]/.test(senha),
+      lower:   /[a-z]/.test(senha),
+      num:     /\d/.test(senha),
+      special: /[^A-Za-z0-9]/.test(senha),
+      match:   senha.length > 0 && senha === conf
+    };
+  }
+
+  function atualizarRequisitos() {
+    var nova = document.getElementById("troca-nova").value;
+    var conf = document.getElementById("troca-confirma").value;
+    var reqs = avaliarSenha(nova, conf);
+    var ul = document.getElementById("troca-reqs");
+    if (!ul) return;
+    ul.querySelectorAll("li").forEach(function (li) {
+      var k = li.getAttribute("data-req");
+      li.classList.toggle("ok", !!reqs[k]);
+    });
+    var btn = document.getElementById("btn-troca");
+    btn.disabled = !(reqs.len && reqs.upper && reqs.lower && reqs.num && reqs.special && reqs.match);
+  }
+
+  document.getElementById("troca-nova").addEventListener("input", atualizarRequisitos);
+  document.getElementById("troca-confirma").addEventListener("input", atualizarRequisitos);
 
   document.getElementById("form-troca").addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -1370,8 +1420,17 @@
 
     erro.hidden = true; ok.hidden = true;
 
-    if (nova.length < 6) { erro.textContent = "A senha precisa ter pelo menos 6 caracteres."; erro.hidden = false; return; }
-    if (nova !== conf)   { erro.textContent = "As duas senhas não coincidem."; erro.hidden = false; return; }
+    var r = avaliarSenha(nova, conf);
+    if (!r.len || !r.upper || !r.lower || !r.num || !r.special) {
+      erro.textContent = "A senha não atende a todos os requisitos.";
+      erro.hidden = false;
+      return;
+    }
+    if (!r.match) {
+      erro.textContent = "As duas senhas não coincidem.";
+      erro.hidden = false;
+      return;
+    }
 
     btn.disabled = true; btn.textContent = "Salvando…";
 

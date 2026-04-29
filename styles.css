@@ -746,6 +746,77 @@ h3 { font-size: 16px; }
   margin-top: 8px;
 }
 
+/* Input com botão de olho (mostrar/ocultar senha) */
+.input-with-eye {
+  position: relative;
+}
+.input-with-eye input {
+  padding-right: 40px;
+}
+.btn-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--text3);
+  padding: 4px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s, background .15s;
+}
+.btn-eye:hover {
+  color: var(--text);
+  background: var(--bg3);
+}
+.btn-eye:focus-visible {
+  outline: none;
+  border-color: var(--ouro);
+}
+.btn-eye svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Requisitos de senha (live) */
+.senha-reqs {
+  list-style: none;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+}
+.senha-reqs li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  transition: color .15s;
+}
+.senha-reqs li::before {
+  content: "○";
+  font-size: 12px;
+  width: 14px;
+  text-align: center;
+  color: var(--text3);
+  transition: color .15s;
+}
+.senha-reqs li.ok {
+  color: var(--success);
+  font-weight: 700;
+}
+.senha-reqs li.ok::before {
+  content: "✓";
+  color: var(--success);
+}
+
 /* =========================================================
    IMPORTAR
    ========================================================= */
