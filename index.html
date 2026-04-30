@@ -163,6 +163,16 @@
             </div>
           </div>
 
+          <div class="sb-group" data-macro="apropriacao">
+            <button class="sb-group-header" type="button" title="Apropriação">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-5"/><path d="M14 8h5v5"/></svg></span><span class="sb-label">Apropriação</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="apr_dashboard" type="button">Dashboard</button>
+              <button class="sb-sub" data-page="apr_excluidas" type="button">OSs excluídas</button>
+            </div>
+          </div>
+
           <div class="sb-group" data-macro="rh">
             <button class="sb-group-header" type="button" title="Dep. Pessoal e RH">
               <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
@@ -575,6 +585,69 @@
           </div>
         </section>
 
+        <!-- Apropriação — Dashboard -->
+        <section class="page" data-page="apr_dashboard" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Apropriação de Receita</h1>
+            <p class="page-sub">Receita reconhecida × custo realizado por mês · regra calcOS preservada do dashboard antigo</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Ano:
+              <select id="apr-ano">
+                <option value="2026" selected>2026</option>
+                <option value="2025">2025</option>
+              </select>
+            </label>
+            <label class="toolbar-inline">Status:
+              <select id="apr-status">
+                <option value="">Todas</option>
+                <option value="andamento" selected>Em andamento</option>
+                <option value="concluida">Concluídas</option>
+                <option value="pausada">Pausadas</option>
+                <option value="cancelada">Canceladas</option>
+              </select>
+            </label>
+            <span class="toolbar-label" id="apr-lbl"></span>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Receita do ano</div><div class="metric-value" id="apr-m-rec">—</div><div class="metric-sub">soma das apropriações</div></div>
+            <div class="metric-card"><div class="metric-label">Custo do ano</div><div class="metric-value" id="apr-m-cus">—</div><div class="metric-sub">CPV-Matéria Prima</div></div>
+            <div class="metric-card"><div class="metric-label">Margem</div><div class="metric-value" id="apr-m-mrg">—</div><div class="metric-sub">(rec − custo) / rec</div></div>
+            <div class="metric-card"><div class="metric-label">Residual a apropriar</div><div class="metric-value" id="apr-m-res">—</div><div class="metric-sub">contrato − apropriado</div></div>
+          </div>
+
+          <h3 class="imp-subtitle">Receita reconhecida mês a mês</h3>
+          <div class="apr-meses" id="apr-grid-meses"></div>
+
+          <h3 class="imp-subtitle">Carteira por orçamento</h3>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Orçamento</th><th>Cliente</th><th class="num">OSs</th><th class="num">Contrato</th><th class="num">Apropriado</th><th class="num">Residual</th><th class="num">Custo</th><th class="num">Margem</th></tr></thead>
+                <tbody id="apr-carteira-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Apropriação — OSs excluídas -->
+        <section class="page" data-page="apr_excluidas" hidden>
+          <div class="page-header">
+            <h1 class="page-title">OSs excluídas</h1>
+            <p class="page-sub">OSs descartadas da análise com justificativa</p>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>OS</th><th>Justificativa</th><th>Quando</th><th>Por</th><th></th></tr></thead>
+                <tbody id="apr-excl-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- Importar — Entrega 4e -->
         <section class="page" data-page="importacoes" hidden>
           <div class="page-header">
@@ -591,6 +664,8 @@
                   <option value="movimentos">Movimentos</option>
                   <option value="notas_fiscais">Notas Fiscais</option>
                   <option value="receitas_custos">Receitas e Custos</option>
+                  <option value="evolucao_pct">Evolução % (Planilha de Produção)</option>
+                  <option value="saida_estoque">Saída de Estoque (CPV-Matéria Prima)</option>
                 </select>
               </label>
               <input type="file" id="imp-arquivo" accept=".xlsx,.xls" />

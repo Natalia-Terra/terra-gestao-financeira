@@ -977,6 +977,57 @@ h3 { font-size: 16px; }
 .org-fechar-fs.ativo {
   display: inline-flex;
 }
+
+/* =========================================================
+   APROPRIAÇÃO — grid mensal
+   ========================================================= */
+
+.apr-meses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.apr-mes {
+  background: var(--bg2);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.apr-mes:hover {
+  border-color: var(--ouro);
+  box-shadow: 0 2px 6px rgba(184, 134, 11, 0.10);
+}
+.apr-mes.vazio { opacity: .55; }
+.apr-mes-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.apr-mes-rec {
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ouro-esc);
+  line-height: 1.1;
+}
+.apr-mes-cus {
+  font-size: 11px;
+  color: var(--text3);
+}
+.apr-mes-mrg {
+  font-size: 10px;
+  color: var(--success);
+  font-weight: 700;
+}
+.apr-mes-mrg.neg { color: var(--danger); }
 .org-tree {
   display: inline-flex;
   flex-direction: column;

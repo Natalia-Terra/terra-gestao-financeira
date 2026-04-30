@@ -324,6 +324,8 @@
     if (pageId === "rh_folha")        carregarFolhaSeNecessario();
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
+    if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
+    if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -477,6 +479,12 @@
       orgFechar.classList.remove("ativo");
       document.body.style.overflow = "";
     }
+    // Apropriação — handlers de filtro
+    var aprAno = document.getElementById("apr-ano");
+    var aprStatus = document.getElementById("apr-status");
+    if (aprAno) aprAno.addEventListener("change", renderApropriacao);
+    if (aprStatus) aprStatus.addEventListener("change", renderApropriacao);
+
     if (orgFs) orgFs.addEventListener("click", abrirTelaCheia);
     if (orgFechar) orgFechar.addEventListener("click", fecharTelaCheia);
     document.addEventListener("keydown", function (ev) {
@@ -1556,6 +1564,34 @@
   // Templates esperados por tipo de planilha.
   // Chave = nome da coluna na planilha (case-insensitive, sem acento).
   // Valor = nome da coluna no Supabase.
+  // Parser auxiliar de meses ("YYYY-MM" a partir de Date / "01/2026" / "jan-26" / "Janeiro 2026")
+  function parseMesRef(v) {
+    if (v == null || v === "") return null;
+    if (v instanceof Date) {
+      return v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0");
+    }
+    var s = String(v).trim();
+    var m;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); // dd/mm/yyyy
+    if (m) {
+      var a = m[3].length === 2 ? "20" + m[3] : m[3];
+      return a + "-" + String(m[2]).padStart(2, "0");
+    }
+    m = s.match(/^(\d{4})-(\d{1,2})$/); // yyyy-mm
+    if (m) return m[1] + "-" + String(m[2]).padStart(2, "0");
+    m = s.match(/^(\d{1,2})\/(\d{4})$/); // mm/yyyy
+    if (m) return m[2] + "-" + String(m[1]).padStart(2, "0");
+    var nomes = { jan:"01", fev:"02", mar:"03", abr:"04", mai:"05", jun:"06", jul:"07", ago:"08", set:"09", out:"10", nov:"11", dez:"12", janeiro:"01", fevereiro:"02", março:"03", marco:"03", abril:"04", maio:"05", junho:"06", julho:"07", agosto:"08", setembro:"09", outubro:"10", novembro:"11", dezembro:"12" };
+    var sl = s.toLowerCase();
+    for (var k in nomes) {
+      if (sl.indexOf(k) !== -1) {
+        var ya = s.match(/(\d{2,4})/);
+        if (ya) { var an = ya[1].length === 2 ? "20" + ya[1] : ya[1]; return an + "-" + nomes[k]; }
+      }
+    }
+    return null;
+  }
+
   var impTemplates = {
     orcamentos: {
       nomeLegivel: "Orçamentos",
@@ -1628,6 +1664,18 @@
       },
       obrigatorias: ["ano", "mes", "categoria", "valor"],
       dicas: "Colunas esperadas: ano, mes, categoria (receita|custo), valor (obrigatórias); subcategoria (opcional)."
+    },
+    evolucao_pct: {
+      nomeLegivel: "Evolução % (Planilha de Produção)",
+      alvo: "os_evolucao_mensal",
+      especial: true,
+      dicas: "Aba 'Evolução %' do PRODUÇÃO. Espera linha de cabeçalho com 'OS' na 1ª coluna e datas/meses nas demais. Valores são % (0 a 100). UPSERT por (os, mes_ref) preservando custo_saida existente."
+    },
+    saida_estoque: {
+      nomeLegivel: "Saída de Estoque (CPV-Matéria Prima)",
+      alvo: "os_evolucao_mensal",
+      especial: true,
+      dicas: "Filtra DRE='CPV - Matéria Prima', cruza por OS (split por '/'), Compet. → mes_ref, soma Custo Total. UPSERT por (os, mes_ref) preservando pct existente."
     }
   };
 
@@ -1708,6 +1756,9 @@
     if (!arq) return;
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
+
+    if (impTipo.value === "evolucao_pct")  return previsualizarEvolucaoPct(arq);
+    if (impTipo.value === "saida_estoque") return previsualizarSaidaEstoque(arq);
 
     setImpStatus("Lendo arquivo…", "carregando");
 
@@ -2610,10 +2661,311 @@
     }, 80);
   }
 
+  // =========================================================================
+  // 31. APROPRIAÇÃO DE RECEITA (incorporado do dashboard antigo)
+  // =========================================================================
+
+  var osLista = [];
+  var osEvolLista = [];
+  var osExcluidas = [];
+  var aprCarregado = false;
+
+  var MESES_ANO = function (ano) {
+    var arr = [];
+    for (var m = 1; m <= 12; m++) {
+      arr.push(ano + "-" + (m < 10 ? "0" + m : "" + m));
+    }
+    return arr;
+  };
+  var NOMES_MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+  function carregarApropriacaoSeNecessario() {
+    Promise.all([
+      client.from("ordens_servico").select("*"),
+      client.from("os_evolucao_mensal").select("*"),
+      client.from("os_excluidas").select("os")
+    ]).then(function (rs) {
+      var rOs = rs[0], rEv = rs[1], rEx = rs[2];
+      if (rOs.error) {
+        document.getElementById("apr-grid-meses").innerHTML = '<div class="tbl-vazio erro">Erro: ' + rOs.error.message + '</div>';
+        return;
+      }
+      osLista = rOs.data || [];
+      osEvolLista = (rEv && rEv.data) || [];
+      var exclSet = {};
+      ((rEx && rEx.data) || []).forEach(function (x) { exclSet[x.os] = true; });
+      osLista = osLista.filter(function (o) { return !exclSet[o.os]; });
+      aprCarregado = true;
+      renderApropriacao();
+    });
+  }
+
+  // Mapa { os → { mes_ref → { pct, custo_saida, mat_usado_arq, ancora_custo } } }
+  function indexarEvolucao() {
+    var idx = {};
+    osEvolLista.forEach(function (e) {
+      if (!idx[e.os]) idx[e.os] = {};
+      idx[e.os][e.mes_ref] = e;
+    });
+    return idx;
+  }
+
+  // Replica a regra calcOS do dashboard antigo, ano a ano:
+  //   Receita do mês = min(residual, vl × pct/100), com pct vindo de os_evolucao_mensal
+  //   Custo do mês  = custo_saida (Saída de Estoque) preferencial; fallback mat_usado_arq incremental
+  //   Residual atualiza-se mês a mês.
+  function calcOsAno(o, idxEvol, ano) {
+    var hist = idxEvol[o.os] || {};
+    var residual = Number(o.valor_contrato || 0);
+    var matAnt = 0;
+    var meses = MESES_ANO(ano);
+    var resultado = [];
+    meses.forEach(function (mes) {
+      var h = hist[mes] || {};
+      var pct = (h.pct != null) ? Number(h.pct) : null;
+      var rec = 0;
+      if (pct != null) {
+        rec = Math.min(residual, (Number(o.valor_contrato || 0) * pct) / 100);
+        residual = Math.max(0, residual - rec);
+      }
+      var cus = 0;
+      if (h.custo_saida != null) {
+        cus = Number(h.custo_saida);
+      } else if (h.mat_usado_arq != null && !h.ancora_custo) {
+        cus = Math.max(0, Number(h.mat_usado_arq) - matAnt);
+        matAnt = Number(h.mat_usado_arq);
+      }
+      resultado.push({ mes: mes, pct: pct, rec: rec, cus: cus });
+    });
+    return { residual: residual, meses: resultado };
+  }
+
+  function renderApropriacao() {
+    var ano = Number(document.getElementById("apr-ano").value);
+    var status = document.getElementById("apr-status").value;
+    var idxEvol = indexarEvolucao();
+
+    var alvo = osLista.filter(function (o) {
+      if (status && o.status !== status) return false;
+      return true;
+    });
+
+    // Acumular por mês
+    var porMes = {};
+    MESES_ANO(ano).forEach(function (mes) { porMes[mes] = { rec: 0, cus: 0 }; });
+
+    var totRec = 0, totCus = 0, totResidualSomado = 0;
+    var carteira = {}; // por orçamento
+
+    alvo.forEach(function (o) {
+      var calc = calcOsAno(o, idxEvol, ano);
+      var oRec = 0, oCus = 0;
+      calc.meses.forEach(function (m) {
+        porMes[m.mes].rec += m.rec;
+        porMes[m.mes].cus += m.cus;
+        oRec += m.rec;
+        oCus += m.cus;
+      });
+      totRec += oRec;
+      totCus += oCus;
+      totResidualSomado += calc.residual;
+
+      var orc = o.orcamento || "(sem orçamento)";
+      if (!carteira[orc]) carteira[orc] = { orcamento: orc, cliente: o.cliente, oss: 0, contrato: 0, apropriado: 0, residual: 0, custo: 0 };
+      carteira[orc].oss++;
+      carteira[orc].contrato += Number(o.valor_contrato || 0);
+      carteira[orc].apropriado += oRec;
+      carteira[orc].residual += calc.residual;
+      carteira[orc].custo += oCus;
+    });
+
+    // Métricas topo
+    valText(document.getElementById("apr-m-rec"), fmtBRL(totRec));
+    valText(document.getElementById("apr-m-cus"), fmtBRL(totCus));
+    valText(document.getElementById("apr-m-mrg"), totRec > 0 ? ((totRec - totCus) / totRec * 100).toFixed(1).replace(".", ",") + "%" : "—");
+    valText(document.getElementById("apr-m-res"), fmtBRL(totResidualSomado));
+    valText(document.getElementById("apr-lbl"), alvo.length + " OS no filtro · " + osLista.length + " no total");
+
+    // Grid de meses
+    var grid = document.getElementById("apr-grid-meses");
+    grid.innerHTML = MESES_ANO(ano).map(function (mes, idx) {
+      var p = porMes[mes];
+      var temDado = p.rec > 0.01 || p.cus > 0.01;
+      var mrg = p.rec > 0 ? ((p.rec - p.cus) / p.rec * 100) : null;
+      var mrgClasse = mrg !== null && mrg < 0 ? "neg" : "";
+      return (
+        '<div class="apr-mes' + (temDado ? "" : " vazio") + '">' +
+          '<div class="apr-mes-titulo">' + NOMES_MES[idx] + "/" + String(ano).slice(2) + '</div>' +
+          '<div class="apr-mes-rec">' + (temDado ? fmtBRL(p.rec) : "—") + '</div>' +
+          '<div class="apr-mes-cus">custo ' + (p.cus ? fmtBRL(p.cus) : "—") + '</div>' +
+          '<div class="apr-mes-mrg ' + mrgClasse + '">' + (mrg !== null ? mrg.toFixed(1).replace(".", ",") + "% margem" : "—") + '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    // Carteira
+    var carteiraArr = Object.values(carteira).sort(function (a, b) { return b.contrato - a.contrato; });
+    var tbody = document.getElementById("apr-carteira-tbody");
+    preencherTbody(tbody, carteiraArr.map(function (c) {
+      var mrg = c.apropriado > 0 ? ((c.apropriado - c.custo) / c.apropriado * 100).toFixed(1).replace(".", ",") + "%" : "—";
+      return '<tr>' +
+        '<td class="mono">' + escHtml(c.orcamento) + '</td>' +
+        '<td>' + escHtml(c.cliente || "—") + '</td>' +
+        '<td class="num">' + fmtInt(c.oss) + '</td>' +
+        '<td class="num">' + fmtBRL(c.contrato) + '</td>' +
+        '<td class="num destaque">' + fmtBRL(c.apropriado) + '</td>' +
+        '<td class="num">' + fmtBRL(c.residual) + '</td>' +
+        '<td class="num">' + fmtBRL(c.custo) + '</td>' +
+        '<td class="num">' + mrg + '</td>' +
+      '</tr>';
+    }), 8, "Sem orçamentos no filtro.");
+  }
+
+  function carregarOsExcluidasSeNecessario() {
+    var tbody = document.getElementById("apr-excl-tbody");
+    client.from("os_excluidas").select("*").order("excluida_em", { ascending: false })
+      .then(function (r) {
+        if (r.error) {
+          tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+          return;
+        }
+        var lista = r.data || [];
+        preencherTbody(tbody, lista.map(function (e) {
+          return '<tr>' +
+            '<td class="mono">' + escHtml(e.os) + '</td>' +
+            '<td>' + escHtml(e.justificativa) + '</td>' +
+            '<td>' + fmtData(e.excluida_em) + '</td>' +
+            '<td class="mono">' + escHtml(String(e.excluida_por || "—").slice(0,8)) + '…</td>' +
+            '<td><button class="btn-limpar" data-restaurar-os="' + escHtml(e.os) + '">Restaurar</button></td>' +
+          '</tr>';
+        }), 5, "Nenhuma OS excluída.");
+
+        tbody.querySelectorAll("[data-restaurar-os]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var os = btn.getAttribute("data-restaurar-os");
+            if (!confirm("Restaurar OS " + os + " para a análise?")) return;
+            client.from("os_excluidas").delete().eq("os", os).then(function () {
+              carregarOsExcluidasSeNecessario();
+              aprCarregado = false;
+            });
+          });
+        });
+      });
+  }
+
+  // ----- Parser específico: Evolução % -----
+  function previsualizarEvolucaoPct(arq) {
+    setImpStatus("Lendo planilha de Evolução %…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets["Evolução %"] || wb.Sheets["Evolucao %"] || wb.Sheets[wb.SheetNames[0]];
+        var matriz = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+        // Encontrar a linha de cabeçalho que tem "OS" como primeira célula
+        var iCab = -1;
+        for (var i = 0; i < matriz.length; i++) {
+          var c0 = String((matriz[i] && matriz[i][0]) || "").trim().toLowerCase();
+          if (c0 === "os" || c0 === "n.os" || c0 === "nº os" || c0 === "no os") { iCab = i; break; }
+        }
+        if (iCab === -1) { setImpStatus("Não encontrei a linha de cabeçalho com 'OS' na coluna A.", "erro"); return; }
+        var cab = matriz[iCab];
+        var colsMes = [];
+        for (var j = 1; j < cab.length; j++) {
+          var mes = parseMesRef(cab[j]);
+          if (mes) colsMes.push({ idx: j, mes: mes });
+        }
+        if (!colsMes.length) { setImpStatus("Não identifiquei colunas de mês válidas no cabeçalho.", "erro"); return; }
+        var linhas = [];
+        for (var i2 = iCab + 1; i2 < matriz.length; i2++) {
+          var row = matriz[i2] || [];
+          var os = String(row[0] || "").trim().split("/")[0].trim();
+          if (!os || isNaN(Number(os))) continue;
+          colsMes.forEach(function (col) {
+            var v = row[col.idx];
+            if (v == null || v === "") return;
+            var pct = Number(String(v).replace(/[^0-9,.\-]/g, "").replace(",", "."));
+            if (isNaN(pct) || pct === 0) return;
+            linhas.push({ os: os, mes_ref: col.mes, pct: pct });
+          });
+        }
+        impParsed = { linhas: linhas, cabs: ["os","mes_ref","pct"], tipo: "evolucao_pct" };
+        renderPreviewImport(linhas, ["os","mes_ref","pct"]);
+        setImpStatus(linhas.length + " atualização(ões) de % evolução prontas. " + colsMes.length + " coluna(s) de mês detectada(s).", "ok");
+        atualizarEstadoImport();
+      } catch (e) {
+        setImpStatus("Erro lendo arquivo: " + e.message, "erro");
+      }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  // ----- Parser específico: Saída de Estoque (CPV-Matéria Prima) -----
+  function previsualizarSaidaEstoque(arq) {
+    setImpStatus("Lendo Saída de Estoque…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+        if (!raw.length) { setImpStatus("Planilha vazia.", "erro"); return; }
+        var headers = Object.keys(raw[0]);
+        function findCol(nomes) {
+          for (var i = 0; i < headers.length; i++) {
+            var n = normalizarCabecalho(headers[i]);
+            if (nomes.indexOf(n) !== -1) return headers[i];
+          }
+          return null;
+        }
+        var colDRE = findCol(["dre"]);
+        var colOS  = findCol(["os"]);
+        var colCmp = findCol(["compet","competencia","competência"]);
+        var colCt  = findCol(["custo total","total custo","custo"]);
+        var faltam = [];
+        if (!colDRE) faltam.push("DRE");
+        if (!colOS)  faltam.push("OS");
+        if (!colCmp) faltam.push("Compet.");
+        if (!colCt)  faltam.push("Custo Total");
+        if (faltam.length) { setImpStatus("Faltando colunas: " + faltam.join(", "), "erro"); return; }
+        var agg = {}, ignorados = 0;
+        raw.forEach(function (r) {
+          var dre = String(r[colDRE] || "").trim().toLowerCase();
+          var ehMP = dre === "cpv - matéria prima" || dre === "cpv - materia prima" || dre === "cpv-matéria prima" || dre === "cpv-materia prima";
+          if (!ehMP) { ignorados++; return; }
+          var os = String(r[colOS] || "").trim().split("/")[0].trim();
+          if (!os) { ignorados++; return; }
+          var mes = parseMesRef(r[colCmp]);
+          if (!mes) { ignorados++; return; }
+          var v = Number(String(r[colCt] || "").replace(/\./g,"").replace(",", "."));
+          if (isNaN(v)) v = 0;
+          var k = os + "|" + mes;
+          agg[k] = (agg[k] || 0) + v;
+        });
+        var linhas = Object.keys(agg).map(function (k) {
+          var p = k.split("|");
+          return { os: p[0], mes_ref: p[1], custo_saida: Math.round(agg[k] * 100) / 100 };
+        });
+        impParsed = { linhas: linhas, cabs: ["os","mes_ref","custo_saida"], tipo: "saida_estoque" };
+        renderPreviewImport(linhas, ["os","mes_ref","custo_saida"]);
+        setImpStatus(linhas.length + " agregação(ões) de CPV-Matéria Prima prontas. " + ignorados + " linha(s) ignorada(s) (DRE diferente, sem OS, etc).", "ok");
+        atualizarEstadoImport();
+      } catch (e) {
+        setImpStatus("Erro lendo arquivo: " + e.message, "erro");
+      }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
   function confirmarImport() {
     if (!impParsed) return;
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
+
+    // Tipos especiais usam UPSERT em os_evolucao_mensal
+    if (impParsed.tipo === "evolucao_pct" || impParsed.tipo === "saida_estoque") {
+      return confirmarUpsertEvolucao(impParsed.tipo, impParsed.linhas);
+    }
 
     var confirma = confirm("Confirmar importação de " + impParsed.linhas.length + " linha(s) para " + tpl.nomeLegivel + "?\n\nRegistros serão adicionados à tabela " + tpl.alvo + ".");
     if (!confirma) return;
@@ -2661,6 +3013,41 @@
       impParsed = null;
     };
     processarProximo(0);
+  }
+
+  // UPSERT de evolução/saída em os_evolucao_mensal (preserva campos não enviados)
+  function confirmarUpsertEvolucao(tipo, linhas) {
+    var nomeOp = tipo === "evolucao_pct" ? "% evolução" : "custo CPV-Matéria Prima";
+    if (!confirm("Confirmar atualização de " + linhas.length + " linha(s) de " + nomeOp + " em os_evolucao_mensal?\n\nUPSERT por (os, mes_ref): novos são inseridos, existentes têm o campo deste import atualizado e os demais campos preservados.")) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Atualizando em lotes de 200…", "carregando");
+    var lotes = [];
+    for (var i = 0; i < linhas.length; i += 200) lotes.push(linhas.slice(i, i + 200));
+    var atualizados = 0, erros = [];
+    var processar = function (idx) {
+      if (idx >= lotes.length) {
+        impBtnConf.disabled = false;
+        impBtnPrev.disabled = false;
+        if (erros.length) {
+          setImpStatus("Concluído com avisos. Atualizados: " + atualizados + ". Erros em " + erros.length + " lote(s): " + erros.slice(0,2).join(" | "), "alerta");
+        } else {
+          setImpStatus("Pronto. " + atualizados + " linha(s) atualizadas em os_evolucao_mensal.", "ok");
+          aprCarregado = false;
+        }
+        impParsed = null;
+        return;
+      }
+      client.from("os_evolucao_mensal")
+        .upsert(lotes[idx], { onConflict: "os,mes_ref" })
+        .then(function (r) {
+          if (r.error) erros.push("Lote " + (idx + 1) + ": " + r.error.message);
+          else atualizados += lotes[idx].length;
+          setImpStatus("Atualizados " + atualizados + " / " + linhas.length + "…", "carregando");
+          processar(idx + 1);
+        });
+    };
+    processar(0);
   }
 
 })();
