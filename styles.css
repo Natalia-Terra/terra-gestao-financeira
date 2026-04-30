@@ -933,6 +933,49 @@ h3 { font-size: 16px; }
   border: 1px solid var(--borda);
   border-radius: var(--r-md);
   padding: 24px;
+  position: relative;
+  transition: padding .15s;
+}
+.org-scroll.tela-cheia {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  padding: 32px 24px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--bg2);
+  max-height: 100vh;
+}
+.org-scroll.tela-cheia .org-tree {
+  display: flex;
+  margin: 0 auto;
+}
+.org-fechar-fs {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 61;
+  background: var(--bg2);
+  border: 1px solid var(--borda2);
+  color: var(--text2);
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+.org-fechar-fs:hover {
+  color: var(--text);
+  background: var(--bg3);
+  border-color: var(--text3);
+}
+.org-fechar-fs.ativo {
+  display: inline-flex;
 }
 .org-tree {
   display: inline-flex;
@@ -1068,12 +1111,21 @@ h3 { font-size: 16px; }
   min-width: 60px;
 }
 .org-card .org-prof:hover { border-color: var(--borda2); }
-.org-card .org-prof.editing {
+.org-card .org-prof.editing,
+.org-card.g-familia .org-prof.editing,
+.org-card.g-forum .org-prof.editing,
+.org-card.g-diretoria .org-prof.editing,
+.org-card.g-controladoria .org-prof.editing,
+.org-card.g-comercial .org-prof.editing,
+.org-card.g-tecnico .org-prof.editing,
+.org-card.g-produtivo .org-prof.editing,
+.org-card.g-producao_setor .org-prof.editing {
   background: #fff;
   border: 1px solid var(--ouro);
   outline: none;
   font-style: normal;
   color: var(--text);
+  min-width: 80px;
 }
 .org-card .org-prof.placeholder { color: var(--text3); opacity: .55; }
 

@@ -643,16 +643,18 @@
                 </select>
               </label>
               <button class="btn-ouro" id="org-btn-pdf" type="button">Baixar PDF</button>
+              <button class="btn-limpar" id="org-btn-fs" type="button">⛶ Tela cheia</button>
               <span class="toolbar-label" id="org-lbl"></span>
             </div>
 
             <div id="org-status" class="status" hidden role="status" aria-live="polite"></div>
 
-            <div class="org-scroll">
+            <div class="org-scroll" id="org-scroll">
               <div class="org-tree" id="org-tree">
                 <div class="tbl-vazio">Carregando organograma…</div>
               </div>
             </div>
+            <button type="button" id="org-fechar-fs" class="org-fechar-fs" title="Fechar (Esc)">✕ Fechar tela cheia</button>
           </div>
         </section>
 

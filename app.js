@@ -460,6 +460,26 @@
     if (orgRec) orgRec.addEventListener("click", function () { setColapsoOrganograma(true);  });
     if (orgPdf) orgPdf.addEventListener("click", baixarOrganogramaPdf);
 
+    // Tela cheia do organograma
+    var orgFs = document.getElementById("org-btn-fs");
+    var orgFechar = document.getElementById("org-fechar-fs");
+    var orgScroll = document.getElementById("org-scroll");
+    function abrirTelaCheia() {
+      orgScroll.classList.add("tela-cheia");
+      orgFechar.classList.add("ativo");
+      document.body.style.overflow = "hidden";
+    }
+    function fecharTelaCheia() {
+      orgScroll.classList.remove("tela-cheia");
+      orgFechar.classList.remove("ativo");
+      document.body.style.overflow = "";
+    }
+    if (orgFs) orgFs.addEventListener("click", abrirTelaCheia);
+    if (orgFechar) orgFechar.addEventListener("click", fecharTelaCheia);
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && orgScroll && orgScroll.classList.contains("tela-cheia")) fecharTelaCheia();
+    });
+
     // Sub-navegação em Configuração
     document.querySelectorAll(".config-card[data-subpage]").forEach(function (btn) {
       btn.addEventListener("click", function () {
