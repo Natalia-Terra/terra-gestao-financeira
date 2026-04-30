@@ -221,8 +221,10 @@
     window._terraUser = user;
 
     // Setup DOM roda APENAS UMA VEZ — evita listeners duplicados
-    // (Supabase pode disparar SIGNED_IN mais de uma vez no carregamento)
-    if (!shellJaInicializado) {
+    // (Supabase pode disparar SIGNED_IN mais de uma vez no carregamento;
+    // antes, isso reiniciava a página para o Dashboard derrubando a navegação atual)
+    var primeiraVez = !shellJaInicializado;
+    if (primeiraVez) {
       aplicarPreferenciaSidebar();
       ativarNavegacao();
       ativarPaginaOrcamentos();
@@ -242,10 +244,11 @@
         topbarAvatar.textContent = iniciais(nome);
       });
 
-    carregarDashboard(user);
-
-    // Entrar já na página Dashboard
-    showPage("dashboard");
+    if (primeiraVez) {
+      carregarDashboard(user);
+      // Só redireciona pra dashboard no primeiro carregamento
+      showPage("dashboard");
+    }
   }
 
   // ------------- Sidebar (colapso + macros expansíveis) --------------------
@@ -2426,9 +2429,14 @@
     tree.appendChild(renderOrgNode(raiz));
     document.getElementById("org-lbl").textContent = orgLista.length + " posições";
 
-    // Liga inputs editáveis
-    tree.querySelectorAll(".org-prof").forEach(function (el) {
-      el.addEventListener("click", function () { ativarEdicaoOrg(el); });
+    // Liga inputs editáveis (delegado: salva ao perder foco se mudou)
+    tree.querySelectorAll(".org-prof-input").forEach(function (input) {
+      input.addEventListener("blur", function () { salvarProfissional(input); });
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+        else if (ev.key === "Escape") { input.value = input.dataset.original || ""; input.blur(); }
+      });
+      input.addEventListener("click", function (ev) { ev.stopPropagation(); });
     });
     tree.querySelectorAll(".org-toggle").forEach(function (el) {
       el.addEventListener("click", function (ev) {
@@ -2457,10 +2465,13 @@
     pos.textContent = no.posicao;
     card.appendChild(pos);
 
-    var prof = document.createElement("div");
-    prof.className = "org-prof" + (no.profissional ? "" : " placeholder");
-    prof.textContent = no.profissional || "+ atribuir";
-    prof.dataset.id = no.id;
+    var prof = document.createElement("input");
+    prof.type = "text";
+    prof.className = "org-prof-input";
+    prof.placeholder = "+ atribuir";
+    prof.value = no.profissional || "";
+    prof.dataset.id = String(no.id);
+    prof.dataset.original = no.profissional || "";
     card.appendChild(prof);
 
     var filhos = orgPorPai[no.id] || [];
@@ -2492,56 +2503,23 @@
     return div;
   }
 
-  function ativarEdicaoOrg(el) {
-    if (el.classList.contains("editing")) return;
-    var valorAntigo = el.classList.contains("placeholder") ? "" : el.textContent;
-    el.classList.add("editing");
-    el.classList.remove("placeholder");
-    el.contentEditable = "true";
-    el.textContent = valorAntigo;
-    el.focus();
-    var range = document.createRange();
-    range.selectNodeContents(el);
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    function fechar(salvar) {
-      el.contentEditable = "false";
-      el.classList.remove("editing");
-      el.removeEventListener("blur", onBlur);
-      el.removeEventListener("keydown", onKey);
-      var novo = el.textContent.trim();
-      if (salvar && novo !== valorAntigo) {
-        var id = Number(el.dataset.id);
-        el.classList.add("salvando");
-        client.from("organograma").update({ profissional: novo || null }).eq("id", id).then(function (r) {
-          el.classList.remove("salvando");
-          if (r.error) {
-            alert("Erro ao salvar: " + r.error.message);
-            el.textContent = valorAntigo || "+ atribuir";
-            if (!valorAntigo) el.classList.add("placeholder");
-            return;
-          }
-          if (!novo) { el.textContent = "+ atribuir"; el.classList.add("placeholder"); }
-          else { el.textContent = novo; el.classList.remove("placeholder"); }
-          // Atualiza cache local
-          var item = orgLista.find(function (n) { return n.id === id; });
-          if (item) item.profissional = novo || null;
-        });
-      } else {
-        if (!novo) { el.textContent = "+ atribuir"; el.classList.add("placeholder"); }
-        else el.textContent = novo;
+  function salvarProfissional(input) {
+    var novo = (input.value || "").trim();
+    var antigo = input.dataset.original || "";
+    if (novo === antigo) return;  // nada a fazer
+    var id = Number(input.dataset.id);
+    input.disabled = true;
+    client.from("organograma").update({ profissional: novo || null }).eq("id", id).then(function (r) {
+      input.disabled = false;
+      if (r.error) {
+        alert("Erro ao salvar: " + r.error.message);
+        input.value = antigo;
+        return;
       }
-    }
-
-    function onBlur() { fechar(true); }
-    function onKey(ev) {
-      if (ev.key === "Enter") { ev.preventDefault(); fechar(true); }
-      else if (ev.key === "Escape") { ev.preventDefault(); fechar(false); }
-    }
-    el.addEventListener("blur", onBlur);
-    el.addEventListener("keydown", onKey);
+      input.dataset.original = novo;
+      var item = orgLista.find(function (n) { return n.id === id; });
+      if (item) item.profissional = novo || null;
+    });
   }
 
   function setColapsoOrganograma(colapsado) {
