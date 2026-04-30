@@ -2456,8 +2456,15 @@
     div.appendChild(card);
 
     if (filhos.length) {
+      // Se TODOS os filhos forem folhas (sem netos), render em coluna vertical
+      // (compacta, evita explodir a largura como acontecia antes).
+      // Caso contrário, segue a régua horizontal padrão de organograma.
+      var todosFolhas = filhos.every(function (f) {
+        var netos = orgPorPai[f.id] || [];
+        return netos.length === 0;
+      });
       var ch = document.createElement("div");
-      ch.className = "org-children";
+      ch.className = "org-children" + (todosFolhas ? " vertical" : "");
       filhos.forEach(function (f) { ch.appendChild(renderOrgNode(f)); });
       div.appendChild(ch);
     }
