@@ -915,6 +915,182 @@ h3 { font-size: 16px; }
 }
 
 /* =========================================================
+   ORGANOGRAMA
+   ========================================================= */
+
+.toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 24px;
+  background: var(--borda2);
+  margin: 0 4px;
+}
+
+.org-scroll {
+  overflow: auto;
+  max-width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  padding: 24px;
+}
+.org-tree {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100%;
+  font-family: 'Quattrocento Sans', Georgia, serif;
+}
+.org-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 12px 0;
+}
+.org-children {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+  padding-top: 24px;
+}
+/* Linha vertical descendo do nó pai até a barra horizontal das crianças */
+.org-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 16px;
+  background: var(--borda2);
+}
+/* Cada filho ganha uma "tampa" vertical em cima */
+.org-children > .org-node::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 2px;
+  height: 16px;
+  background: var(--borda2);
+}
+/* Barra horizontal conectando irmãos */
+.org-children > .org-node::after {
+  content: "";
+  position: absolute;
+  top: -8px;
+  height: 2px;
+  background: var(--borda2);
+  left: 0;
+  right: 0;
+}
+/* Primeiro e último escondem metade da barra para não vazar lateralmente */
+.org-children > .org-node:first-child::after { left: 50%; }
+.org-children > .org-node:last-child::after  { right: 50%; }
+/* Quando só tem um filho, a barra é desnecessária */
+.org-children > .org-node:only-child::after { display: none; }
+
+.org-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+  max-width: 200px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  border: 1.5px solid var(--ouro-cl);
+  box-shadow: 0 1px 3px rgba(42, 26, 6, 0.08);
+  cursor: text;
+  position: relative;
+  z-index: 1;
+}
+.org-card .org-pos {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  letter-spacing: .02em;
+  line-height: 1.3;
+}
+.org-card .org-prof {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--ouro-esc);
+  font-style: italic;
+  text-align: center;
+  border: 1px dashed transparent;
+  border-radius: var(--r-sm);
+  padding: 1px 4px;
+  min-height: 14px;
+  min-width: 60px;
+}
+.org-card .org-prof:hover { border-color: var(--borda2); }
+.org-card .org-prof.editing {
+  background: #fff;
+  border: 1px solid var(--ouro);
+  outline: none;
+  font-style: normal;
+  color: var(--text);
+}
+.org-card .org-prof.placeholder { color: var(--text3); opacity: .55; }
+
+.org-card.colapsado {
+  border-style: dashed;
+}
+.org-card .org-toggle {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 1.5px solid var(--ouro-cl);
+  color: var(--ouro-esc);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+  font-family: inherit;
+}
+.org-card .org-toggle:hover { background: var(--bg3); }
+
+/* Cores por grupo */
+.org-card.g-familia       { background: #2A1A06; border-color: #2A1A06; }
+.org-card.g-familia .org-pos, .org-card.g-familia .org-prof { color: #F5EFE6; }
+.org-card.g-familia .org-prof:hover { border-color: #C9972A; }
+
+.org-card.g-forum         { background: #4A2F0F; border-color: #4A2F0F; }
+.org-card.g-forum .org-pos, .org-card.g-forum .org-prof { color: #F5EFE6; }
+
+.org-card.g-diretoria     { background: #6B4C1E; border-color: #6B4C1E; }
+.org-card.g-diretoria .org-pos, .org-card.g-diretoria .org-prof { color: #F5EFE6; }
+
+.org-card.g-controladoria { background: #1A4A7A; border-color: #1A4A7A; color: #fff; }
+.org-card.g-controladoria .org-pos, .org-card.g-controladoria .org-prof { color: #fff; }
+
+.org-card.g-comercial     { background: #1A6B45; border-color: #1A6B45; color: #fff; }
+.org-card.g-comercial .org-pos, .org-card.g-comercial .org-prof { color: #fff; }
+
+.org-card.g-tecnico       { background: #6E1F4D; border-color: #6E1F4D; color: #fff; }
+.org-card.g-tecnico .org-pos, .org-card.g-tecnico .org-prof { color: #fff; }
+
+.org-card.g-produtivo     { background: #8B3A1F; border-color: #8B3A1F; color: #fff; }
+.org-card.g-produtivo .org-pos, .org-card.g-produtivo .org-prof { color: #fff; }
+
+.org-card.g-producao_setor { background: #C9972A; border-color: #C9972A; color: #2A1A06; }
+
+/* Folhas (sem grupo de cor) usam neutro */
+.org-card:not([class*="g-"]) { background: var(--bg2); border-color: var(--borda2); }
+
+/* =========================================================
    TABELA
    ========================================================= */
 

@@ -168,6 +168,7 @@
               <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
+              <button class="sb-sub" data-page="rh_organograma" type="button">Organograma</button>
               <button class="sb-sub" data-page="rh_funcionarios" type="button">Funcionários</button>
               <button class="sb-sub" data-page="rh_beneficios" type="button">Benefícios</button>
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
@@ -618,6 +619,48 @@
           </div>
         </section>
 
+        <!-- RH — Organograma -->
+        <section class="page" data-page="rh_organograma" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Organograma</h1>
+            <p class="page-sub">Estrutura da Terra · clique em uma posição para atribuir a pessoa · use ▸ / ▾ para recolher e expandir</p>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <button class="btn-limpar" id="org-btn-expandir" type="button">Expandir tudo</button>
+              <button class="btn-limpar" id="org-btn-recolher" type="button">Recolher tudo</button>
+              <span class="toolbar-sep"></span>
+              <label class="toolbar-inline">Papel:
+                <select id="org-papel">
+                  <option value="A4">A4</option>
+                  <option value="A3" selected>A3</option>
+                  <option value="A2">A2</option>
+                  <option value="A1">A1</option>
+                  <option value="Letter">Letter</option>
+                  <option value="Tabloid">Tabloid (11×17)</option>
+                </select>
+              </label>
+              <label class="toolbar-inline">Orientação:
+                <select id="org-orient">
+                  <option value="landscape" selected>Paisagem</option>
+                  <option value="portrait">Retrato</option>
+                </select>
+              </label>
+              <button class="btn-ouro" id="org-btn-pdf" type="button">Baixar PDF</button>
+              <span class="toolbar-label" id="org-lbl"></span>
+            </div>
+
+            <div id="org-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div class="org-scroll">
+              <div class="org-tree" id="org-tree">
+                <div class="tbl-vazio">Carregando organograma…</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- RH — Funcionários -->
         <section class="page" data-page="rh_funcionarios" hidden>
           <div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro da equipe da Terra</p></div>
@@ -959,6 +1002,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- SheetJS (XLSX) para a tela de Importar — carrega com defer pois não é crítico no boot -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <!-- html2canvas + jsPDF para a tela de Organograma → PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

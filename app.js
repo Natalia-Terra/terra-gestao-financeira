@@ -320,6 +320,7 @@
     if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
     if (pageId === "rh_folha")        carregarFolhaSeNecessario();
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
+    if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -450,6 +451,14 @@
     if (btnNovoBen) btnNovoBen.addEventListener("click", abrirModalBeneficio);
     if (btnNovoFol) btnNovoFol.addEventListener("click", abrirModalFolha);
     if (btnNovoImp) btnNovoImp.addEventListener("click", abrirModalImposto);
+
+    // Organograma
+    var orgExp = document.getElementById("org-btn-expandir");
+    var orgRec = document.getElementById("org-btn-recolher");
+    var orgPdf = document.getElementById("org-btn-pdf");
+    if (orgExp) orgExp.addEventListener("click", function () { setColapsoOrganograma(false); });
+    if (orgRec) orgRec.addEventListener("click", function () { setColapsoOrganograma(true);  });
+    if (orgPdf) orgPdf.addEventListener("click", baixarOrganogramaPdf);
 
     // Sub-navegação em Configuração
     document.querySelectorAll(".config-card[data-subpage]").forEach(function (btn) {
@@ -2352,6 +2361,248 @@
         });
       }
     });
+  }
+
+  // =========================================================================
+  // 30. ORGANOGRAMA (RH > Organograma)
+  // =========================================================================
+
+  var orgLista = [];
+  var orgPorPai = {};
+  var orgCarregado = false;
+
+  function carregarOrganogramaSeNecessario() {
+    document.getElementById("org-tree").innerHTML = '<div class="tbl-vazio">Carregando organograma…</div>';
+    client.from("organograma").select("id, parent_id, posicao, profissional, grupo, ordem")
+      .order("ordem", { ascending: true })
+      .then(function (r) {
+        if (r.error) {
+          document.getElementById("org-tree").innerHTML = '<div class="tbl-vazio erro">Erro: ' + r.error.message + '</div>';
+          return;
+        }
+        orgLista = r.data || [];
+        orgPorPai = {};
+        orgLista.forEach(function (n) {
+          var pid = n.parent_id;
+          if (!orgPorPai[pid]) orgPorPai[pid] = [];
+          orgPorPai[pid].push(n);
+        });
+        Object.keys(orgPorPai).forEach(function (k) {
+          orgPorPai[k].sort(function (a, b) { return (a.ordem || 0) - (b.ordem || 0); });
+        });
+        orgCarregado = true;
+        renderOrganograma();
+      });
+  }
+
+  function renderOrganograma() {
+    var raiz = orgLista.find(function (n) { return n.parent_id === null; });
+    var tree = document.getElementById("org-tree");
+    if (!raiz) {
+      tree.innerHTML = '<div class="tbl-vazio">Sem dados de organograma. Rode migracao_04_organograma.sql no Supabase.</div>';
+      return;
+    }
+    tree.innerHTML = "";
+    tree.appendChild(renderOrgNode(raiz));
+    document.getElementById("org-lbl").textContent = orgLista.length + " posições";
+
+    // Liga inputs editáveis
+    tree.querySelectorAll(".org-prof").forEach(function (el) {
+      el.addEventListener("click", function () { ativarEdicaoOrg(el); });
+    });
+    tree.querySelectorAll(".org-toggle").forEach(function (el) {
+      el.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var node = el.closest(".org-node");
+        var card = node.querySelector(".org-card");
+        var children = node.querySelector(".org-children");
+        var colap = !card.classList.contains("colapsado");
+        card.classList.toggle("colapsado", colap);
+        if (children) children.hidden = colap;
+        el.textContent = colap ? "+" : "−";
+      });
+    });
+  }
+
+  function renderOrgNode(no) {
+    var div = document.createElement("div");
+    div.className = "org-node";
+
+    var card = document.createElement("div");
+    card.className = "org-card" + (no.grupo ? " g-" + no.grupo : "");
+    card.dataset.id = no.id;
+
+    var pos = document.createElement("div");
+    pos.className = "org-pos";
+    pos.textContent = no.posicao;
+    card.appendChild(pos);
+
+    var prof = document.createElement("div");
+    prof.className = "org-prof" + (no.profissional ? "" : " placeholder");
+    prof.textContent = no.profissional || "+ atribuir";
+    prof.dataset.id = no.id;
+    card.appendChild(prof);
+
+    var filhos = orgPorPai[no.id] || [];
+    if (filhos.length) {
+      var toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "org-toggle";
+      toggle.textContent = "−";
+      toggle.title = "Recolher / expandir";
+      card.appendChild(toggle);
+    }
+
+    div.appendChild(card);
+
+    if (filhos.length) {
+      var ch = document.createElement("div");
+      ch.className = "org-children";
+      filhos.forEach(function (f) { ch.appendChild(renderOrgNode(f)); });
+      div.appendChild(ch);
+    }
+
+    return div;
+  }
+
+  function ativarEdicaoOrg(el) {
+    if (el.classList.contains("editing")) return;
+    var valorAntigo = el.classList.contains("placeholder") ? "" : el.textContent;
+    el.classList.add("editing");
+    el.classList.remove("placeholder");
+    el.contentEditable = "true";
+    el.textContent = valorAntigo;
+    el.focus();
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    function fechar(salvar) {
+      el.contentEditable = "false";
+      el.classList.remove("editing");
+      el.removeEventListener("blur", onBlur);
+      el.removeEventListener("keydown", onKey);
+      var novo = el.textContent.trim();
+      if (salvar && novo !== valorAntigo) {
+        var id = Number(el.dataset.id);
+        el.classList.add("salvando");
+        client.from("organograma").update({ profissional: novo || null }).eq("id", id).then(function (r) {
+          el.classList.remove("salvando");
+          if (r.error) {
+            alert("Erro ao salvar: " + r.error.message);
+            el.textContent = valorAntigo || "+ atribuir";
+            if (!valorAntigo) el.classList.add("placeholder");
+            return;
+          }
+          if (!novo) { el.textContent = "+ atribuir"; el.classList.add("placeholder"); }
+          else { el.textContent = novo; el.classList.remove("placeholder"); }
+          // Atualiza cache local
+          var item = orgLista.find(function (n) { return n.id === id; });
+          if (item) item.profissional = novo || null;
+        });
+      } else {
+        if (!novo) { el.textContent = "+ atribuir"; el.classList.add("placeholder"); }
+        else el.textContent = novo;
+      }
+    }
+
+    function onBlur() { fechar(true); }
+    function onKey(ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); fechar(true); }
+      else if (ev.key === "Escape") { ev.preventDefault(); fechar(false); }
+    }
+    el.addEventListener("blur", onBlur);
+    el.addEventListener("keydown", onKey);
+  }
+
+  function setColapsoOrganograma(colapsado) {
+    document.querySelectorAll("#org-tree .org-card").forEach(function (card) {
+      card.classList.toggle("colapsado", colapsado);
+    });
+    document.querySelectorAll("#org-tree .org-children").forEach(function (ch) {
+      ch.hidden = colapsado;
+    });
+    document.querySelectorAll("#org-tree .org-toggle").forEach(function (t) {
+      t.textContent = colapsado ? "+" : "−";
+    });
+    // A raiz sempre visível: garantir que filhos do nó topo apareçam mesmo quando recolhe?
+    // Na verdade, deixar tudo recolhido faz sentido (só mostra a raiz).
+  }
+
+  function setStatusOrg(msg, tipo) {
+    var s = document.getElementById("org-status");
+    if (!msg) { s.hidden = true; return; }
+    s.textContent = msg;
+    s.className = "status " + (tipo || "");
+    s.hidden = false;
+  }
+
+  function baixarOrganogramaPdf() {
+    if (typeof window.html2canvas === "undefined" || typeof window.jspdf === "undefined") {
+      setStatusOrg("Bibliotecas ainda carregando. Tente novamente em alguns segundos.", "alerta");
+      return;
+    }
+    var papel  = document.getElementById("org-papel").value;
+    var orient = document.getElementById("org-orient").value;
+
+    var sizesMm = {
+      'A4':      [210, 297],
+      'A3':      [297, 420],
+      'A2':      [420, 594],
+      'A1':      [594, 841],
+      'Letter':  [216, 279],
+      'Tabloid': [279, 432]
+    };
+    var dim = sizesMm[papel];
+    if (!dim) dim = sizesMm.A3;
+    var pageW = dim[0], pageH = dim[1];
+    if (orient === "landscape") { pageW = dim[1]; pageH = dim[0]; }
+
+    setStatusOrg("Gerando PDF — pode levar alguns segundos…", "carregando");
+
+    // Garante que tudo esteja expandido para a captura ficar completa
+    setColapsoOrganograma(false);
+
+    var tree = document.getElementById("org-tree");
+    setTimeout(function () {
+      window.html2canvas(tree, {
+        backgroundColor: "#FDFAF6",
+        scale: 2,
+        useCORS: true,
+        logging: false
+      }).then(function (canvas) {
+        var img = canvas.toDataURL("image/png");
+        var jspdfNS = window.jspdf || window.jsPDF;
+        var jsPDF = (jspdfNS && jspdfNS.jsPDF) || jspdfNS;
+        var pdf = new jsPDF({ orientation: orient, unit: "mm", format: papel.toLowerCase() === "tabloid" ? [279, 432] : papel.toLowerCase() });
+
+        var marginMm = 8;
+        var availW = pageW - 2 * marginMm;
+        var availH = pageH - 2 * marginMm;
+
+        // Conversão px → mm: html2canvas em scale 2 dá uma imagem 2x. Largura px / scale ~ largura visual.
+        // Ratio para caber na página, mantendo proporção
+        var cw = canvas.width;
+        var ch = canvas.height;
+        var ratioW = availW / (cw * 0.264583 / 2);  // 1px ≈ 0.264583 mm @ 96dpi; canvas em scale 2 conta o dobro
+        var ratioH = availH / (ch * 0.264583 / 2);
+        var ratio = Math.min(ratioW, ratioH);
+        var imgWmm = cw * 0.264583 / 2 * ratio;
+        var imgHmm = ch * 0.264583 / 2 * ratio;
+        var ox = (pageW - imgWmm) / 2;
+        var oy = (pageH - imgHmm) / 2;
+
+        pdf.addImage(img, "PNG", ox, oy, imgWmm, imgHmm, undefined, "FAST");
+        var nome = "organograma-terra-" + papel + (orient === "landscape" ? "-paisagem" : "-retrato") + ".pdf";
+        pdf.save(nome);
+        setStatusOrg("PDF gerado: " + nome, "ok");
+        setTimeout(function () { setStatusOrg(null); }, 5000);
+      }).catch(function (e) {
+        setStatusOrg("Falha ao gerar PDF: " + e.message, "erro");
+      });
+    }, 80);
   }
 
   function confirmarImport() {
