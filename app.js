@@ -326,6 +326,8 @@
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
+    if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
+    if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -442,6 +444,8 @@
     ligarFiltros("pc-",  renderPlanoContas);
     ligarFiltros("cf-",  renderCfop);
     ligarFiltros("us-",  renderUsuarios);
+    ligarFiltros("cc-",  renderCentros);
+    ligarFiltros("rb-",  renderRubricas);
     ligarFiltros("fn-",  renderFuncionarios);
     ligarFiltros("bn-",  renderBeneficios);
     ligarFiltros("fl-",  renderFolha);
@@ -452,6 +456,10 @@
     var btnNovoBen = document.getElementById("bn-btn-novo");
     var btnNovoFol = document.getElementById("fl-btn-novo");
     var btnNovoImp = document.getElementById("ir-btn-novo");
+    var btnNovoCc = document.getElementById("cc-btn-novo");
+    var btnNovoRb = document.getElementById("rb-btn-novo");
+    if (btnNovoCc) btnNovoCc.addEventListener("click", abrirModalCentroCusto);
+    if (btnNovoRb) btnNovoRb.addEventListener("click", abrirModalRubrica);
     if (btnNovoFun) btnNovoFun.addEventListener("click", abrirModalFuncionario);
     if (btnNovoBen) btnNovoBen.addEventListener("click", abrirModalBeneficio);
     if (btnNovoFol) btnNovoFol.addEventListener("click", abrirModalFolha);
@@ -1676,6 +1684,18 @@
       alvo: "os_evolucao_mensal",
       especial: true,
       dicas: "Filtra DRE='CPV - Matéria Prima', cruza por OS (split por '/'), Compet. → mes_ref, soma Custo Total. UPSERT por (os, mes_ref) preservando pct existente."
+    },
+    funcionarios_tc: {
+      nomeLegivel: "Funcionários ativos (Planilha TC)",
+      alvo: "funcionarios",
+      especial: true,
+      dicas: "Aba 'FUNCIONÁRIOS GERAL'. Importa só STATUS='ATIVO'. UPSERT por CPF (ou nome se sem CPF). Não atribui CC ainda — isso vem do import 'Despesas Folha Mensal'."
+    },
+    despesas_folha_mensal: {
+      nomeLegivel: "Despesas Folha Mensal",
+      alvo: "folha_pagamento + folha_pagamento_rubricas + atualiza centro_custo_id",
+      especial: true,
+      dicas: "Uma aba mensal (ex: 'Outubro'). Cruza nome → funcionário, atribui CC, cria linha em folha_pagamento (mes_ref derivado da data na linha 3) e povoa folha_pagamento_rubricas para cada coluna não-vazia."
     }
   };
 
@@ -1757,8 +1777,10 @@
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
 
-    if (impTipo.value === "evolucao_pct")  return previsualizarEvolucaoPct(arq);
-    if (impTipo.value === "saida_estoque") return previsualizarSaidaEstoque(arq);
+    if (impTipo.value === "evolucao_pct")          return previsualizarEvolucaoPct(arq);
+    if (impTipo.value === "saida_estoque")         return previsualizarSaidaEstoque(arq);
+    if (impTipo.value === "funcionarios_tc")       return previsualizarFuncionariosTc(arq);
+    if (impTipo.value === "despesas_folha_mensal") return previsualizarDespesasFolha(arq);
 
     setImpStatus("Lendo arquivo…", "carregando");
 
@@ -2069,6 +2091,12 @@
   var funcionariosCarregado = false;
 
   function carregarFuncionariosSeNecessario() {
+    // Carrega CCs em paralelo (necessários pro select do modal)
+    if (!centrosCustoLista || !centrosCustoLista.length) {
+      client.from("centros_custo").select("id, codigo, descricao").order("codigo").then(function (rc) {
+        centrosCustoLista = (rc && rc.data) || [];
+      });
+    }
     client.from("funcionarios").select("*").order("nome", { ascending: true }).then(function (r) {
       if (r.error) {
         document.getElementById("fn-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
@@ -2124,22 +2152,49 @@
   function abrirModalFuncionario(f) {
     f = f || {};
     var editar = !!f.id;
+    var opcoesCc = [{ value: "", label: "—" }].concat(
+      (centrosCustoLista || []).map(function (c) { return { value: c.id, label: c.codigo + " — " + c.descricao }; })
+    );
     abrirModal({
       titulo: editar ? "Editar funcionário" : "Novo funcionário",
       fields: [
-        { name: "nome",          label: "Nome completo",       type: "text",   valor: f.nome,          required: true },
-        { name: "cpf",           label: "CPF",                 type: "text",   valor: f.cpf },
-        { name: "cargo",         label: "Cargo",               type: "text",   valor: f.cargo },
-        { name: "data_admissao", label: "Data de admissão",    type: "date",   valor: f.data_admissao },
-        { name: "data_demissao", label: "Data de demissão",    type: "date",   valor: f.data_demissao },
-        { name: "salario_base",  label: "Salário base (R$)",   type: "number", valor: f.salario_base },
-        { name: "observacoes",   label: "Observações",         type: "text",   valor: f.observacoes }
+        { name: "nome",            label: "Nome completo",     type: "text",   valor: f.nome, required: true },
+        { name: "centro_custo_id", label: "Centro de Custo",   type: "select", valor: f.centro_custo_id || "", options: opcoesCc },
+        { name: "status",          label: "Status",            type: "select", valor: f.status || "ATIVO", options: ["ATIVO","INATIVO","AFASTADO"], required: true },
+        { name: "cargo",           label: "Função / Cargo",    type: "text",   valor: f.cargo },
+        { name: "cbo",             label: "CBO",               type: "text",   valor: f.cbo },
+        { name: "salario_base",    label: "Salário base (R$)", type: "number", valor: f.salario_base },
+        { name: "data_admissao",   label: "Data de admissão",  type: "date",   valor: f.data_admissao },
+        { name: "data_demissao",   label: "Data de demissão (vazio se ativo)", type: "date", valor: f.data_demissao },
+        { name: "data_nascimento", label: "Data de nascimento",type: "date",   valor: f.data_nascimento },
+        { name: "cpf",             label: "CPF",               type: "text",   valor: f.cpf },
+        { name: "rg",              label: "RG",                type: "text",   valor: f.rg },
+        { name: "pis",             label: "PIS",               type: "text",   valor: f.pis },
+        { name: "ctps",            label: "CTPS",              type: "text",   valor: f.ctps },
+        { name: "telefone",        label: "Telefone",          type: "text",   valor: f.telefone },
+        { name: "email",           label: "E-mail",            type: "text",   valor: f.email },
+        { name: "endereco",        label: "Endereço",          type: "text",   valor: f.endereco },
+        { name: "cidade",          label: "Cidade",            type: "text",   valor: f.cidade },
+        { name: "cep",             label: "CEP",               type: "text",   valor: f.cep },
+        { name: "banco",           label: "Banco",             type: "text",   valor: f.banco },
+        { name: "agencia",         label: "Agência",           type: "text",   valor: f.agencia },
+        { name: "conta",           label: "Conta",             type: "text",   valor: f.conta },
+        { name: "pix",             label: "Chave PIX",         type: "text",   valor: f.pix },
+        { name: "observacoes",     label: "Observações",       type: "text",   valor: f.observacoes }
       ],
       onSubmit: function (v, done) {
         var payload = {
-          nome: v.nome, cpf: v.cpf, cargo: v.cargo,
+          nome: v.nome,
+          centro_custo_id: v.centro_custo_id ? Number(v.centro_custo_id) : null,
+          status: v.status, cargo: v.cargo, cbo: v.cbo,
+          salario_base: v.salario_base || 0,
           data_admissao: v.data_admissao, data_demissao: v.data_demissao,
-          salario_base: v.salario_base || 0, observacoes: v.observacoes
+          data_nascimento: v.data_nascimento,
+          cpf: v.cpf, rg: v.rg, pis: v.pis, ctps: v.ctps,
+          telefone: v.telefone, email: v.email,
+          endereco: v.endereco, cidade: v.cidade, cep: v.cep,
+          banco: v.banco, agencia: v.agencia, conta: v.conta, pix: v.pix,
+          observacoes: v.observacoes
         };
         var q = editar
           ? client.from("funcionarios").update(payload).eq("id", f.id)
@@ -2966,6 +3021,12 @@
     if (impParsed.tipo === "evolucao_pct" || impParsed.tipo === "saida_estoque") {
       return confirmarUpsertEvolucao(impParsed.tipo, impParsed.linhas);
     }
+    if (impParsed.tipo === "funcionarios_tc") {
+      return confirmarUpsertFuncionarios(impParsed.linhas);
+    }
+    if (impParsed.tipo === "despesas_folha_mensal") {
+      return confirmarFolhaMensal(impParsed);
+    }
 
     var confirma = confirm("Confirmar importação de " + impParsed.linhas.length + " linha(s) para " + tpl.nomeLegivel + "?\n\nRegistros serão adicionados à tabela " + tpl.alvo + ".");
     if (!confirma) return;
@@ -3013,6 +3074,406 @@
       impParsed = null;
     };
     processarProximo(0);
+  }
+
+  // =========================================================================
+  // 32. CENTROS DE CUSTO (Configuração)
+  // =========================================================================
+
+  var centrosCustoLista = [];
+  function carregarCentrosSeNecessario() {
+    document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr>';
+    Promise.all([
+      client.from("centros_custo").select("*").order("codigo"),
+      client.from("funcionarios").select("centro_custo_id")
+    ]).then(function (rs) {
+      var rCc = rs[0], rFn = rs[1];
+      if (rCc.error) { document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + rCc.error.message + '</td></tr>'; return; }
+      centrosCustoLista = rCc.data || [];
+      var contagens = {};
+      ((rFn && rFn.data) || []).forEach(function (f) { if (f.centro_custo_id) contagens[f.centro_custo_id] = (contagens[f.centro_custo_id] || 0) + 1; });
+      window._ccContagens = contagens;
+      renderCentros();
+    });
+  }
+
+  function renderCentros() {
+    var tbody = document.getElementById("cc-tbody");
+    var busca = (document.getElementById("cc-busca").value || "").trim().toLowerCase();
+    var filtrados = centrosCustoLista.filter(function (c) { return matchBusca(busca, [c.codigo, c.descricao]); });
+    valText(document.getElementById("cc-lbl"), filtrados.length + " de " + centrosCustoLista.length);
+    var contagens = window._ccContagens || {};
+    preencherTbody(tbody, filtrados.map(function (c) {
+      return '<tr>' +
+        '<td class="mono">' + escHtml(c.codigo) + '</td>' +
+        '<td>' + escHtml(c.descricao) + '</td>' +
+        '<td>' + (c.ativo ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
+        '<td class="num">' + fmtInt(contagens[c.id] || 0) + '</td>' +
+        '<td><button class="btn-limpar" data-cc-edit="' + c.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 5);
+    tbody.querySelectorAll("[data-cc-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-cc-edit"));
+        var c = centrosCustoLista.find(function (x) { return x.id === id; });
+        if (c) abrirModalCentroCusto(c);
+      });
+    });
+  }
+
+  function abrirModalCentroCusto(c) {
+    c = c || {};
+    var editar = !!c.id;
+    abrirModal({
+      titulo: editar ? "Editar Centro de Custo" : "Novo Centro de Custo",
+      fields: [
+        { name: "codigo",    label: "Código (ex: 05.0007)", type: "text", valor: c.codigo, required: true },
+        { name: "descricao", label: "Descrição",            type: "text", valor: c.descricao, required: true },
+        { name: "ativo",     label: "Ativo?",               type: "select", valor: c.ativo === false ? "false" : "true", options: [{value:"true",label:"Sim"},{value:"false",label:"Não"}] }
+      ],
+      onSubmit: function (v, done) {
+        var payload = { codigo: v.codigo, descricao: v.descricao, ativo: v.ativo === "true" };
+        var q = editar
+          ? client.from("centros_custo").update(payload).eq("id", c.id)
+          : client.from("centros_custo").insert(payload);
+        q.then(function (r) { if (r.error) { done(r.error.message); return; } carregarCentrosSeNecessario(); done(null); });
+      }
+    });
+  }
+
+  // =========================================================================
+  // 33. RUBRICAS (Configuração)
+  // =========================================================================
+
+  var rubricasLista = [];
+  function carregarRubricasSeNecessario() {
+    document.getElementById("rb-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr>';
+    client.from("rubricas").select("*").order("ordem").then(function (r) {
+      if (r.error) { document.getElementById("rb-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>'; return; }
+      rubricasLista = r.data || [];
+      renderRubricas();
+    });
+  }
+
+  function renderRubricas() {
+    var tbody = document.getElementById("rb-tbody");
+    var busca = (document.getElementById("rb-busca").value || "").trim().toLowerCase();
+    var tipo  = document.getElementById("rb-tipo").value;
+    var filtrados = rubricasLista.filter(function (r) {
+      if (tipo && r.tipo !== tipo) return false;
+      return matchBusca(busca, [r.nome, r.conta_contabil]);
+    });
+    valText(document.getElementById("rb-lbl"), filtrados.length + " de " + rubricasLista.length);
+    preencherTbody(tbody, filtrados.map(function (r) {
+      return '<tr>' +
+        '<td class="num">' + fmtInt(r.ordem) + '</td>' +
+        '<td>' + escHtml(r.nome) + '</td>' +
+        '<td><span class="badge-tipo ' + (r.tipo === 'desconto' || r.tipo === 'tributo' ? 'outras' : 'solta') + '">' + escHtml(r.tipo) + '</span></td>' +
+        '<td class="mono">' + escHtml(r.conta_contabil || "—") + '</td>' +
+        '<td>' + (r.ativa ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
+        '<td><button class="btn-limpar" data-rb-edit="' + r.id + '">Editar</button></td>' +
+      '</tr>';
+    }), 6);
+    tbody.querySelectorAll("[data-rb-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-rb-edit"));
+        var r = rubricasLista.find(function (x) { return x.id === id; });
+        if (r) abrirModalRubrica(r);
+      });
+    });
+  }
+
+  function abrirModalRubrica(r) {
+    r = r || {};
+    var editar = !!r.id;
+    abrirModal({
+      titulo: editar ? "Editar rubrica" : "Nova rubrica",
+      fields: [
+        { name: "nome",           label: "Nome",                type: "text",   valor: r.nome, required: true },
+        { name: "tipo",           label: "Tipo",                type: "select", valor: r.tipo || "provento", options: ["provento","desconto","tributo","beneficio","evento"], required: true },
+        { name: "conta_contabil", label: "Conta contábil",      type: "text",   valor: r.conta_contabil },
+        { name: "ordem",          label: "Ordem (1=mais alta)", type: "number", valor: r.ordem || 0 },
+        { name: "ativa",          label: "Ativa?",              type: "select", valor: r.ativa === false ? "false" : "true", options: [{value:"true",label:"Sim"},{value:"false",label:"Não"}] }
+      ],
+      onSubmit: function (v, done) {
+        var payload = { nome: v.nome, tipo: v.tipo, conta_contabil: v.conta_contabil, ordem: Number(v.ordem || 0), ativa: v.ativa === "true" };
+        var q = editar
+          ? client.from("rubricas").update(payload).eq("id", r.id)
+          : client.from("rubricas").insert(payload);
+        q.then(function (rr) { if (rr.error) { done(rr.error.message); return; } carregarRubricasSeNecessario(); done(null); });
+      }
+    });
+  }
+
+  // ----- Parser específico: Funcionários da Planilha TC -----
+  function previsualizarFuncionariosTc(arq) {
+    setImpStatus("Lendo Planilha Funcionários TC…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets["FUNCIONÁRIOS GERAL"] || wb.Sheets["FUNCIONARIOS GERAL"] || wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+        // Cabeçalho está na linha 2 (índice 1)
+        var cab = raw[1] || [];
+        // Mapa de coluna por nome do header normalizado
+        var idx = {};
+        cab.forEach(function (h, i) { if (h) idx[normalizarCabecalho(h)] = i; });
+        function pegar(row, nomes) {
+          for (var n = 0; n < nomes.length; n++) {
+            var i = idx[nomes[n]];
+            if (i !== undefined && row[i] != null && row[i] !== "") return row[i];
+          }
+          return null;
+        }
+        function dataIso(v) {
+          if (!v || v === "-") return null;
+          if (v instanceof Date) return v.toISOString().slice(0,10);
+          var s = String(v).trim();
+          var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (m) return s.slice(0,10);
+          m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+          if (m) {
+            var a = m[3].length === 2 ? "20" + m[3] : m[3];
+            return a + "-" + m[2].padStart(2,"0") + "-" + m[1].padStart(2,"0");
+          }
+          return null;
+        }
+        var linhas = [];
+        for (var i = 2; i < raw.length; i++) {
+          var row = raw[i] || [];
+          var status = String(pegar(row, ["status"]) || "").trim().toUpperCase();
+          if (status !== "ATIVO") continue;
+          var nome = pegar(row, ["nome"]);
+          if (!nome) continue;
+          linhas.push({
+            nome: String(nome).trim(),
+            status: "ATIVO",
+            cpf: pegar(row, ["cpf"]),
+            rg: pegar(row, ["rg"]),
+            pis: pegar(row, ["pis"]),
+            ctps: pegar(row, ["ctps"]),
+            cargo: pegar(row, ["funcao", "função"]),
+            cbo: pegar(row, ["cbo"]),
+            salario_base: Number(String(pegar(row, ["salario atual","salário atual"]) || "0").replace(/\./g,"").replace(",", ".")) || 0,
+            data_admissao: dataIso(pegar(row, ["data admissao","data admissão"])),
+            data_demissao: dataIso(pegar(row, ["data demissao","data demissão"])),
+            data_aso: dataIso(pegar(row, ["data aso"])),
+            vencimento_aso: dataIso(pegar(row, ["vencimento aso"])),
+            primeira_experiencia: dataIso(pegar(row, ["1a experiencia","1ª experiência"])),
+            segunda_experiencia: dataIso(pegar(row, ["2a experiencia","2ª experiência"])),
+            data_nascimento: dataIso(pegar(row, ["data de nascimento","data nascimento"])),
+            livro: pegar(row, ["livro"]),
+            serie: pegar(row, ["serie","série"]),
+            cnh: pegar(row, ["cnh"]),
+            cnh_categoria: pegar(row, ["cat", "cat."]),
+            titulo_eleitor: pegar(row, ["titulo de eleitor","título de eleitor"]),
+            telefone: pegar(row, ["telefone"]),
+            telefone_recado: pegar(row, ["telefone recado"]),
+            email: pegar(row, ["e mail","e-mail","email"]),
+            endereco: pegar(row, ["endereco","endereço"]),
+            complemento: pegar(row, ["complemento"]),
+            bairro: pegar(row, ["bairro"]),
+            cidade: pegar(row, ["cidade"]),
+            cep: pegar(row, ["cep"]),
+            filhos: pegar(row, ["filho", "filhos"]),
+            integracao: pegar(row, ["integracao","integração"]),
+            banco: pegar(row, ["banco"]),
+            agencia: pegar(row, ["agencia","agência"]),
+            conta: pegar(row, ["conta"]),
+            pix: pegar(row, ["pix"]),
+            e_social: pegar(row, ["e social","e-social"])
+          });
+        }
+        impParsed = { linhas: linhas, cabs: ["nome","cargo","cpf","status","salario_base"], tipo: "funcionarios_tc" };
+        renderPreviewImport(linhas, ["nome","cargo","cpf","status","salario_base"]);
+        setImpStatus("Pré-visualização: " + linhas.length + " funcionário(s) ATIVO(S) prontos para importar (sem CC ainda).", "ok");
+        atualizarEstadoImport();
+      } catch (e) { setImpStatus("Erro: " + e.message, "erro"); }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  function confirmarUpsertFuncionarios(linhas) {
+    if (!confirm("Importar " + linhas.length + " funcionário(s) ATIVO(S)?\n\nOnConflict por CPF; quem não tem CPF cria como novo registro.")) return;
+    impBtnConf.disabled = true;
+    setImpStatus("Inserindo funcionários…", "carregando");
+    // Separar quem tem CPF (UPSERT) de quem não tem (INSERT direto)
+    var comCpf  = linhas.filter(function (l) { return l.cpf; });
+    var semCpf  = linhas.filter(function (l) { return !l.cpf; });
+    var promises = [];
+    if (comCpf.length) {
+      promises.push(client.from("funcionarios").upsert(comCpf, { onConflict: "cpf" }));
+    }
+    if (semCpf.length) {
+      promises.push(client.from("funcionarios").insert(semCpf));
+    }
+    Promise.all(promises).then(function (rs) {
+      impBtnConf.disabled = false;
+      var erro = rs.find(function (r) { return r.error; });
+      if (erro) { setImpStatus("Erro: " + erro.error.message, "erro"); return; }
+      setImpStatus("Importação concluída. " + linhas.length + " funcionários (" + comCpf.length + " com CPF / " + semCpf.length + " sem CPF). Atribua o Centro de Custo importando 'Despesas Folha Mensal' depois.", "ok");
+      funcionariosCarregado = false;
+      impParsed = null;
+    });
+  }
+
+  // ----- Parser específico: Despesas Folha Mensal -----
+  // Layout: linha 4 = cabeçalho rubricas (col E em diante), linhas 5+ = dados.
+  // Col A = NOME, B = CC código, C = CC descrição.
+  // Linha 3 col D = data de referência da folha (datetime).
+  function previsualizarDespesasFolha(arq) {
+    setImpStatus("Lendo Despesas Folha…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        // Tenta achar a primeira aba mensal (excluindo Resumo* e Conta*)
+        var mesAbas = wb.SheetNames.filter(function (n) {
+          return /(janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/i.test(n);
+        });
+        if (!mesAbas.length) { setImpStatus("Nenhuma aba mensal encontrada.", "erro"); return; }
+        // Pega a primeira mensal — usuário pode preparar a planilha contendo apenas o mês desejado
+        var nomeAba = mesAbas[0];
+        var sheet = wb.Sheets[nomeAba];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+        // Data de referência (linha 3, col D) → mes_ref "YYYY-MM"
+        var dataRef = raw[2] && raw[2][3];
+        var mesRef = dataRef instanceof Date
+          ? dataRef.getFullYear() + "-" + String(dataRef.getMonth() + 1).padStart(2,"0")
+          : null;
+        if (!mesRef) {
+          // Tenta inferir do nome da aba
+          var nomesMes = {janeiro:"01",fevereiro:"02",marco:"03","março":"03",abril:"04",maio:"05",junho:"06",julho:"07",agosto:"08",setembro:"09",outubro:"10",novembro:"11",dezembro:"12"};
+          for (var n in nomesMes) {
+            if (nomeAba.toLowerCase().indexOf(n) !== -1) { mesRef = "2025-" + nomesMes[n]; break; }
+          }
+        }
+        if (!mesRef) { setImpStatus("Não consegui identificar o mês de referência.", "erro"); return; }
+        // Cabeçalho de rubricas — linha 4 (índice 3), col E (índice 4) em diante até "Total"
+        var cab = raw[3] || [];
+        var colsRubrica = [];
+        for (var c = 4; c < cab.length; c++) {
+          var nome = cab[c];
+          if (!nome) continue;
+          var nomeStr = String(nome).trim();
+          if (nomeStr.toLowerCase() === "total") continue;
+          colsRubrica.push({ idx: c, nome: nomeStr });
+        }
+        // Coletar linhas de funcionários
+        var registros = [];
+        for (var r = 4; r < raw.length; r++) {
+          var row = raw[r] || [];
+          var nome = String(row[0] || "").trim();
+          if (!nome) continue;
+          var ccCodigo = row[1] != null ? String(row[1]).trim() : null;
+          var rubricasFun = [];
+          colsRubrica.forEach(function (col) {
+            var v = row[col.idx];
+            if (v == null || v === "") return;
+            var num = Number(String(v).replace(/[^0-9,.\-]/g,"").replace(",", "."));
+            if (isNaN(num) || num === 0) return;
+            rubricasFun.push({ rubrica_nome: col.nome, valor: num });
+          });
+          if (!rubricasFun.length && !ccCodigo) continue;
+          registros.push({ nome: nome, cc_codigo: ccCodigo, mes_ref: mesRef, rubricas: rubricasFun });
+        }
+        impParsed = { tipo: "despesas_folha_mensal", aba: nomeAba, mes_ref: mesRef, registros: registros };
+        // Render preview
+        var preview = registros.slice(0, 10).map(function (r) {
+          return { nome: r.nome, cc: r.cc_codigo || "—", mes_ref: r.mes_ref, qtd_rubricas: r.rubricas.length, soma: r.rubricas.reduce(function (a, b) { return a + b.valor; }, 0) };
+        });
+        renderPreviewImport(preview, ["nome","cc","mes_ref","qtd_rubricas","soma"]);
+        impTotal.textContent = fmtInt(registros.length);
+        impPreview.hidden = false;
+        setImpStatus("Aba '" + nomeAba + "' (mês " + mesRef + "): " + registros.length + " funcionários com lançamentos.", "ok");
+        atualizarEstadoImport();
+      } catch (e) { setImpStatus("Erro: " + e.message, "erro"); }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  function confirmarFolhaMensal(parsed) {
+    if (!confirm("Importar folha de " + parsed.mes_ref + "?\n\n" + parsed.registros.length + " funcionário(s). Para cada um:\n• Cria/atualiza linha em folha_pagamento (nesse mes_ref)\n• Atribui CC ao funcionário (cruzamento por nome)\n• Insere todas as rubricas em folha_pagamento_rubricas")) return;
+    impBtnConf.disabled = true;
+    setImpStatus("Carregando funcionários, CCs e rubricas para cruzamento…", "carregando");
+
+    Promise.all([
+      client.from("funcionarios").select("id, nome, cpf"),
+      client.from("centros_custo").select("id, codigo"),
+      client.from("rubricas").select("id, nome")
+    ]).then(function (rs) {
+      var funcs = rs[0].data || [];
+      var ccs   = rs[1].data || [];
+      var rubs  = rs[2].data || [];
+      // Mapas de busca
+      function norm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+      var funcPorNome = {};
+      funcs.forEach(function (f) { funcPorNome[norm(f.nome)] = f; });
+      var ccPorCodigo = {};
+      ccs.forEach(function (c) { ccPorCodigo[c.codigo] = c.id; });
+      var rubPorNome = {};
+      rubs.forEach(function (r) { rubPorNome[norm(r.nome)] = r.id; });
+
+      var processados = 0, naoEncontrados = [], erros = [];
+      var i = 0;
+      function processarUm() {
+        if (i >= parsed.registros.length) { terminar(); return; }
+        var reg = parsed.registros[i++];
+        var f = funcPorNome[norm(reg.nome)];
+        if (!f) {
+          naoEncontrados.push(reg.nome);
+          processarUm(); return;
+        }
+        // 1) Atualiza CC se aplicável
+        var ccId = ccPorCodigo[reg.cc_codigo];
+        var pUpdateCc = ccId
+          ? client.from("funcionarios").update({ centro_custo_id: ccId }).eq("id", f.id)
+          : Promise.resolve({});
+        // 2) UPSERT na folha
+        var totalBruto = 0, totalDesc = 0;
+        reg.rubricas.forEach(function (r) {
+          var rid = rubPorNome[norm(r.rubrica_nome)];
+          if (!rid) return;
+          var rub = rubs.find(function (x) { return x.id === rid; });
+          // Aproximação: tributos e descontos são abatidos do bruto
+          if (rub) totalBruto += r.valor;
+        });
+        var folhaPayload = {
+          funcionario_id: f.id,
+          mes_ref: reg.mes_ref,
+          salario_bruto: totalBruto,
+          observacoes: "Importado de Despesas Folha Mensal · " + reg.rubricas.length + " rubricas"
+        };
+        pUpdateCc.then(function () {
+          return client.from("folha_pagamento").upsert(folhaPayload, { onConflict: "funcionario_id,mes_ref" }).select();
+        }).then(function (rFol) {
+          if (rFol.error) { erros.push(reg.nome + ": " + rFol.error.message); processarUm(); return; }
+          var folha = rFol.data && rFol.data[0];
+          if (!folha) { erros.push(reg.nome + ": sem folha retornada"); processarUm(); return; }
+          // 3) Insere rubricas (UPSERT por folha_id+rubrica_id)
+          var linhasRub = reg.rubricas
+            .map(function (r) { return { folha_id: folha.id, rubrica_id: rubPorNome[norm(r.rubrica_nome)], valor: r.valor }; })
+            .filter(function (x) { return x.rubrica_id; });
+          if (!linhasRub.length) { processados++; processarUm(); return; }
+          client.from("folha_pagamento_rubricas").upsert(linhasRub, { onConflict: "folha_id,rubrica_id" }).then(function (rR) {
+            if (rR.error) erros.push(reg.nome + ": " + rR.error.message);
+            processados++;
+            setImpStatus("Processados " + processados + " / " + parsed.registros.length + "…", "carregando");
+            processarUm();
+          });
+        });
+      }
+      function terminar() {
+        impBtnConf.disabled = false;
+        var msg = "Folha " + parsed.mes_ref + " importada. " + processados + " funcionários processados.";
+        if (naoEncontrados.length) msg += " · " + naoEncontrados.length + " sem cadastro: " + naoEncontrados.slice(0,3).join(", ") + (naoEncontrados.length > 3 ? "…" : "");
+        if (erros.length)         msg += " · " + erros.length + " erros: " + erros.slice(0,2).join(" | ");
+        setImpStatus(msg, naoEncontrados.length || erros.length ? "alerta" : "ok");
+        impParsed = null;
+      }
+      processarUm();
+    });
   }
 
   // UPSERT de evolução/saída em os_evolucao_mensal (preserva campos não enviados)

@@ -666,6 +666,8 @@
                   <option value="receitas_custos">Receitas e Custos</option>
                   <option value="evolucao_pct">Evolução % (Planilha de Produção)</option>
                   <option value="saida_estoque">Saída de Estoque (CPV-Matéria Prima)</option>
+                  <option value="funcionarios_tc">Funcionários ativos (Planilha TC)</option>
+                  <option value="despesas_folha_mensal">Despesas Folha Mensal (com cruzamento de CC)</option>
                 </select>
               </label>
               <input type="file" id="imp-arquivo" accept=".xlsx,.xls" />
@@ -869,6 +871,14 @@
               <div class="config-card-title">Limpar Dados</div>
               <div class="config-card-desc">Apagar tabelas da Terra com confirmação</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_centros">
+              <div class="config-card-title">Centros de Custo</div>
+              <div class="config-card-desc">Cadastro de CCs para alocação de funcionários e folha</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_rubricas">
+              <div class="config-card-title">Rubricas</div>
+              <div class="config-card-desc">37 rubricas de folha vinculadas ao plano de contas</div>
+            </button>
             <button class="config-card" type="button" data-subpage="cfg_diag">
               <div class="config-card-title">Diagnóstico</div>
               <div class="config-card-desc">Orçamentos com ruído de Tipo (Fixa + Solta simultâneos)</div>
@@ -881,6 +891,58 @@
               <div class="config-card-title">Usuários</div>
               <div class="config-card-desc">Editar nome, perfil e flag de senha temporária (criação e exclusão no painel do Supabase)</div>
             </button>
+          </div>
+        </section>
+
+        <!-- Configuração > Centros de Custo -->
+        <section class="page" data-page="cfg_centros" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Centros de Custo</h1>
+            <p class="page-sub">CCs usados para alocar funcionários e folha de pagamento</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="cc-busca" placeholder="Buscar código ou descrição…" />
+              <button class="btn-ouro" id="cc-btn-novo" type="button">+ Novo CC</button>
+              <span class="toolbar-label" id="cc-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Código</th><th>Descrição</th><th>Ativo?</th><th class="num">Funcionários</th><th></th></tr></thead>
+                <tbody id="cc-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > Rubricas -->
+        <section class="page" data-page="cfg_rubricas" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Rubricas de folha</h1>
+            <p class="page-sub">Cadastro de rubricas (provento, desconto, tributo, benefício, evento) com vínculo à conta contábil</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="rb-busca" placeholder="Buscar nome ou conta contábil…" />
+              <select id="rb-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="provento">Provento</option>
+                <option value="desconto">Desconto</option>
+                <option value="tributo">Tributo</option>
+                <option value="beneficio">Benefício</option>
+                <option value="evento">Evento</option>
+              </select>
+              <button class="btn-ouro" id="rb-btn-novo" type="button">+ Nova rubrica</button>
+              <span class="toolbar-label" id="rb-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th class="num">Ordem</th><th>Nome</th><th>Tipo</th><th class="mono">Conta Contábil</th><th>Ativa?</th><th></th></tr></thead>
+                <tbody id="rb-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
