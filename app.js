@@ -543,7 +543,7 @@
   }
 
   function ligarFiltros(prefixo, renderFn) {
-    var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel", "livro", "cc", "org"];
+    var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel", "livro", "cc", "org", "dre"];
     ids.forEach(function (suf) {
       var el = document.getElementById(prefixo + suf);
       if (!el) return;
@@ -1235,6 +1235,18 @@
         sel.appendChild(opt);
       });
 
+      // Popular dropdown de DRE (classificação)
+      var dres = {};
+      planoContas.forEach(function (p) { if (p.dre) dres[p.dre] = true; });
+      var selDre = document.getElementById("pc-dre");
+      if (selDre) {
+        Object.keys(dres).sort().forEach(function (d) {
+          var opt = document.createElement("option");
+          opt.value = d; opt.textContent = d;
+          selDre.appendChild(opt);
+        });
+      }
+
       renderPlanoContas();
     });
   }
@@ -1245,10 +1257,12 @@
     var grupo = document.getElementById("pc-grupo").value;
     var nivel = document.getElementById("pc-nivel").value;
 
+    var dre = (document.getElementById("pc-dre")||{}).value || "";
     var filtrados = planoContas.filter(function (p) {
       if (grupo && p.grupo !== grupo) return false;
       if (nivel && String(p.nivel) !== nivel) return false;
-      return matchBusca(busca, [p.cod_conta, p.descritivo, p.grupo, p.numero_conta]);
+      if (dre && p.dre !== dre) return false;
+      return matchBusca(busca, [p.cod_conta, p.descritivo, p.grupo, p.numero_conta, p.dre]);
     });
 
     valText(document.getElementById("pc-lbl"), filtrados.length + " de " + planoContas.length);
