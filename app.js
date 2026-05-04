@@ -252,14 +252,15 @@
   var SIDEBAR_PREF_KEY = "terra.sidebar.colapsada";
 
   function aplicarPreferenciaSidebar() {
-    var colapsada = localStorage.getItem(SIDEBAR_PREF_KEY) === "1";
+    var colapsada = false;
+    try { colapsada = localStorage.getItem(SIDEBAR_PREF_KEY) === "1"; } catch (e) { /* tracking prevention bloqueou storage — segue sem preferência */ }
     sidebar.classList.toggle("colapsada", colapsada);
   }
 
   btnToggleSidebar.addEventListener("click", function () {
     var agora = !sidebar.classList.contains("colapsada");
     sidebar.classList.toggle("colapsada", agora);
-    localStorage.setItem(SIDEBAR_PREF_KEY, agora ? "1" : "0");
+    try { localStorage.setItem(SIDEBAR_PREF_KEY, agora ? "1" : "0"); } catch (e) { /* tracking prevention */ }
   });
 
   // ------------- Navegação entre páginas -----------------------------------
