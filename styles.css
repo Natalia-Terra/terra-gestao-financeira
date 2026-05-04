@@ -39,7 +39,7 @@
   --r-lg: 8px;
 
   /* Dimensões do shell */
-  --topbar-h:       96px;
+  --topbar-h:       56px;
   --sidebar-w:      230px;
   --sidebar-w-col:   56px;
 }
@@ -254,7 +254,7 @@ h3 { font-size: 16px; }
   padding: 4px 0;
 }
 .topbar-logo-img {
-  height: 80px;     /* encaixa confortável no topbar de 96px */
+  height: 40px;     /* encaixa confortável no topbar de 56px */
   width: auto;
   display: block;
 }
@@ -1318,7 +1318,8 @@ h3 { font-size: 16px; }
 }
 .tabela thead th {
   position: sticky;
-  top: 0;
+  top: var(--topbar-h);   /* fixa abaixo da topbar, não embaixo dela */
+  z-index: 5;             /* fica acima das células do tbody, abaixo da topbar (z-index: 20) */
   background: var(--bg3);
   color: var(--text2);
   font-weight: 700;
