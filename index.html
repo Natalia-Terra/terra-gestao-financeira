@@ -162,17 +162,40 @@
             </button>
             <div class="sb-group-items">
               <button class="sb-sub" data-page="consolidado" type="button">Consolidado</button>
+              <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
+              <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
+              <button class="sb-sub" data-page="dre" type="button">DRE</button>
+              <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
+            </div>
+          </div>
+
+          <div class="sb-group" data-macro="comercial">
+            <button class="sb-group-header" type="button" title="Comercial">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3z"/><path d="M5 7v14h14V7"/><path d="M9 11h6"/><path d="M9 15h6"/></svg></span><span class="sb-label">Comercial</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
               <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
               <button class="sb-sub" data-page="faturamento" type="button">Orçamentos</button>
+            </div>
+          </div>
+
+          <div class="sb-group" data-macro="faturamento">
+            <button class="sb-group-header" type="button" title="Faturamento">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg></span><span class="sb-label">Faturamento</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
-              <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
-              <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
-              <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
-              <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
+            </div>
+          </div>
+
+          <div class="sb-group" data-macro="custeio">
+            <button class="sb-group-header" type="button" title="Custeio">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="sb-label">Custeio</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
+              <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
               <button class="sb-sub" data-page="entregas" type="button">Entregas pendentes</button>
-              <button class="sb-sub" data-page="dre" type="button">DRE</button>
-              <button class="sb-sub" data-page="importacoes" type="button">↑ Importar</button>
             </div>
           </div>
 
@@ -214,6 +237,9 @@
         </nav>
 
         <div class="sidebar-footer">
+          <button class="sb-item" data-page="importacoes" type="button" title="Importar planilhas">
+            <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg></span><span class="sb-label">Importar</span>
+          </button>
           <button class="sb-item" data-page="configuracao" type="button" title="Configuração">
             <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="sb-label">Configuração</span>
           </button>
