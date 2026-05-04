@@ -140,9 +140,15 @@
         </div>
 
         <nav class="sidebar-nav">
-          <button class="sb-item" data-page="dashboard" type="button" title="Dashboard">
-            <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg></span><span class="sb-label">Dashboard</span>
-          </button>
+          <div class="sb-group" data-macro="dashboard">
+            <button class="sb-group-header" type="button" title="Dashboard">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg></span><span class="sb-label">Dashboard</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="dashboard" type="button">Visão geral</button>
+              <button class="sb-sub" data-page="programa_bonus" type="button">Programa de Bônus</button>
+            </div>
+          </div>
 
           <div class="sb-group" data-macro="financeiro">
             <button class="sb-group-header" type="button" title="Financeiro">
@@ -228,6 +234,75 @@
           </div>
 
           <div id="dash-status" class="status" role="status" aria-live="polite" hidden></div>
+        </section>
+
+        <!-- Página: Programa de Bônus (Entrega 6) -->
+        <section class="page" data-page="programa_bonus" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Programa de Bônus</h1>
+            <p class="page-sub">Atingimento por esfera — Empresa, Áreas e Profissional</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Período:
+              <select id="bon-periodo"><option value="">Carregando…</option></select>
+            </label>
+            <span class="toolbar-label" id="bon-lbl"></span>
+          </div>
+
+          <!-- 4 cards globais: % alcançado por esfera + total -->
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Empresa</div><div class="metric-value" id="bon-m-empresa">—</div><div class="metric-sub" id="bon-m-empresa-sub">peso 30%</div></div>
+            <div class="metric-card"><div class="metric-label">Áreas</div><div class="metric-value" id="bon-m-areas">—</div><div class="metric-sub" id="bon-m-areas-sub">peso 30%</div></div>
+            <div class="metric-card"><div class="metric-label">Profissional</div><div class="metric-value" id="bon-m-prof">—</div><div class="metric-sub" id="bon-m-prof-sub">peso 40% — média do quadro</div></div>
+            <div class="metric-card"><div class="metric-label">Total atingido</div><div class="metric-value" id="bon-m-total">—</div><div class="metric-sub">de 100%</div></div>
+          </div>
+
+          <!-- Bloco 1: Esfera Empresa -->
+          <div class="card fat-card">
+            <h2>Esfera Empresa <span class="bon-peso">30%</span></h2>
+            <p class="card-desc">4 metas; cada uma vale o peso indicado. Cálculos em tempo real conforme dados disponíveis.</p>
+            <div class="bon-grid" id="bon-empresa-grid">
+              <div class="tbl-vazio">Carregando…</div>
+            </div>
+          </div>
+
+          <!-- Bloco 2: Esfera Áreas -->
+          <div class="card fat-card">
+            <h2>Esfera Áreas <span class="bon-peso">30%</span></h2>
+            <p class="card-desc">Metas por área do organograma. Cada área cumpre 0–6 meses no semestre, transformados em peso conforme escada (slide 19).</p>
+            <div class="bon-grid" id="bon-areas-grid">
+              <div class="tbl-vazio">Aguardando definição das metas por área.</div>
+            </div>
+          </div>
+
+          <!-- Bloco 3: Esfera Profissional -->
+          <div class="card fat-card">
+            <h2>Esfera Profissional <span class="bon-peso">40%</span></h2>
+            <p class="card-desc">Conduta (12,5%) · Faltas justificadas (6,25%) · Atrasos (6,25%) · Performance (15%) · Penalidade -12,5% por falta/atraso sem justificativa (trava em 0).</p>
+            <div class="toolbar">
+              <input class="input-search" type="text" id="bon-prof-busca" placeholder="Buscar funcionário…" />
+              <span class="toolbar-label" id="bon-prof-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Funcionário</th>
+                    <th class="num">Conduta (12,5%)</th>
+                    <th class="num">Faltas just. (6,25%)</th>
+                    <th class="num">Atrasos (6,25%)</th>
+                    <th class="num">Performance (15%)</th>
+                    <th class="num">Penalidade</th>
+                    <th class="num">Total / 40%</th>
+                  </tr>
+                </thead>
+                <tbody id="bon-prof-tbody">
+                  <tr><td colspan="7" class="tbl-vazio">Aguardando dados de RH (frequência, medidas disciplinares, avaliações).</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <!-- Páginas stubs: Financeiro (7 restantes) -->

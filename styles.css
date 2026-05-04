@@ -1372,3 +1372,104 @@ h3 { font-size: 16px; }
 .badge-tipo.assist { background: #E6EFF8; color: #1A4A7A; border-color: #AFC8DE; }
 .badge-tipo.outras { background: #EDE4D8; color: #A07840; border-color: var(--borda2); }
 .badge-tipo.vazio  { background: transparent; color: var(--text3); border-color: var(--borda); font-weight: 400; }
+
+/* =========================================================
+   PROGRAMA DE BÔNUS (Entrega 6)
+   ========================================================= */
+
+.bon-peso {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--ouro-esc);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
+
+.bon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.bon-card {
+  background: var(--bg2);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.bon-card:hover {
+  border-color: var(--borda2);
+  box-shadow: 0 2px 6px rgba(42, 26, 6, 0.06);
+}
+.bon-card-titulo {
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.bon-card-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+.bon-card-meta {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+}
+.bon-card-bar {
+  background: var(--bg3);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  margin: 6px 0 4px;
+}
+.bon-card-bar-fill {
+  background: var(--ouro);
+  height: 100%;
+  transition: width .25s ease;
+}
+.bon-card-valor {
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ouro-esc);
+  line-height: 1.1;
+}
+.bon-card-peso-linha {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 700;
+}
+.bon-card-peso-linha .ok    { color: var(--success); }
+.bon-card-peso-linha .alert { color: var(--warn); }
+.bon-card-peso-linha .neg   { color: var(--danger); }
+.bon-card-fonte {
+  font-size: 11px;
+  color: var(--text3);
+  font-style: italic;
+  margin-top: 4px;
+  border-top: 1px dashed var(--borda);
+  padding-top: 6px;
+}
+.bon-card.bon-card-faltadado {
+  border-style: dashed;
+  background: var(--bg3);
+}
+.bon-card.bon-card-faltadado .bon-card-valor {
+  color: var(--text3);
+  font-style: italic;
+}

@@ -324,6 +324,7 @@
     if (pageId === "rh_folha")        carregarFolhaSeNecessario();
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
+    if (pageId === "programa_bonus")  carregarProgramaBonusSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
@@ -3655,6 +3656,325 @@
         });
     };
     processar(0);
+  }
+
+
+  // =========================================================================
+  // 34. PROGRAMA DE BÔNUS (Entrega 6) — Cálculo por esfera
+  // =========================================================================
+
+  var bonPeriodos = [];
+  var bonPeriodoSel = null;
+  var bonMetasEmpresa = [];
+  var bonMetasArea = [];
+  var bonAreaMes = [];
+  var bonCarregado = false;
+
+  // Escala: para Faturamento Bruto e Margem Líquida — % atingido (0..100) → % peso ganho
+  // Slide 21 (Faturamento) e 23 (Margem Líquida — usando interpretação A confirmada):
+  //   100% da meta → peso 100%
+  //    90% da meta → peso 80% (=8/10 ou 4/5 do peso integral)
+  //    80% da meta → peso 50%
+  //   < 80% → 0%
+  function escalaPesoLinear(pctAtingido, pesoBase) {
+    if (pctAtingido >= 100) return pesoBase;
+    if (pctAtingido >=  90) return pesoBase * 0.80;
+    if (pctAtingido >=  80) return pesoBase * 0.50;
+    return 0;
+  }
+
+  // Escala da Esfera Áreas (slide 19): meses cumpridos / 6 → peso ganho
+  // 6→100% (peso integral), 5→83% (≈0.833), 4→67%, 3→50%, 2→33%, 1→17%, 0→0
+  function escalaPesoArea(mesesCumpridos, pesoBase) {
+    var fator = { 0:0, 1:0.166, 2:0.333, 3:0.50, 4:0.666, 5:0.833, 6:1.0 };
+    var f = fator[Math.max(0, Math.min(6, mesesCumpridos))] || 0;
+    return pesoBase * f;
+  }
+
+  function carregarProgramaBonusSeNecessario() {
+    if (bonCarregado) { renderProgramaBonus(); return; }
+    var grid = document.getElementById("bon-empresa-grid");
+    if (grid) grid.innerHTML = '<div class="tbl-vazio">Carregando…</div>';
+
+    Promise.all([
+      client.from("bonif_periodos").select("*").order("inicio_em", { ascending: false }),
+      client.from("bonif_metas_empresa").select("*"),
+      client.from("bonif_metas_area").select("*"),
+      client.from("bonif_meta_area_mes").select("*")
+    ]).then(function (rs) {
+      bonPeriodos     = (rs[0] && rs[0].data) || [];
+      bonMetasEmpresa = (rs[1] && rs[1].data) || [];
+      bonMetasArea    = (rs[2] && rs[2].data) || [];
+      bonAreaMes      = (rs[3] && rs[3].data) || [];
+      bonCarregado = true;
+
+      // Popular dropdown de período + selecionar o ativo
+      var sel = document.getElementById("bon-periodo");
+      if (sel) {
+        sel.innerHTML = bonPeriodos.map(function (p) {
+          return '<option value="' + p.id + '">' + escHtml(p.nome) + '</option>';
+        }).join("");
+        var ativo = bonPeriodos.find(function (p) { return p.status === "ativo"; });
+        bonPeriodoSel = ativo ? ativo.id : (bonPeriodos[0] && bonPeriodos[0].id) || null;
+        if (bonPeriodoSel) sel.value = String(bonPeriodoSel);
+        sel.onchange = function () {
+          bonPeriodoSel = Number(sel.value);
+          renderProgramaBonus();
+        };
+      }
+      // Garante que receitas_custos esteja carregado para os cálculos
+      if (!rcCarregado) {
+        carregarConsolidadoSeNecessario();
+        var iv = setInterval(function () {
+          if (rcCarregado) { clearInterval(iv); renderProgramaBonus(); }
+        }, 150);
+      } else {
+        // E orcamentos para faturamento por nota_fiscal
+        if (!orcamentosCarregados) {
+          carregarOrcamentosSeNecessario();
+          var iv2 = setInterval(function () {
+            if (orcamentosCarregados) { clearInterval(iv2); renderProgramaBonus(); }
+          }, 150);
+        } else {
+          renderProgramaBonus();
+        }
+      }
+    });
+  }
+
+  function periodoAtual() {
+    return bonPeriodos.find(function (p) { return p.id === bonPeriodoSel; }) || null;
+  }
+
+  function calcularEmpresa() {
+    var periodo = periodoAtual();
+    if (!periodo) return null;
+    var inicio = String(periodo.inicio_em).slice(0,10);
+    var fim    = String(periodo.fim_em).slice(0,10);
+    var anoIni = Number(inicio.slice(0,4)), mesIni = Number(inicio.slice(5,7));
+    var anoFim = Number(fim.slice(0,4)),    mesFim = Number(fim.slice(5,7));
+
+    var metasPorChave = {};
+    bonMetasEmpresa.forEach(function (m) {
+      if (m.periodo_id === periodo.id) metasPorChave[m.meta_chave] = m;
+    });
+
+    // -- Faturamento Bruto acumulado no período (sum de orcamentos.nota_fiscal cuja data está no período)
+    var fatAcum = 0;
+    (orcamentosLista || []).forEach(function (o) {
+      var d = String(o.data || "").slice(0,10);
+      if (!d) return;
+      if (d >= inicio && d <= fim) fatAcum += Number(o.nota_fiscal || 0);
+    });
+
+    // -- Margem Líquida acumulada (receita - custo) / receita no período
+    var totReceita = 0, totCusto = 0;
+    (rcLista || []).forEach(function (r) {
+      var ano = Number(r.ano), mes = Number(r.mes);
+      var dentro = (ano > anoIni || (ano === anoIni && mes >= mesIni)) &&
+                   (ano < anoFim || (ano === anoFim && mes <= mesFim));
+      if (!dentro) return;
+      if (r.categoria === "receita") totReceita += Number(r.valor || 0);
+      else if (r.categoria === "custo") totCusto += Number(r.valor || 0);
+    });
+    var mlPct = totReceita > 0 ? ((totReceita - totCusto) / totReceita * 100) : null;
+
+    // Cálculo dos pesos
+    var resultado = {};
+
+    // Faturamento Bruto (peso 10) → escala linear
+    var mFat = metasPorChave.faturamento_bruto;
+    if (mFat) {
+      var metaFat = Number(mFat.valor_meta);
+      var pctAt  = metaFat > 0 ? (fatAcum / metaFat * 100) : 0;
+      var peso   = escalaPesoLinear(pctAt, Number(mFat.peso_pct));
+      resultado.faturamento_bruto = {
+        meta: metaFat, valor: fatAcum, pctAtingido: pctAt,
+        pesoBase: Number(mFat.peso_pct), pesoGanho: peso, unidade: "BRL",
+        fonte: "orcamentos.nota_fiscal somado por data"
+      };
+    }
+
+    // Margem Líquida (peso 10) → escala linear sobre ML% / meta% (ex: ML 9% / meta 10% = 90% atingido)
+    var mML = metasPorChave.margem_liquida;
+    if (mML) {
+      var metaML = Number(mML.valor_meta);
+      var pctAt2 = (mlPct != null && metaML > 0) ? (mlPct / metaML * 100) : null;
+      var peso2  = pctAt2 != null ? escalaPesoLinear(pctAt2, Number(mML.peso_pct)) : null;
+      resultado.margem_liquida = {
+        meta: metaML, valor: mlPct, pctAtingido: pctAt2,
+        pesoBase: Number(mML.peso_pct), pesoGanho: peso2, unidade: "pct",
+        fonte: "receitas_custos (receita − custo) / receita",
+        receita: totReceita, custo: totCusto
+      };
+    }
+
+    // Caixa Positivo (peso 5) — depende de caixa_saldo_mensal (vazio ainda)
+    var mCx = metasPorChave.caixa_positivo;
+    if (mCx) {
+      resultado.caixa_positivo = {
+        meta: 1, valor: null, pctAtingido: null,
+        pesoBase: Number(mCx.peso_pct), pesoGanho: null, unidade: "bool",
+        faltaDado: true,
+        fonte: "caixa_saldo_mensal — sem dados ainda. Importe os saldos mensais para ativar."
+      };
+    }
+
+    // ICC ≥ 100% (peso 5) — depende de caixa + compromissos_financeiros
+    var mIcc = metasPorChave.icc_6m;
+    if (mIcc) {
+      resultado.icc_6m = {
+        meta: 100, valor: null, pctAtingido: null,
+        pesoBase: Number(mIcc.peso_pct), pesoGanho: null, unidade: "pct",
+        faltaDado: true,
+        fonte: "ICC = saldo de caixa atual ÷ compromissos próximos 6m. Falta importar compromissos_financeiros."
+      };
+    }
+
+    return resultado;
+  }
+
+  function calcularAreas() {
+    var periodo = periodoAtual();
+    if (!periodo) return [];
+    var metasDoPeriodo = bonMetasArea.filter(function (m) { return m.periodo_id === periodo.id; });
+    if (!metasDoPeriodo.length) return [];
+
+    // Para cada meta, conta meses atingidos
+    return metasDoPeriodo.map(function (m) {
+      var atingiu = bonAreaMes.filter(function (x) { return x.meta_id === m.id && x.atingiu; });
+      var meses = atingiu.length;
+      var pesoGanho = escalaPesoArea(meses, Number(m.peso_pct || 30));
+      var path = (organogramaLista && organogramaLista.length) ? buildOrgPath(m.organograma_id) : ("#" + m.organograma_id);
+      return {
+        id: m.id, area: path, descricao: m.descricao, indicador: m.indicador_descritivo,
+        peso_base: Number(m.peso_pct || 30), meses_cumpridos: meses, peso_ganho: pesoGanho
+      };
+    });
+  }
+
+  function renderProgramaBonus() {
+    if (!bonCarregado) return;
+    var periodo = periodoAtual();
+    if (!periodo) {
+      document.getElementById("bon-empresa-grid").innerHTML = '<div class="tbl-vazio">Nenhum período cadastrado.</div>';
+      return;
+    }
+
+    valText(document.getElementById("bon-lbl"),
+      periodo.nome + " · " + fmtData(periodo.inicio_em) + " a " + fmtData(periodo.fim_em));
+
+    // ===== Esfera Empresa
+    var empresa = calcularEmpresa();
+    var grid = document.getElementById("bon-empresa-grid");
+    var pesoEmpresa = 0, pesoEmpresaMax = 0, pesoEmpresaCalculavel = 0;
+    var ordemEmpresa = ["faturamento_bruto","margem_liquida","caixa_positivo","icc_6m"];
+    var labelEmpresa = {
+      faturamento_bruto: "Faturamento Bruto",
+      margem_liquida:    "Rentabilidade (Margem Líquida)",
+      caixa_positivo:    "Fluxo de Caixa Positivo (mensal)",
+      icc_6m:            "ICC ≥ 100% (cobertura 6 meses)"
+    };
+
+    var html = ordemEmpresa.map(function (chave) {
+      var x = empresa && empresa[chave];
+      if (!x) return "";
+      pesoEmpresaMax += x.pesoBase;
+      var faltaDado = !!x.faltaDado;
+      if (!faltaDado && x.pesoGanho != null) {
+        pesoEmpresa += x.pesoGanho;
+        pesoEmpresaCalculavel += x.pesoBase;
+      }
+
+      var valTxt, metaTxt, pctAtTxt;
+      if (faltaDado) {
+        valTxt = "—"; metaTxt = (chave === "caixa_positivo" ? "saldo > 0 todo mês" : (chave === "icc_6m" ? "ICC ≥ 100%" : "")); pctAtTxt = "Aguardando dado";
+      } else if (chave === "faturamento_bruto") {
+        valTxt = fmtBRL(x.valor); metaTxt = fmtBRL(x.meta); pctAtTxt = (x.pctAtingido).toFixed(1).replace(".", ",") + "% da meta";
+      } else if (chave === "margem_liquida") {
+        valTxt = (x.valor != null ? x.valor.toFixed(1).replace(".", ",") + "%" : "—");
+        metaTxt = x.meta + "%"; pctAtTxt = (x.pctAtingido != null ? x.pctAtingido.toFixed(1).replace(".", ",") + "% da meta" : "—");
+      }
+
+      var pesoTxt = faltaDado ? "— / " + x.pesoBase + "%" : (x.pesoGanho.toFixed(2).replace(".", ",") + "% / " + x.pesoBase + "%");
+      var clsValor = faltaDado ? " neg" : (x.pesoGanho >= x.pesoBase ? " ok" : (x.pesoGanho > 0 ? " alert" : " neg"));
+      var pctAtingido = faltaDado ? 0 : Math.min(100, Math.max(0, x.pctAtingido || 0));
+
+      return '<div class="bon-card' + (faltaDado ? ' bon-card-faltadado' : '') + '">' +
+        '<div class="bon-card-titulo">' + escHtml(labelEmpresa[chave]) + '</div>' +
+        '<div class="bon-card-meta">Meta: ' + escHtml(metaTxt) + '</div>' +
+        '<div class="bon-card-valor">' + escHtml(valTxt) + '</div>' +
+        '<div class="bon-card-bar"><div class="bon-card-bar-fill" style="width:' + pctAtingido + '%"></div></div>' +
+        '<div class="bon-card-peso-linha"><span>' + escHtml(pctAtTxt) + '</span><span class="' + clsValor.trim() + '">' + escHtml(pesoTxt) + '</span></div>' +
+        '<div class="bon-card-fonte">' + escHtml(x.fonte || "") + '</div>' +
+      '</div>';
+    }).join("");
+    grid.innerHTML = html || '<div class="tbl-vazio">Sem metas cadastradas para este período.</div>';
+
+    // ===== Esfera Áreas
+    var areas = calcularAreas();
+    var gAreas = document.getElementById("bon-areas-grid");
+    if (!areas.length) {
+      gAreas.innerHTML = '<div class="tbl-vazio">Nenhuma meta de área cadastrada para o período. (UI de cadastro virá em entrega futura.)</div>';
+    } else {
+      var pesoAreas = 0, pesoAreasMax = 0;
+      gAreas.innerHTML = areas.map(function (a) {
+        pesoAreas += a.peso_ganho;
+        pesoAreasMax += a.peso_base;
+        var pct = a.peso_base > 0 ? (a.peso_ganho / a.peso_base * 100) : 0;
+        return '<div class="bon-card">' +
+          '<div class="bon-card-titulo">' + escHtml(a.area) + '</div>' +
+          '<div class="bon-card-meta">' + escHtml(a.descricao) + '</div>' +
+          '<div class="bon-card-valor">' + a.meses_cumpridos + ' / 6 meses</div>' +
+          '<div class="bon-card-bar"><div class="bon-card-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="bon-card-peso-linha"><span>' + escHtml(a.indicador || "") + '</span><span>' + a.peso_ganho.toFixed(2).replace(".", ",") + '% / ' + a.peso_base + '%</span></div>' +
+        '</div>';
+      }).join("");
+    }
+
+    // ===== Esfera Profissional (sem dados ainda — placeholder)
+    var tProf = document.getElementById("bon-prof-tbody");
+    var ativos = (funcionariosLista || []).filter(function (f) { return f.status === "ATIVO"; });
+    if (!ativos.length) {
+      tProf.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Funcionários ainda não carregados ou sem ativos. Acesse RH → Funcionários para forçar a carga.</td></tr>';
+    } else {
+      // Por enquanto mostra a lista de ativos com colunas vazias até termos os dados (frequencia, conduta, avaliação)
+      tProf.innerHTML = ativos.slice(0, 50).map(function (f) {
+        return '<tr>' +
+          '<td>' + escHtml(f.nome) + '</td>' +
+          '<td class="num">—</td>' +
+          '<td class="num">—</td>' +
+          '<td class="num">—</td>' +
+          '<td class="num">—</td>' +
+          '<td class="num">—</td>' +
+          '<td class="num">— / 40%</td>' +
+        '</tr>';
+      }).join("") + (ativos.length > 50
+          ? '<tr><td colspan="7" class="tbl-vazio">… exibindo 50 de ' + ativos.length + '. Cálculos serão ativados quando importarmos frequencia_mensal, medidas_disciplinares e avaliacao_desempenho.</td></tr>'
+          : "");
+    }
+
+    // ===== Cards globais no topo
+    valText(document.getElementById("bon-m-empresa"),
+      pesoEmpresa.toFixed(2).replace(".", ",") + "% / 30%");
+    valText(document.getElementById("bon-m-empresa-sub"),
+      pesoEmpresaCalculavel < 30
+        ? "calculado sobre " + pesoEmpresaCalculavel + "% (faltam " + (30 - pesoEmpresaCalculavel) + "% de dados)"
+        : "todas as 4 metas calculadas");
+
+    if (areas.length) {
+      var somaA = areas.reduce(function (acc, a) { return acc + a.peso_ganho; }, 0);
+      valText(document.getElementById("bon-m-areas"), somaA.toFixed(2).replace(".", ",") + "% / 30%");
+      valText(document.getElementById("bon-m-areas-sub"), areas.length + " meta(s) por área");
+    } else {
+      valText(document.getElementById("bon-m-areas"), "—");
+      valText(document.getElementById("bon-m-areas-sub"), "Aguardando definição");
+    }
+
+    valText(document.getElementById("bon-m-prof"), "—");
+    valText(document.getElementById("bon-m-prof-sub"), "Aguardando dados de RH");
+
+    valText(document.getElementById("bon-m-total"), pesoEmpresa.toFixed(2).replace(".", ",") + "%");
   }
 
 })();
