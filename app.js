@@ -4644,4 +4644,34 @@
       : "");
   }
 
+
+  // =========================================================================
+  // BOOT FINAL — delegação global de cliques em botões estáticos.
+  // Garante que .config-card[data-subpage], [data-goto] e [data-limpar]
+  // SEMPRE funcionem, mesmo se ativarPaginaOrcamentos() falhar por qualquer
+  // motivo (elemento ausente, erro no fluxo de auth, etc).
+  // Bug histórico: listeners eram registrados dentro de ativarPaginaOrcamentos;
+  // se essa função abortasse antes da linha 503, os botões ficavam mortos
+  // sem nenhum erro visível no console.
+  // =========================================================================
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var card = t.closest(".config-card[data-subpage]");
+    if (card) {
+      var alvo = card.getAttribute("data-subpage");
+      if (alvo && typeof showPage === "function") { showPage(alvo); return; }
+    }
+    var gotoBtn = t.closest("[data-goto]");
+    if (gotoBtn) {
+      var pg = gotoBtn.getAttribute("data-goto");
+      if (pg && typeof showPage === "function") { showPage(pg); return; }
+    }
+    var limparBtn = t.closest("[data-limpar]");
+    if (limparBtn) {
+      var tabela = limparBtn.getAttribute("data-limpar");
+      if (tabela && typeof limparTabela === "function") { limparTabela(tabela); return; }
+    }
+  });
+
 })();
