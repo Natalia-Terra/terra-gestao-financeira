@@ -526,7 +526,13 @@
           </div>
           <div class="card fat-card">
             <div class="toolbar">
-              <input class="input-search" type="text" id="desp-busca" placeholder="Buscar subcategoria…" />
+              <label class="toolbar-inline">Fonte:
+                <select id="desp-fonte">
+                  <option value="rc">Agregado mensal (receitas_custos)</option>
+                  <option value="mov">Lançamentos classificados (movimentos)</option>
+                </select>
+              </label>
+              <input class="input-search" type="text" id="desp-busca" placeholder="Buscar subcategoria ou DRE…" />
               <select id="desp-ano">
                 <option value="">Todos os anos</option>
                 <option value="2026">2026</option>
@@ -543,8 +549,8 @@
               <span class="toolbar-label" id="desp-lbl"></span>
             </div>
             <div class="table-wrap">
-              <table class="tabela">
-                <thead><tr><th>Ano</th><th>Mês</th><th>Subcategoria</th><th class="num">Valor</th></tr></thead>
+              <table class="tabela" id="desp-tabela">
+                <thead id="desp-thead"><tr><th>Ano</th><th>Mês</th><th>Subcategoria</th><th class="num">Valor</th></tr></thead>
                 <tbody id="desp-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>

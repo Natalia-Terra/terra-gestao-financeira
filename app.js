@@ -1005,12 +1005,20 @@
   // =========================================================================
 
   function carregarDespesasSeNecessario() {
-    if (rcCarregado) { renderDespesas(); return; }
-    if (rcCarregando) return;
-    carregarConsolidadoSeNecessario();
+    if (!pcCarregado)          carregarPlanoContasSeNecessario();
+    if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    if (!rcCarregado && !rcCarregando) carregarConsolidadoSeNecessario();
     var iv = setInterval(function () {
-      if (rcCarregado) { clearInterval(iv); renderDespesas(); }
+      if (rcCarregado && pcCarregado && orcamentosCarregados) {
+        clearInterval(iv);
+        renderDespesas();
+      }
     }, 150);
+    var sel = document.getElementById("desp-fonte");
+    if (sel && !sel.dataset.bound) {
+      sel.dataset.bound = "1";
+      sel.addEventListener("change", renderDespesas);
+    }
   }
 
   function renderDespesas() {
