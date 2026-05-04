@@ -3395,13 +3395,13 @@
 
   var centrosCustoLista = [];
   function carregarCentrosSeNecessario() {
-    document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr>';
+    document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr>';
     Promise.all([
       client.from("centros_custo").select("*").order("codigo"),
       client.from("funcionarios").select("centro_custo_id")
     ]).then(function (rs) {
       var rCc = rs[0], rFn = rs[1];
-      if (rCc.error) { document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + rCc.error.message + '</td></tr>'; return; }
+      if (rCc.error) { document.getElementById("cc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + rCc.error.message + '</td></tr>'; return; }
       centrosCustoLista = rCc.data || [];
       var contagens = {};
       ((rFn && rFn.data) || []).forEach(function (f) { if (f.centro_custo_id) contagens[f.centro_custo_id] = (contagens[f.centro_custo_id] || 0) + 1; });
@@ -3416,15 +3416,24 @@
     var filtrados = centrosCustoLista.filter(function (c) { return matchBusca(busca, [c.codigo, c.descricao]); });
     valText(document.getElementById("cc-lbl"), filtrados.length + " de " + centrosCustoLista.length);
     var contagens = window._ccContagens || {};
+    var tipoLabel = { direto: "Direto", indireto: "Indireto", despesa: "Despesa" };
+    var tipoClasse = { direto: "tag-ok", indireto: "tag-warn", despesa: "" };
     preencherTbody(tbody, filtrados.map(function (c) {
+      var tag = tipoLabel[c.tipo_custo] || "—";
+      var cls = tipoClasse[c.tipo_custo] || "";
+      var tagHtml = c.tipo_custo
+        ? '<span class="tag ' + cls + '">' + tag + '</span>'
+        : '<span class="muted">—</span>';
       return '<tr>' +
         '<td class="mono">' + escHtml(c.codigo) + '</td>' +
         '<td>' + escHtml(c.descricao) + '</td>' +
+        '<td>' + escHtml(c.dre || "—") + '</td>' +
+        '<td>' + tagHtml + '</td>' +
         '<td>' + (c.ativo ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
         '<td class="num">' + fmtInt(contagens[c.id] || 0) + '</td>' +
         '<td><button class="btn-limpar" data-cc-edit="' + c.id + '">Editar</button></td>' +
       '</tr>';
-    }), 5);
+    }), 7);
     tbody.querySelectorAll("[data-cc-edit]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var id = Number(btn.getAttribute("data-cc-edit"));
@@ -3442,10 +3451,23 @@
       fields: [
         { name: "codigo",    label: "Código (ex: 05.0007)", type: "text", valor: c.codigo, required: true },
         { name: "descricao", label: "Descrição",            type: "text", valor: c.descricao, required: true },
+        { name: "dre",       label: "DRE (descritiva — espelho da planilha)", type: "text", valor: c.dre || "" },
+        { name: "tipo_custo",label: "Tipo de custo",        type: "select", valor: c.tipo_custo || "despesa",
+          options: [
+            { value: "direto",   label: "Direto (MOD da produção — CPV)" },
+            { value: "indireto", label: "Indireto (apoio à produção)" },
+            { value: "despesa",  label: "Despesa (administrativo/financeiro/comercial)" }
+          ] },
         { name: "ativo",     label: "Ativo?",               type: "select", valor: c.ativo === false ? "false" : "true", options: [{value:"true",label:"Sim"},{value:"false",label:"Não"}] }
       ],
       onSubmit: function (v, done) {
-        var payload = { codigo: v.codigo, descricao: v.descricao, ativo: v.ativo === "true" };
+        var payload = {
+          codigo: v.codigo,
+          descricao: v.descricao,
+          dre: v.dre || null,
+          tipo_custo: v.tipo_custo,
+          ativo: v.ativo === "true"
+        };
         var q = editar
           ? client.from("centros_custo").update(payload).eq("id", c.id)
           : client.from("centros_custo").insert(payload);
