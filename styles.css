@@ -39,7 +39,7 @@
   --r-lg: 8px;
 
   /* Dimensões do shell */
-  --topbar-h:       56px;
+  --topbar-h:       72px;
   --sidebar-w:      230px;
   --sidebar-w-col:   56px;
 }
@@ -254,7 +254,7 @@ h3 { font-size: 16px; }
   padding: 4px 0;
 }
 .topbar-logo-img {
-  height: 40px;     /* encaixa confortável no topbar de 56px */
+  height: 56px;     /* encaixa confortável no topbar de 72px */
   width: auto;
   display: block;
 }
@@ -1306,7 +1306,8 @@ h3 { font-size: 16px; }
 .fat-card { padding: 16px 18px; }
 
 .table-wrap {
-  overflow-x: auto;
+  overflow-x: clip;       /* clip não cria contexto de scroll → sticky thead se conecta ao body */
+  overflow-y: visible;
   border: 1px solid var(--borda);
   border-radius: var(--r-md);
   background: var(--bg);
