@@ -1630,47 +1630,115 @@
           </div>
         </section>
 
-        <!-- Custeio > Custo Direto > Via OS (placeholder Pacote 5) -->
+        <!-- Custeio > Custo Direto > Via OS -->
         <section class="page" data-page="cust_direto_via_os" hidden>
           <div class="page-header">
             <h1 class="page-title">Custo Direto — Via OS</h1>
-            <p class="page-sub">Matéria-prima baixada via apontamento de OS (DRE: CPV - Direto)</p>
+            <p class="page-sub">Baixa de estoque por apontamento de OS (origem: os_evolucao_mensal · custo_saida)</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total no ano</div><div class="metric-value" id="cdvos-m-tot">—</div><div class="metric-sub">soma das baixas</div></div>
+            <div class="metric-card"><div class="metric-label">OSs com baixa</div><div class="metric-value" id="cdvos-m-qtd">—</div><div class="metric-sub">distintas</div></div>
+            <div class="metric-card"><div class="metric-label">Ticket médio</div><div class="metric-value" id="cdvos-m-tk">—</div><div class="metric-sub">total / qtd OSs</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="cdvos-busca" placeholder="Buscar OS ou cliente…" />
+            <label class="toolbar-inline">Ano:
+              <select id="cdvos-ano"></select>
+            </label>
+            <button class="btn-limpar" id="cdvos-btn-limpar" type="button">✕ Limpar</button>
+            <span class="toolbar-label" id="cdvos-lbl"></span>
           </div>
           <div class="card fat-card">
-            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai consolidar saídas de estoque por subcategoria (madeiras, ferragens, lustros, etc) usando os_evolucao_mensal.</p>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>OS</th><th>Cliente</th><th class="num">Meses com baixa</th><th class="num">Total no ano</th></tr></thead>
+                <tbody id="cdvos-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
-        <!-- Custeio > Custo Direto > Lançamento Direto (placeholder Pacote 5) -->
+        <!-- Custeio > Custo Direto > Lançamento Direto -->
         <section class="page" data-page="cust_direto_lanc" hidden>
           <div class="page-header">
             <h1 class="page-title">Custo Direto — Lançamento Direto</h1>
-            <p class="page-sub">Lançamentos diretos em CPV - Matéria Prima e CPV - Viagens (sem baixa de OS)</p>
+            <p class="page-sub">Lançamentos com custo direto SEM apontamento de OS</p>
+          </div>
+          <div class="status alerta" style="margin-bottom:14px">
+            ⚠ Esta tela depende da ligação <code>movimentos.plano_contas_id</code> que ainda não existe.
+            Hoje só dá pra aproximar via <em>movimentos com custo &gt; 0 e sem OS preenchida</em>.
+            Vou trazer essa aproximação enquanto a migração 15 (link contábil) não chega.
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="cdlanc-busca" placeholder="Buscar item, cliente ou orçamento…" />
+            <label class="toolbar-inline">Ano:
+              <select id="cdlanc-ano"></select>
+            </label>
+            <button class="btn-limpar" id="cdlanc-btn-limpar" type="button">✕ Limpar</button>
+            <span class="toolbar-label" id="cdlanc-lbl"></span>
           </div>
           <div class="card fat-card">
-            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai listar lançamentos cuja conta tem DRE = CPV - Matéria Prima ou CPV - Viagens, sem OS preenchida.</p>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>Item</th><th>Natureza</th><th class="num">Valor</th></tr></thead>
+                <tbody id="cdlanc-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
-        <!-- Custeio > Custo Indireto (placeholder Pacote 5) -->
+        <!-- Custeio > Custo Indireto -->
         <section class="page" data-page="cust_indireto" hidden>
           <div class="page-header">
             <h1 class="page-title">Custo Indireto</h1>
-            <p class="page-sub">Custos vinculados à produção indiretamente — folha de CCs PCPM/Estoque/Projetos + 14 contas selecionadas de infraestrutura</p>
+            <p class="page-sub">Folha de funcionários com CC tipo Indireto (PCPM, Estoque, Projetos)</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total folha indireta</div><div class="metric-value" id="cind-m-tot">—</div><div class="metric-sub">soma do ano</div></div>
+            <div class="metric-card"><div class="metric-label">Funcionários</div><div class="metric-value" id="cind-m-func">—</div><div class="metric-sub">com folha indireta</div></div>
+            <div class="metric-card"><div class="metric-label">Média mensal</div><div class="metric-value" id="cind-m-med">—</div><div class="metric-sub">total / 12</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <label class="toolbar-inline">Ano:
+              <select id="cind-ano"></select>
+            </label>
+            <span class="toolbar-label" id="cind-lbl"></span>
           </div>
           <div class="card fat-card">
-            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai consolidar (a) folha de funcionários cujo CC tem tipo_custo=indireto + (b) lançamentos em contas com tipo_custo=indireto (água, energia, condomínio, EPI, etc).</p>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês</th><th class="num">Folha indireta</th><th class="num">Headcount</th></tr></thead>
+                <tbody id="cind-tbody"><tr><td colspan="3" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
-        <!-- Custeio > Custo por Área (placeholder Pacote 5) -->
+        <!-- Custeio > Custo por Área -->
         <section class="page" data-page="cust_area" hidden>
           <div class="page-header">
             <h1 class="page-title">Custo por Área</h1>
-            <p class="page-sub">Custos rateados por área do organograma — folha por CC + rateio % de despesas compartilhadas</p>
+            <p class="page-sub">Folha consolidada por Centro de Custo / Área — base para análise de custo por unidade de produção</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total folha</div><div class="metric-value" id="carea-m-tot">—</div><div class="metric-sub">no período selecionado</div></div>
+            <div class="metric-card"><div class="metric-label">Área mais cara</div><div class="metric-value" id="carea-m-top">—</div><div class="metric-sub" id="carea-m-top-pct">—</div></div>
+            <div class="metric-card"><div class="metric-label">Headcount total</div><div class="metric-value" id="carea-m-hc">—</div><div class="metric-sub">funcionários alocados</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <label class="toolbar-inline">Ano:
+              <select id="carea-ano"></select>
+            </label>
+            <span class="toolbar-label" id="carea-lbl"></span>
           </div>
           <div class="card fat-card">
-            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai usar rateio_areas para distribuir contas selecionadas + somar folha por área via centro_custo do funcionário.</p>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Centro de Custo</th><th>Tipo</th><th class="num">Headcount</th><th class="num">Folha (ano)</th><th class="num">% do total</th></tr></thead>
+                <tbody id="carea-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 

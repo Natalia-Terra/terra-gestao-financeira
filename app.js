@@ -338,6 +338,10 @@
     if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_faturamento") carregarApropriacaoFaturamentoSeNecessario();
+    if (pageId === "cust_direto_via_os") carregarCustoDiretoViaOsSeNecessario();
+    if (pageId === "cust_direto_lanc")   carregarCustoDiretoLancSeNecessario();
+    if (pageId === "cust_indireto")      carregarCustoIndiretoSeNecessario();
+    if (pageId === "cust_area")          carregarCustoAreaSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
     if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
@@ -5799,6 +5803,310 @@
     '</tr>');
 
     document.getElementById("afat-tbody").innerHTML = linhas.join("");
+  }
+
+
+  // =========================================================================
+  // CUSTOS — Pacote 5
+  // =========================================================================
+
+  // -------- Helper genérico: popular select de ano com 2024..2027 --------
+  function popularSelectAno(sel) {
+    if (!sel || sel.dataset.bound) return;
+    sel.dataset.bound = "1";
+    var anos = [];
+    for (var a = 2024; a <= 2027; a++) anos.push(a);
+    sel.innerHTML = anos.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join("");
+    sel.value = String(new Date().getFullYear());
+  }
+
+  // -------- Custo Direto — Via OS (os_evolucao_mensal) --------
+  function carregarCustoDiretoViaOsSeNecessario() {
+    if (!aprCarregado) carregarApropriacaoSeNecessario();
+    if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    var iv = setInterval(function () {
+      if (aprCarregado && orcamentosCarregados) {
+        clearInterval(iv);
+        renderCustoDiretoViaOs();
+      }
+    }, 150);
+    popularSelectAno(document.getElementById("cdvos-ano"));
+    ["cdvos-busca","cdvos-ano"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.boundEv) { el.dataset.boundEv = "1"; el.addEventListener("input", renderCustoDiretoViaOs); el.addEventListener("change", renderCustoDiretoViaOs); }
+    });
+    var btn = document.getElementById("cdvos-btn-limpar");
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function () {
+        var b = document.getElementById("cdvos-busca"); if (b) b.value = "";
+        renderCustoDiretoViaOs();
+      });
+    }
+  }
+
+  function renderCustoDiretoViaOs() {
+    var tbody = document.getElementById("cdvos-tbody");
+    if (!tbody) return;
+    var ano = Number((document.getElementById("cdvos-ano") || {}).value || new Date().getFullYear());
+    var busca = ((document.getElementById("cdvos-busca") || {}).value || "").trim().toLowerCase();
+    var anoStr = String(ano);
+
+    // Agrega por OS no ano
+    var porOs = {};
+    (osEvolLista || []).forEach(function (e) {
+      var mr = String(e.mes_ref || "").slice(0, 7);
+      if (!mr.startsWith(anoStr)) return;
+      var c = Number(e.custo_saida || 0);
+      if (c <= 0) return;
+      if (!porOs[e.os]) porOs[e.os] = { os: e.os, total: 0, meses: 0 };
+      porOs[e.os].total += c;
+      porOs[e.os].meses += 1;
+    });
+
+    // Mapa OS → cliente (via osLista que tem orcamento + nome)
+    var clientePorOs = {};
+    (osLista || []).forEach(function (o) { clientePorOs[o.os] = o.cliente || o.nome_cliente || o.orcamento_nome || ""; });
+
+    var lista = Object.keys(porOs).map(function (os) {
+      var r = porOs[os];
+      r.cliente = clientePorOs[os] || "—";
+      return r;
+    }).filter(function (r) {
+      if (!busca) return true;
+      return matchBusca(busca, [r.os, r.cliente]);
+    });
+    lista.sort(function (a, b) { return b.total - a.total; });
+
+    var totalAno = lista.reduce(function (a, r) { return a + r.total; }, 0);
+    var qtd = lista.length;
+    var ticket = qtd ? totalAno / qtd : 0;
+
+    valText(document.getElementById("cdvos-m-tot"), fmtBRL(totalAno));
+    valText(document.getElementById("cdvos-m-qtd"), fmtInt(qtd));
+    valText(document.getElementById("cdvos-m-tk"),  fmtBRL(ticket));
+    valText(document.getElementById("cdvos-lbl"), "Ano " + ano + " — " + qtd + " OSs");
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="tbl-vazio">Sem baixas de estoque no período.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (r) {
+      return '<tr>' +
+        '<td class="mono">' + escHtml(r.os) + '</td>' +
+        '<td>' + escHtml(r.cliente) + '</td>' +
+        '<td class="num">' + fmtInt(r.meses) + '</td>' +
+        '<td class="num">' + fmtBRL(r.total) + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  // -------- Custo Direto — Lançamento Direto (aproximação sem plano_contas_id) --------
+  function carregarCustoDiretoLancSeNecessario() {
+    if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    var iv = setInterval(function () {
+      if (orcamentosCarregados) { clearInterval(iv); renderCustoDiretoLanc(); }
+    }, 150);
+    popularSelectAno(document.getElementById("cdlanc-ano"));
+    ["cdlanc-busca","cdlanc-ano"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.boundEv) { el.dataset.boundEv = "1"; el.addEventListener("input", renderCustoDiretoLanc); el.addEventListener("change", renderCustoDiretoLanc); }
+    });
+    var btn = document.getElementById("cdlanc-btn-limpar");
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function () {
+        var b = document.getElementById("cdlanc-busca"); if (b) b.value = "";
+        renderCustoDiretoLanc();
+      });
+    }
+  }
+
+  function renderCustoDiretoLanc() {
+    var tbody = document.getElementById("cdlanc-tbody");
+    if (!tbody) return;
+    var ano = Number((document.getElementById("cdlanc-ano") || {}).value || new Date().getFullYear());
+    var busca = ((document.getElementById("cdlanc-busca") || {}).value || "").trim().toLowerCase();
+    var ini = ano + "-01-01", fim = ano + "-12-31";
+
+    // Aproximação: movimentos com custo (valor < 0 ou flag custo) e SEM os preenchida
+    // Como o schema atual tem 'custo' (numérico) e 'os' (text), filtramos por custo > 0 e os vazia
+    var lista = (movimentosCompletos || []).filter(function (m) {
+      var d = String(m.data || "").slice(0, 10);
+      if (d < ini || d > fim) return false;
+      // Aproximação: tem 'custo' positivo ou natureza indica saída (Resultado Financeiro)
+      var ehCusto = (m.custo != null && Number(m.custo) > 0)
+                    || /resultado financeiro|outras despesas|fornecedor/i.test(String(m.natureza || ""));
+      if (!ehCusto) return false;
+      // Sem OS preenchida
+      if (m.os && String(m.os).trim() !== "") return false;
+      if (busca) {
+        return matchBusca(busca, [m.orcamento, m.nome, m.item, m.natureza]);
+      }
+      return true;
+    });
+    lista.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
+
+    var total = lista.reduce(function (a, m) { return a + Number(m.valor || m.custo || 0); }, 0);
+    valText(document.getElementById("cdlanc-lbl"), "Ano " + ano + " — " + lista.length + " lançamentos · " + fmtBRL(total));
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Sem lançamentos diretos sem OS no período (aproximação).</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.slice(0, 200).map(function (m) {
+      return '<tr>' +
+        '<td>' + escHtml(fmtData(m.data)) + '</td>' +
+        '<td class="mono">' + escHtml(m.orcamento || "—") + '</td>' +
+        '<td>' + escHtml(m.nome || "—") + '</td>' +
+        '<td>' + escHtml(m.item || "—") + '</td>' +
+        '<td>' + escHtml(m.natureza || "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.valor || m.custo || 0) + '</td>' +
+      '</tr>';
+    }).join("") + (lista.length > 200 ? '<tr><td colspan="6" class="tbl-vazio">… exibindo 200 de ' + lista.length + '.</td></tr>' : "");
+  }
+
+  // -------- Custo Indireto — folha de funcionários com CC tipo Indireto --------
+  var folhaCustoCarregado = false;
+  var folhaCustoLista = [];
+
+  function carregarCustoIndiretoSeNecessario() {
+    if (!folhaCustoCarregado) {
+      Promise.all([
+        client.from("folha_pagamento").select("funcionario_id, mes_ref, salario_bruto, liquido"),
+        client.from("funcionarios").select("id, centro_custo_id"),
+        client.from("centros_custo").select("id, codigo, descricao, tipo_custo, dre")
+      ]).then(function (rs) {
+        var fp = (rs[0] && rs[0].data) || [];
+        var fn = (rs[1] && rs[1].data) || [];
+        var cc = (rs[2] && rs[2].data) || [];
+        var ccPorId = {}; cc.forEach(function (c) { ccPorId[c.id] = c; });
+        var ccPorFunc = {}; fn.forEach(function (f) { ccPorFunc[f.id] = ccPorId[f.centro_custo_id]; });
+        folhaCustoLista = fp.map(function (l) {
+          var cc = ccPorFunc[l.funcionario_id];
+          return {
+            funcionario_id: l.funcionario_id,
+            mes_ref: l.mes_ref,
+            valor: Number(l.salario_bruto || l.liquido || 0),
+            cc_codigo: cc && cc.codigo,
+            cc_desc: cc && cc.descricao,
+            cc_tipo: cc && cc.tipo_custo
+          };
+        });
+        folhaCustoCarregado = true;
+        renderCustoIndireto();
+      });
+    } else {
+      renderCustoIndireto();
+    }
+    popularSelectAno(document.getElementById("cind-ano"));
+    var sel = document.getElementById("cind-ano");
+    if (sel && !sel.dataset.boundEv) { sel.dataset.boundEv = "1"; sel.addEventListener("change", renderCustoIndireto); }
+  }
+
+  function renderCustoIndireto() {
+    var tbody = document.getElementById("cind-tbody");
+    if (!tbody) return;
+    var ano = Number((document.getElementById("cind-ano") || {}).value || new Date().getFullYear());
+    var anoStr = String(ano);
+
+    var indireta = folhaCustoLista.filter(function (l) {
+      return l.cc_tipo === "indireto" && String(l.mes_ref || "").startsWith(anoStr);
+    });
+    var porMes = {};
+    var funcSet = {};
+    for (var i = 1; i <= 12; i++) porMes[i] = { total: 0, hc: {} };
+    indireta.forEach(function (l) {
+      var mes = Number(String(l.mes_ref).slice(5, 7));
+      if (!porMes[mes]) porMes[mes] = { total: 0, hc: {} };
+      porMes[mes].total += l.valor;
+      porMes[mes].hc[l.funcionario_id] = true;
+      funcSet[l.funcionario_id] = true;
+    });
+    var totAno = indireta.reduce(function (a, l) { return a + l.valor; }, 0);
+
+    valText(document.getElementById("cind-m-tot"),  fmtBRL(totAno));
+    valText(document.getElementById("cind-m-func"), fmtInt(Object.keys(funcSet).length));
+    valText(document.getElementById("cind-m-med"),  fmtBRL(totAno / 12));
+    valText(document.getElementById("cind-lbl"), "Ano " + ano);
+
+    var nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    var html = "";
+    for (var m = 1; m <= 12; m++) {
+      var d = porMes[m];
+      html += '<tr>' +
+        '<td>' + nomes[m-1] + '/' + ano + '</td>' +
+        '<td class="num">' + fmtBRL(d.total) + '</td>' +
+        '<td class="num">' + fmtInt(Object.keys(d.hc).length) + '</td>' +
+      '</tr>';
+    }
+    html += '<tr class="tot"><td><strong>TOTAL</strong></td><td class="num"><strong>' + fmtBRL(totAno) + '</strong></td><td class="num">—</td></tr>';
+    tbody.innerHTML = html;
+
+    if (!indireta.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="tbl-vazio">Sem folha de pagamento de CCs Indiretos no período. Cadastre folha em RH > Folha de Pagamento ou ajuste o tipo_custo dos CCs em Configuração > Centros de Custo.</td></tr>';
+    }
+  }
+
+  // -------- Custo por Área (consolidado de folha por CC) --------
+  function carregarCustoAreaSeNecessario() {
+    if (!folhaCustoCarregado) carregarCustoIndiretoSeNecessario(); // reusa carga
+    var iv = setInterval(function () {
+      if (folhaCustoCarregado) { clearInterval(iv); renderCustoArea(); }
+    }, 150);
+    popularSelectAno(document.getElementById("carea-ano"));
+    var sel = document.getElementById("carea-ano");
+    if (sel && !sel.dataset.boundEv2) { sel.dataset.boundEv2 = "1"; sel.addEventListener("change", renderCustoArea); }
+  }
+
+  function renderCustoArea() {
+    var tbody = document.getElementById("carea-tbody");
+    if (!tbody) return;
+    var ano = Number((document.getElementById("carea-ano") || {}).value || new Date().getFullYear());
+    var anoStr = String(ano);
+
+    var noAno = folhaCustoLista.filter(function (l) { return String(l.mes_ref || "").startsWith(anoStr); });
+    var porCc = {};
+    noAno.forEach(function (l) {
+      var key = (l.cc_codigo || "(sem CC)") + "|" + (l.cc_desc || "—") + "|" + (l.cc_tipo || "—");
+      if (!porCc[key]) porCc[key] = { codigo: l.cc_codigo || "(sem CC)", desc: l.cc_desc || "—", tipo: l.cc_tipo, total: 0, hc: {} };
+      porCc[key].total += l.valor;
+      porCc[key].hc[l.funcionario_id] = true;
+    });
+    var lista = Object.values(porCc);
+    lista.sort(function (a, b) { return b.total - a.total; });
+
+    var totGeral = lista.reduce(function (a, c) { return a + c.total; }, 0);
+    var hcTotal = noAno.reduce(function (s, l) { return s; }, 0); // recalcular
+    var allFuncs = {}; noAno.forEach(function (l) { allFuncs[l.funcionario_id] = true; });
+    var hcGeral = Object.keys(allFuncs).length;
+
+    valText(document.getElementById("carea-m-tot"), fmtBRL(totGeral));
+    var top = lista[0];
+    valText(document.getElementById("carea-m-top"), top ? top.desc : "—");
+    valText(document.getElementById("carea-m-top-pct"), top && totGeral ? ((top.total / totGeral) * 100).toFixed(1) + "% do total" : "—");
+    valText(document.getElementById("carea-m-hc"), fmtInt(hcGeral));
+    valText(document.getElementById("carea-lbl"), "Ano " + ano + " — " + lista.length + " CCs");
+
+    var tipoLabel = { direto: "Direto", indireto: "Indireto", despesa: "Despesa" };
+    var tipoClasse = { direto: "tag-ok", indireto: "tag-warn", despesa: "" };
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Sem folha de pagamento no período.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (c) {
+      var pct = totGeral ? ((c.total / totGeral) * 100).toFixed(1) : "0.0";
+      var tag = tipoLabel[c.tipo] || "—";
+      var cls = tipoClasse[c.tipo] || "";
+      return '<tr>' +
+        '<td><strong>' + escHtml(c.codigo) + '</strong> — ' + escHtml(c.desc) + '</td>' +
+        '<td><span class="tag ' + cls + '">' + tag + '</span></td>' +
+        '<td class="num">' + fmtInt(Object.keys(c.hc).length) + '</td>' +
+        '<td class="num">' + fmtBRL(c.total) + '</td>' +
+        '<td class="num">' + pct + '%</td>' +
+      '</tr>';
+    }).join("") + '<tr class="tot"><td colspan="3"><strong>TOTAL</strong></td><td class="num"><strong>' + fmtBRL(totGeral) + '</strong></td><td class="num">100,0%</td></tr>';
   }
 
 
