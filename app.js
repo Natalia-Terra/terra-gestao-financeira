@@ -582,7 +582,7 @@
 
     // Puxa movimentos completos — serve 4a (derivação de Tipo) e 4c/4d
     var qMov = client.from("movimentos")
-      .select("id, data, orcamento, nome, tipo, natureza, valor, nota_fiscal, os, item, custo")
+      .select("id, data, orcamento, nome, tipo, natureza, valor, nota_fiscal, os, item, custo, plano_contas_id")
       .order("data", { ascending: false });
 
     Promise.all([qOrc, qMov]).then(function (respostas) {
@@ -1765,7 +1765,14 @@
         "os":          "os",
         "item":        "item",
         "custo":       "custo",
-        "comentarios": "comentarios"
+        "comentarios": "comentarios",
+        "conta":          "plano_contas_codigo",   // resolvido no parser → plano_contas_id
+        "cod conta":      "plano_contas_codigo",
+        "cod_conta":      "plano_contas_codigo",
+        "plano de contas":"plano_contas_codigo",
+        "plano_contas":   "plano_contas_codigo",
+        "conta contabil": "plano_contas_codigo",
+        "conta contábil": "plano_contas_codigo"
       },
       obrigatorias: ["orcamento", "natureza", "valor"],
       dicas: "Colunas esperadas: orcamento, natureza e valor (obrigatórias); data, tipo, nota_fiscal, os, item, custo, comentarios (opcionais)."
@@ -3332,6 +3339,54 @@
     if (!impParsed) return;
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
+
+    // Resolução de plano_contas_codigo → plano_contas_id (se as linhas tiverem)
+    var temColunaConta = (impParsed.linhas || []).some(function (l) { return "plano_contas_codigo" in l; });
+    if (temColunaConta) {
+      // Garante plano de contas carregado em memória (planoContas)
+      var resolveIds = function () {
+        var mapaCod = {}, mapaNum = {}, mapaDescr = {};
+        (planoContas || []).forEach(function (p) {
+          if (p.cod_conta) mapaCod[String(p.cod_conta).trim().toLowerCase()] = p.id;
+          if (p.numero_conta) mapaNum[String(p.numero_conta).trim().toLowerCase()] = p.id;
+          if (p.descritivo) mapaDescr[String(p.descritivo).trim().toLowerCase()] = p.id;
+        });
+        var naoMapeados = 0;
+        impParsed.linhas.forEach(function (l) {
+          var k = String(l.plano_contas_codigo || "").trim().toLowerCase();
+          delete l.plano_contas_codigo;  // não vai pro insert
+          if (!k) { l.plano_contas_id = null; return; }
+          var id = mapaCod[k] || mapaNum[k] || mapaDescr[k] || null;
+          if (id) l.plano_contas_id = id;
+          else { l.plano_contas_id = null; naoMapeados++; }
+        });
+        if (naoMapeados > 0) {
+          if (!confirm(naoMapeados + " linha(s) não casaram com nenhuma conta do Plano de Contas (cod, número ou descritivo) — vão ficar com plano_contas_id NULL. Continuar?")) {
+            impBtnConf.disabled = false;
+            setImpStatus("Importação cancelada. " + naoMapeados + " contas não mapeadas.", "alerta");
+            return false;  // sinaliza pra abortar
+          }
+        }
+        return true;
+      };
+      if (!pcCarregado) {
+        carregarPlanoContasSeNecessario();
+        var iv = setInterval(function () {
+          if (pcCarregado) {
+            clearInterval(iv);
+            if (resolveIds() === false) return;
+            confirmarImportContinuar(tpl);
+          }
+        }, 150);
+        return;
+      } else {
+        if (resolveIds() === false) return;
+      }
+    }
+    confirmarImportContinuar(tpl);
+  }
+
+  function confirmarImportContinuar(tpl) {
 
     // Tipos especiais usam UPSERT em os_evolucao_mensal
     if (impParsed.tipo === "evolucao_pct" || impParsed.tipo === "saida_estoque") {
@@ -5928,8 +5983,9 @@
   // -------- Custo Direto — Lançamento Direto (aproximação sem plano_contas_id) --------
   function carregarCustoDiretoLancSeNecessario() {
     if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    if (!pcCarregado)          carregarPlanoContasSeNecessario();
     var iv = setInterval(function () {
-      if (orcamentosCarregados) { clearInterval(iv); renderCustoDiretoLanc(); }
+      if (orcamentosCarregados && pcCarregado) { clearInterval(iv); renderCustoDiretoLanc(); }
     }, 150);
     popularSelectAno(document.getElementById("cdlanc-ano"));
     ["cdlanc-busca","cdlanc-ano"].forEach(function (id) {
@@ -5953,38 +6009,69 @@
     var busca = ((document.getElementById("cdlanc-busca") || {}).value || "").trim().toLowerCase();
     var ini = ano + "-01-01", fim = ano + "-12-31";
 
-    // Aproximação: movimentos com custo (valor < 0 ou flag custo) e SEM os preenchida
-    // Como o schema atual tem 'custo' (numérico) e 'os' (text), filtramos por custo > 0 e os vazia
+    // Mapa plano_contas_id → conta (DRE, descritivo)
+    var contaPorId = {};
+    (planoContas || []).forEach(function (p) { contaPorId[p.id] = p; });
+
+    var temPlano = pcCarregado && Object.keys(contaPorId).length > 0;
+    var classificadosCount = 0;
+    var totalCustoSemOs = 0;
+
     var lista = (movimentosCompletos || []).filter(function (m) {
       var d = String(m.data || "").slice(0, 10);
       if (d < ini || d > fim) return false;
-      // Aproximação: tem 'custo' positivo ou natureza indica saída (Resultado Financeiro)
-      var ehCusto = (m.custo != null && Number(m.custo) > 0)
-                    || /resultado financeiro|outras despesas|fornecedor/i.test(String(m.natureza || ""));
-      if (!ehCusto) return false;
-      // Sem OS preenchida
+      // Sem OS preenchida (lançamento direto, não via produção)
       if (m.os && String(m.os).trim() !== "") return false;
+
+      var conta = m.plano_contas_id ? contaPorId[m.plano_contas_id] : null;
+      if (m.plano_contas_id) classificadosCount++;
+
+      // Filtro principal: tem que ser custo direto (DRE = CPV - Matéria Prima ou CPV - Viagens)
+      // ou — se não tem conta classificada — fallback heurístico (modo legacy)
+      var ehCustoDireto = false;
+      if (conta && conta.dre) {
+        ehCustoDireto = /CPV - Matéria Prima|CPV - Viagens/i.test(conta.dre);
+      } else if (!temPlano) {
+        // Sem plano carregado — usa heurística antiga
+        ehCustoDireto = (m.custo != null && Number(m.custo) > 0)
+                     || /resultado financeiro|outras despesas|fornecedor/i.test(String(m.natureza || ""));
+      } else {
+        // Plano carregado mas movimento sem plano_contas_id — não classificado
+        return false;
+      }
+      if (!ehCustoDireto) return false;
+
+      totalCustoSemOs += Number(m.valor || m.custo || 0);
       if (busca) {
-        return matchBusca(busca, [m.orcamento, m.nome, m.item, m.natureza]);
+        var dreTxt = conta ? conta.dre : "";
+        var descrTxt = conta ? conta.descritivo : "";
+        return matchBusca(busca, [m.orcamento, m.nome, m.item, m.natureza, dreTxt, descrTxt]);
       }
       return true;
     });
     lista.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
 
     var total = lista.reduce(function (a, m) { return a + Number(m.valor || m.custo || 0); }, 0);
-    valText(document.getElementById("cdlanc-lbl"), "Ano " + ano + " — " + lista.length + " lançamentos · " + fmtBRL(total));
+    var totalMovs = (movimentosCompletos || []).length;
+    var pctClassif = totalMovs > 0 ? Math.round((classificadosCount / totalMovs) * 100) : 0;
+    valText(document.getElementById("cdlanc-lbl"),
+      "Ano " + ano + " — " + lista.length + " lançamentos · " + fmtBRL(total) +
+      (temPlano ? " · " + pctClassif + "% movs classificados" : " · plano de contas não carregado")
+    );
 
     if (!lista.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Sem lançamentos diretos sem OS no período (aproximação).</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Sem lançamentos diretos (CPV - Matéria Prima / CPV - Viagens) no período.</td></tr>';
       return;
     }
     tbody.innerHTML = lista.slice(0, 200).map(function (m) {
+      var conta = m.plano_contas_id ? contaPorId[m.plano_contas_id] : null;
+      var dreTxt = conta ? conta.dre : '<span class="muted">não classif.</span>';
       return '<tr>' +
         '<td>' + escHtml(fmtData(m.data)) + '</td>' +
         '<td class="mono">' + escHtml(m.orcamento || "—") + '</td>' +
         '<td>' + escHtml(m.nome || "—") + '</td>' +
         '<td>' + escHtml(m.item || "—") + '</td>' +
-        '<td>' + escHtml(m.natureza || "—") + '</td>' +
+        '<td>' + dreTxt + '</td>' +
         '<td class="num">' + fmtBRL(m.valor || m.custo || 0) + '</td>' +
       '</tr>';
     }).join("") + (lista.length > 200 ? '<tr><td colspan="6" class="tbl-vazio">… exibindo 200 de ' + lista.length + '.</td></tr>' : "");

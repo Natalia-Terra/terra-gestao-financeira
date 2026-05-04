@@ -1665,11 +1665,7 @@
             <h1 class="page-title">Custo Direto — Lançamento Direto</h1>
             <p class="page-sub">Lançamentos com custo direto SEM apontamento de OS</p>
           </div>
-          <div class="status alerta" style="margin-bottom:14px">
-            ⚠ Esta tela depende da ligação <code>movimentos.plano_contas_id</code> que ainda não existe.
-            Hoje só dá pra aproximar via <em>movimentos com custo &gt; 0 e sem OS preenchida</em>.
-            Vou trazer essa aproximação enquanto a migração 15 (link contábil) não chega.
-          </div>
+          <p class="page-sub muted" style="margin-bottom:14px"><em>Filtra movimentos sem OS classificados como CPV - Matéria Prima ou CPV - Viagens (via <code>movimentos.plano_contas_id</code>). Movimentos não classificados ficam de fora — importe planilha de movimentos com coluna <code>conta</code> ou <code>cod_conta</code> para classificar.</em></p>
           <div class="toolbar" style="margin-bottom:14px">
             <input class="input-search" type="text" id="cdlanc-busca" placeholder="Buscar item, cliente ou orçamento…" />
             <label class="toolbar-inline">Ano:
