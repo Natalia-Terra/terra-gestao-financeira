@@ -39,7 +39,7 @@
   --r-lg: 8px;
 
   /* Dimensões do shell */
-  --topbar-h:       72px;
+  --topbar-h:       96px;
   --sidebar-w:      230px;
   --sidebar-w-col:   56px;
 }
@@ -254,7 +254,7 @@ h3 { font-size: 16px; }
   padding: 4px 0;
 }
 .topbar-logo-img {
-  height: 60px;     /* encaixa confortável no topbar de 72px */
+  height: 80px;     /* encaixa confortável no topbar de 96px */
   width: auto;
   display: block;
 }

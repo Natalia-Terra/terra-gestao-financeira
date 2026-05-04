@@ -321,6 +321,7 @@
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
     if (pageId === "programa_bonus")  carregarProgramaBonusSeNecessario();
+    if (pageId === "programa_bonus_individual") carregarBonusIndividualSeNecessario();
     if (pageId === "rh_bonus_config") carregarConfigBonusSeNecessario();
     if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
@@ -3972,29 +3973,7 @@
       }).join("");
     }
 
-    // ===== Esfera Profissional (sem dados ainda — placeholder)
-    var tProf = document.getElementById("bon-prof-tbody");
-    var ativos = (funcionariosLista || []).filter(function (f) { return f.status === "ATIVO"; });
-    if (!ativos.length) {
-      tProf.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Funcionários ainda não carregados ou sem ativos. Acesse RH → Funcionários para forçar a carga.</td></tr>';
-    } else {
-      // Por enquanto mostra a lista de ativos com colunas vazias até termos os dados (frequencia, conduta, avaliação)
-      tProf.innerHTML = ativos.slice(0, 50).map(function (f) {
-        return '<tr>' +
-          '<td>' + escHtml(f.nome) + '</td>' +
-          '<td class="num">—</td>' +
-          '<td class="num">—</td>' +
-          '<td class="num">—</td>' +
-          '<td class="num">—</td>' +
-          '<td class="num">—</td>' +
-          '<td class="num">— / 40%</td>' +
-        '</tr>';
-      }).join("") + (ativos.length > 50
-          ? '<tr><td colspan="7" class="tbl-vazio">… exibindo 50 de ' + ativos.length + '. Cálculos serão ativados quando importarmos frequencia_mensal, medidas_disciplinares e avaliacao_desempenho.</td></tr>'
-          : "");
-    }
-
-    // ===== Cards globais no topo
+    // ===== Cards globais no topo (Empresa + Áreas — Profissional foi para a tela "Bônus Individual")
     valText(document.getElementById("bon-m-empresa"),
       pesoEmpresa.toFixed(2).replace(".", ",") + "% / 30%");
     valText(document.getElementById("bon-m-empresa-sub"),
@@ -4011,10 +3990,8 @@
       valText(document.getElementById("bon-m-areas-sub"), "Aguardando definição");
     }
 
-    valText(document.getElementById("bon-m-prof"), "—");
-    valText(document.getElementById("bon-m-prof-sub"), "Aguardando dados de RH");
-
-    valText(document.getElementById("bon-m-total"), pesoEmpresa.toFixed(2).replace(".", ",") + "%");
+    var totalEA = pesoEmpresa + (areas.length ? areas.reduce(function (acc, a) { return acc + a.peso_ganho; }, 0) : 0);
+    valText(document.getElementById("bon-m-total"), totalEA.toFixed(2).replace(".", ",") + "%");
   }
 
 
@@ -4588,6 +4565,82 @@
     window.XLSX.utils.book_append_sheet(wb, w2, "Nao aplicaveis");
     var nome = "cfop-aplicaveis-vs-nao-" + new Date().toISOString().slice(0,10) + ".xlsx";
     window.XLSX.writeFile(wb, nome);
+  }
+
+
+  // =========================================================================
+  // 38. BÔNUS INDIVIDUAL — Esfera Profissional por funcionário
+  // =========================================================================
+
+  function carregarBonusIndividualSeNecessario() {
+    // Reusa os dados já carregados pelo programa_bonus se possível;
+    // se não, dispara as cargas necessárias.
+    if (!bonCarregado) carregarProgramaBonusSeNecessario();
+    if (!funcionariosCarregado) carregarFuncionariosSeNecessario();
+    var iv = setInterval(function () {
+      if (bonCarregado && funcionariosCarregado) {
+        clearInterval(iv);
+        // Popula dropdown de período
+        var sel = document.getElementById("bind-periodo");
+        if (sel) {
+          sel.innerHTML = bonPeriodos.map(function (p) {
+            return '<option value="' + p.id + '">' + escHtml(p.nome) + '</option>';
+          }).join("");
+          var ativo = bonPeriodos.find(function (p) { return p.status === "ativo"; });
+          var idAtivo = ativo ? ativo.id : (bonPeriodos[0] && bonPeriodos[0].id) || null;
+          if (idAtivo) sel.value = String(idAtivo);
+          sel.onchange = renderBonusIndividual;
+        }
+        renderBonusIndividual();
+      }
+    }, 150);
+
+    // Liga busca (idempotente)
+    var busca = document.getElementById("bind-busca");
+    if (busca && !busca.dataset.bound) {
+      busca.dataset.bound = "1";
+      busca.addEventListener("input", renderBonusIndividual);
+    }
+  }
+
+  function renderBonusIndividual() {
+    var sel = document.getElementById("bind-periodo");
+    var periodoSel = sel ? Number(sel.value) : null;
+    var periodo = bonPeriodos.find(function (p) { return p.id === periodoSel; });
+
+    valText(document.getElementById("bind-lbl"),
+      periodo ? (periodo.nome + " · " + fmtData(periodo.inicio_em) + " a " + fmtData(periodo.fim_em)) : "—");
+
+    var ativos = (funcionariosLista || []).filter(function (f) { return f.status === "ATIVO"; });
+    valText(document.getElementById("bind-m-ativos"), fmtInt(ativos.length));
+    valText(document.getElementById("bind-m-media"), "—");
+    valText(document.getElementById("bind-m-dados"), "Aguardando importação");
+
+    var busca = (document.getElementById("bind-busca").value || "").trim().toLowerCase();
+    var filtrados = ativos.filter(function (f) {
+      return matchBusca(busca, [f.nome, f.cargo, f.cpf]);
+    });
+    valText(document.getElementById("bind-tbl-lbl"), filtrados.length + " de " + ativos.length);
+
+    var tbody = document.getElementById("bind-tbody");
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhum funcionário ativo no filtro.</td></tr>';
+      return;
+    }
+    // Placeholder com colunas vazias — preenchemos quando importarmos frequencia/conduta/avaliações
+    tbody.innerHTML = filtrados.slice(0, 100).map(function (f) {
+      return '<tr>' +
+        '<td>' + escHtml(f.nome) + '</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">— / 40%</td>' +
+      '</tr>';
+    }).join("") + (filtrados.length > 100
+      ? '<tr><td colspan="7" class="tbl-vazio">… exibindo 100 de ' + filtrados.length + '. Cálculo individual ativa quando importarmos frequencia_mensal, medidas_disciplinares e avaliacao_desempenho.</td></tr>'
+      : "");
   }
 
 })();

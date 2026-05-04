@@ -147,6 +147,7 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="dashboard" type="button">Visão geral</button>
               <button class="sb-sub" data-page="programa_bonus" type="button">Programa de Bônus</button>
+              <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
           </div>
 
@@ -255,8 +256,7 @@
           <div class="grid-metrics">
             <div class="metric-card"><div class="metric-label">Empresa</div><div class="metric-value" id="bon-m-empresa">—</div><div class="metric-sub" id="bon-m-empresa-sub">peso 30%</div></div>
             <div class="metric-card"><div class="metric-label">Áreas</div><div class="metric-value" id="bon-m-areas">—</div><div class="metric-sub" id="bon-m-areas-sub">peso 30%</div></div>
-            <div class="metric-card"><div class="metric-label">Profissional</div><div class="metric-value" id="bon-m-prof">—</div><div class="metric-sub" id="bon-m-prof-sub">peso 40% — média do quadro</div></div>
-            <div class="metric-card"><div class="metric-label">Total atingido</div><div class="metric-value" id="bon-m-total">—</div><div class="metric-sub">de 100%</div></div>
+            <div class="metric-card"><div class="metric-label">Atingido (Empresa + Áreas)</div><div class="metric-value" id="bon-m-total">—</div><div class="metric-sub">de 60% — Profissional vai em "Bônus Individual"</div></div>
           </div>
 
           <!-- Bloco 1: Esfera Empresa -->
@@ -277,33 +277,6 @@
             </div>
           </div>
 
-          <!-- Bloco 3: Esfera Profissional -->
-          <div class="card fat-card">
-            <h2>Esfera Profissional <span class="bon-peso">40%</span></h2>
-            <p class="card-desc">Conduta (12,5%) · Faltas justificadas (6,25%) · Atrasos (6,25%) · Performance (15%) · Penalidade -12,5% por falta/atraso sem justificativa (trava em 0).</p>
-            <div class="toolbar">
-              <input class="input-search" type="text" id="bon-prof-busca" placeholder="Buscar funcionário…" />
-              <span class="toolbar-label" id="bon-prof-lbl"></span>
-            </div>
-            <div class="table-wrap">
-              <table class="tabela">
-                <thead>
-                  <tr>
-                    <th>Funcionário</th>
-                    <th class="num">Conduta (12,5%)</th>
-                    <th class="num">Faltas just. (6,25%)</th>
-                    <th class="num">Atrasos (6,25%)</th>
-                    <th class="num">Performance (15%)</th>
-                    <th class="num">Penalidade</th>
-                    <th class="num">Total / 40%</th>
-                  </tr>
-                </thead>
-                <tbody id="bon-prof-tbody">
-                  <tr><td colspan="7" class="tbl-vazio">Aguardando dados de RH (frequência, medidas disciplinares, avaliações).</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
         </section>
 
         <!-- Páginas stubs: Financeiro (7 restantes) -->
@@ -1315,6 +1288,53 @@
                   </tr>
                 </thead>
                 <tbody id="aud-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- Página: Dashboard > Bônus Individual (Esfera Profissional) -->
+        <section class="page" data-page="programa_bonus_individual" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Bônus Individual</h1>
+            <p class="page-sub">Esfera Profissional (40%) — cálculo por funcionário · Conduta · Faltas · Atrasos · Performance · Penalidade</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Período:
+              <select id="bind-periodo"><option value="">Carregando…</option></select>
+            </label>
+            <span class="toolbar-label" id="bind-lbl"></span>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Funcionários ativos</div><div class="metric-value" id="bind-m-ativos">—</div><div class="metric-sub">elegíveis no período</div></div>
+            <div class="metric-card"><div class="metric-label">Média do quadro</div><div class="metric-value" id="bind-m-media">—</div><div class="metric-sub">% atingido (média)</div></div>
+            <div class="metric-card"><div class="metric-label">Estado dos dados</div><div class="metric-value" id="bind-m-dados">—</div><div class="metric-sub">frequência · conduta · avaliação</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="bind-busca" placeholder="Buscar funcionário…" />
+              <span class="toolbar-label" id="bind-tbl-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Funcionário</th>
+                    <th class="num">Conduta (12,5%)</th>
+                    <th class="num">Faltas just. (6,25%)</th>
+                    <th class="num">Atrasos (6,25%)</th>
+                    <th class="num">Performance (15%)</th>
+                    <th class="num">Penalidade</th>
+                    <th class="num">Total / 40%</th>
+                  </tr>
+                </thead>
+                <tbody id="bind-tbody">
+                  <tr><td colspan="7" class="tbl-vazio">Aguardando dados de RH (frequência, medidas disciplinares, avaliações).</td></tr>
+                </tbody>
               </table>
             </div>
           </div>
