@@ -290,6 +290,17 @@
       sec.hidden = sec.getAttribute("data-page") !== pageId;
     });
 
+    // Atualiza a faixa 2 da topbar com o título da página atual
+    var pagina = document.querySelector('#shell .main .page[data-page="' + pageId + '"]');
+    var elTit = document.getElementById("topbar-page-title");
+    var elSub = document.getElementById("topbar-page-sub");
+    if (elTit && pagina) {
+      var h = pagina.querySelector(".page-title");
+      var p = pagina.querySelector(".page-sub");
+      elTit.textContent = h ? h.textContent : "—";
+      elSub.textContent = p ? p.textContent : "";
+    }
+
     // Marcar item ativo na sidebar (e abrir a macro que contém o item, se houver)
     document.querySelectorAll("#shell .sb-item, #shell .sb-sub").forEach(function (b) {
       b.classList.toggle("ativo", b.getAttribute("data-page") === pageId);

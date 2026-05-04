@@ -39,7 +39,9 @@
   --r-lg: 8px;
 
   /* Dimensões do shell */
-  --topbar-h:       72px;
+  --topbar-row1-h:  56px;
+  --topbar-row2-h:  44px;
+  --topbar-h:       100px;  /* row1 + row2 — usado pelo sticky thead */
   --sidebar-w:      230px;
   --sidebar-w-col:   56px;
 }
@@ -232,17 +234,51 @@ h3 { font-size: 16px; }
    TOPBAR (48 px, slim)
    ========================================================= */
 
-.topbar {
+.topbar-wrap {
   position: sticky;
   top: 0;
   z-index: 20;
-  height: var(--topbar-h);
+}
+.topbar {
+  height: var(--topbar-row1-h);
   background: var(--bg2);
   border-bottom: 1px solid var(--borda);
   display: flex;
   align-items: center;
   padding: 0 16px;
   gap: 16px;
+}
+/* Faixa 2 — título da página (fica fixa junto com a topbar) */
+.topbar-pagina {
+  height: var(--topbar-row2-h);
+  background: linear-gradient(180deg, var(--bg3) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--borda2);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 32px;
+  box-shadow: 0 2px 6px rgba(42, 26, 6, 0.05);
+}
+.topbar-pagina-titulo {
+  margin: 0;
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ouro-esc);
+  letter-spacing: .03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-pagina-sub {
+  color: var(--text2);
+  font-size: 13px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 .topbar-brand {
   display: flex;
@@ -254,7 +290,7 @@ h3 { font-size: 16px; }
   padding: 4px 0;
 }
 .topbar-logo-img {
-  height: 56px;     /* encaixa confortável no topbar de 72px */
+  height: 44px;     /* encaixa confortável na faixa 1 de 56px */
   width: auto;
   display: block;
 }
@@ -1647,3 +1683,15 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   font-weight: 600;
   margin-left: 4px;
 }
+
+
+/* =========================================================
+   Título da página agora vive na faixa 2 da topbar
+   — esconde o h1.page-title e p.page-sub originais sem
+   quebrar o page-header (que ainda hospeda o btn-voltar).
+   ========================================================= */
+.page-header > .page-title { display: none; }
+.page-header > .page-sub   { display: none; }
+.page-header { margin-bottom: 12px; }
+.page-header:empty { display: none; }
+.page-header .btn-voltar { margin-bottom: 0; }

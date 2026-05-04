@@ -116,19 +116,25 @@
        ========================================================= -->
   <div id="shell" hidden>
 
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="topbar-brand">
-        <img class="topbar-logo-img" src="logo-terra.png" alt="Terra Conttemporânea — móveis" />
+    <!-- Topbar — 2 faixas (a de baixo tem o título da página, fixa também) -->
+    <div class="topbar-wrap">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <img class="topbar-logo-img" src="logo-terra.png" alt="Terra Conttemporânea — móveis" />
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-user">
+          <div class="topbar-user-avatar" id="topbar-avatar">·</div>
+          <span id="topbar-nome">—</span>
+          <button class="btn-sair" id="btn-sair" type="button" title="Sair">Sair</button>
+        </div>
+        <div class="topbar-data" id="topbar-data">—</div>
+      </header>
+      <div class="topbar-pagina">
+        <h1 class="topbar-pagina-titulo" id="topbar-page-title">—</h1>
+        <span class="topbar-pagina-sub" id="topbar-page-sub"></span>
       </div>
-      <div class="topbar-spacer"></div>
-      <div class="topbar-user">
-        <div class="topbar-user-avatar" id="topbar-avatar">·</div>
-        <span id="topbar-nome">—</span>
-        <button class="btn-sair" id="btn-sair" type="button" title="Sair">Sair</button>
-      </div>
-      <div class="topbar-data" id="topbar-data">—</div>
-    </header>
+    </div>
 
     <!-- Layout: sidebar + main -->
     <div class="layout">
