@@ -3228,14 +3228,25 @@
         }
         function dataIso(v) {
           if (!v || v === "-") return null;
-          if (v instanceof Date) return v.toISOString().slice(0,10);
+          if (v instanceof Date) {
+            try { return v.toISOString().slice(0,10); } catch (e) { return null; }
+          }
           var s = String(v).trim();
-          var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-          if (m) return s.slice(0,10);
+          var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (m) {
+            var aa = m[1], mm = parseInt(m[2],10), dd = parseInt(m[3],10);
+            if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+            return aa + "-" + String(mm).padStart(2,"0") + "-" + String(dd).padStart(2,"0");
+          }
           m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
           if (m) {
-            var a = m[3].length === 2 ? "20" + m[3] : m[3];
-            return a + "-" + m[2].padStart(2,"0") + "-" + m[1].padStart(2,"0");
+            var ano = m[3].length === 2 ? "20" + m[3] : m[3];
+            var d1 = parseInt(m[1], 10), d2 = parseInt(m[2], 10);
+            // Heurística: por padrão DD/MM. Se mês > 12 e dia <= 12, troca (formato MM/DD).
+            var dia = d1, mes = d2;
+            if (mes > 12 && dia <= 12) { var tmp = mes; mes = dia; dia = tmp; }
+            if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+            return ano + "-" + String(mes).padStart(2,"0") + "-" + String(dia).padStart(2,"0");
           }
           return null;
         }
