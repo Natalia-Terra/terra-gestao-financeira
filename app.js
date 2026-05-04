@@ -1213,11 +1213,15 @@
 
   var planoContas = [];
   var pcCarregado = false;
+  var pcCarregando = false;
 
   function carregarPlanoContasSeNecessario() {
     if (pcCarregado) { renderPlanoContas(); return; }
+    if (pcCarregando) return;          // evita fetch+populate em paralelo
+    pcCarregando = true;
     document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio">Carregando 510 contas…</td></tr>';
     client.from("plano_contas").select("*").order("seq", { ascending: true }).then(function (r) {
+      pcCarregando = false;
       if (r.error) {
         document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
         return;
@@ -1225,21 +1229,23 @@
       planoContas = r.data || [];
       pcCarregado = true;
 
-      // Popular dropdown de grupos
+      // Popular dropdown de grupos (limpa antes pra não duplicar em re-fetches)
       var grupos = {};
       planoContas.forEach(function (p) { if (p.grupo) grupos[p.grupo] = true; });
       var sel = document.getElementById("pc-grupo");
+      sel.innerHTML = '<option value="">Todos os grupos</option>';
       Object.keys(grupos).sort().forEach(function (g) {
         var opt = document.createElement("option");
         opt.value = g; opt.textContent = g;
         sel.appendChild(opt);
       });
 
-      // Popular dropdown de DRE (classificação)
+      // Popular dropdown de DRE (Classificação DRE) — limpa antes
       var dres = {};
       planoContas.forEach(function (p) { if (p.dre) dres[p.dre] = true; });
       var selDre = document.getElementById("pc-dre");
       if (selDre) {
+        selDre.innerHTML = '<option value="">Classificação DRE</option>';
         Object.keys(dres).sort().forEach(function (d) {
           var opt = document.createElement("option");
           opt.value = d; opt.textContent = d;
