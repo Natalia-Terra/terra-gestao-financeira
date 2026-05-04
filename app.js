@@ -4722,12 +4722,6 @@
       ? '<tr><td colspan="7" class="tbl-vazio">… exibindo 100 de ' + filtrados.length + '. Cálculo individual ativa quando importarmos frequencia_mensal, medidas_disciplinares e avaliacao_desempenho.</td></tr>'
       : "");
 
-    tbody.querySelectorAll("tr.linha-clicavel").forEach(function (tr) {
-      tr.addEventListener("click", function () {
-        var fid = Number(tr.getAttribute("data-fid"));
-        if (fid) abrirDetalheBonusIndividual(fid);
-      });
-    });
   }
 
   // ----- Detalhamento por funcionário (drill-down) -----
@@ -4823,6 +4817,15 @@
     if (limparBtn) {
       var tabela = limparBtn.getAttribute("data-limpar");
       if (tabela && typeof limparTabela === "function") { limparTabela(tabela); return; }
+    }
+    // Drill-down de tabelas — qualquer <tr class="linha-clicavel" data-fid="...">
+    var trBonus = t.closest("tr.linha-clicavel[data-fid]");
+    if (trBonus) {
+      var fid = Number(trBonus.getAttribute("data-fid"));
+      if (fid && typeof abrirDetalheBonusIndividual === "function") {
+        abrirDetalheBonusIndividual(fid);
+        return;
+      }
     }
   });
 
