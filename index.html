@@ -1591,14 +1591,42 @@
         </section>
 
 
-        <!-- Receita > Por Faturamento (placeholder Pacote 4) -->
+        <!-- Receita > Por Faturamento -->
         <section class="page" data-page="apr_faturamento" hidden>
           <div class="page-header">
             <h1 class="page-title">Receita por Faturamento</h1>
-            <p class="page-sub">Receita reconhecida pela emissão de Nota Fiscal — mês a mês</p>
+            <p class="page-sub">Receita reconhecida pela emissão de Nota Fiscal mês a mês — comparada com a Apropriação</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Faturado YTD</div><div class="metric-value" id="afat-m-fat">—</div><div class="metric-sub">soma de NFs emitidas no ano</div></div>
+            <div class="metric-card"><div class="metric-label">Apropriado YTD</div><div class="metric-value" id="afat-m-apr">—</div><div class="metric-sub">receita reconhecida pela apropriação</div></div>
+            <div class="metric-card"><div class="metric-label">Diferença</div><div class="metric-value" id="afat-m-dif">—</div><div class="metric-sub">faturado − apropriado</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <label class="toolbar-inline">Ano:
+              <select id="afat-ano">
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+              </select>
+            </label>
+            <span class="toolbar-label" id="afat-lbl"></span>
           </div>
           <div class="card fat-card">
-            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 4). Vai mostrar receita mensal somando NFs emitidas, comparada com Receita por Apropriação.</p>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th class="num">Faturado (NFs)</th>
+                    <th class="num">Apropriado</th>
+                    <th class="num">Diferença</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="afat-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
 

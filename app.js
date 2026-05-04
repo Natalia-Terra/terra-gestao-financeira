@@ -337,6 +337,7 @@
     if (pageId === "rh_bonus_config") carregarConfigBonusSeNecessario();
     if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
+    if (pageId === "apr_faturamento") carregarApropriacaoFaturamentoSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
     if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
@@ -5701,6 +5702,103 @@
     document.getElementById("flv-tbody").innerHTML = rows.join("");
 
     fluxoVisaoCarregado = true;
+  }
+
+
+  // =========================================================================
+  // RECEITA POR FATURAMENTO (Pacote 4 da Entrega 11)
+  // =========================================================================
+
+  function carregarApropriacaoFaturamentoSeNecessario() {
+    if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    if (!aprCarregado)         carregarApropriacaoSeNecessario();
+
+    var iv = setInterval(function () {
+      if (orcamentosCarregados && aprCarregado) {
+        clearInterval(iv);
+        renderApropriacaoFaturamento();
+      }
+    }, 150);
+
+    var sel = document.getElementById("afat-ano");
+    if (sel && !sel.dataset.bound) {
+      sel.dataset.bound = "1";
+      // default ano atual
+      var anoAtual = new Date().getFullYear();
+      sel.value = String(anoAtual);
+      sel.addEventListener("change", renderApropriacaoFaturamento);
+    }
+  }
+
+  function renderApropriacaoFaturamento() {
+    var sel = document.getElementById("afat-ano");
+    var ano = Number((sel && sel.value) || new Date().getFullYear());
+    var inicioAno = ano + "-01-01";
+    var fimAno    = ano + "-12-31";
+
+    // -------- Faturado por mês: soma de movimentos.natureza='Nota Fiscal' no ano
+    var fatMes = {};
+    for (var m = 1; m <= 12; m++) fatMes[m] = 0;
+    (movimentosCompletos || []).forEach(function (mv) {
+      if (mv.natureza !== "Nota Fiscal") return;
+      var d = String(mv.data || "").slice(0, 10);
+      if (d < inicioAno || d > fimAno) return;
+      var mes = Number(d.slice(5, 7));
+      fatMes[mes] += Number(mv.valor || 0);
+    });
+
+    // -------- Apropriado por mês: usa a regra calcOsAno já implementada
+    var aprMes = {};
+    for (var m2 = 1; m2 <= 12; m2++) aprMes[m2] = 0;
+    var idxEvol = indexarEvolucao();
+    (osLista || []).forEach(function (o) {
+      var calc = calcOsAno(o, idxEvol, ano);
+      calc.meses.forEach(function (linha) {
+        // mes_ref vem como "YYYY-MM"
+        var mes = Number(String(linha.mes).slice(5, 7));
+        aprMes[mes] += Number(linha.rec || 0);
+      });
+    });
+
+    // -------- Totais
+    var totFat = 0, totApr = 0;
+    for (var k = 1; k <= 12; k++) { totFat += fatMes[k]; totApr += aprMes[k]; }
+    var totDif = totFat - totApr;
+
+    valText(document.getElementById("afat-m-fat"), fmtBRL(totFat));
+    valText(document.getElementById("afat-m-apr"), fmtBRL(totApr));
+    valText(document.getElementById("afat-m-dif"),
+      (totDif >= 0 ? "+" : "") + fmtBRL(totDif));
+    valText(document.getElementById("afat-lbl"), "Ano: " + ano);
+
+    // -------- Linhas da tabela
+    var nomesMes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    var linhas = [];
+    for (var i = 1; i <= 12; i++) {
+      var fat = fatMes[i], apr = aprMes[i];
+      var dif = fat - apr;
+      var status, classe;
+      if (Math.abs(dif) < 1) { status = "Em dia"; classe = "tag tag-ok"; }
+      else if (dif > 0)       { status = "Faturado adiantado"; classe = "tag tag-warn"; }
+      else                    { status = "Faturado atrasado"; classe = "tag tag-danger"; }
+      linhas.push('<tr>' +
+        '<td>' + nomesMes[i-1] + '/' + ano + '</td>' +
+        '<td class="num">' + fmtBRL(fat) + '</td>' +
+        '<td class="num">' + fmtBRL(apr) + '</td>' +
+        '<td class="num ' + (dif < 0 ? "neg" : "") + '">' + (dif >= 0 ? "+" : "") + fmtBRL(dif) + '</td>' +
+        '<td><span class="' + classe + '">' + status + '</span></td>' +
+      '</tr>');
+    }
+    // Linha total
+    linhas.push('<tr class="tot">' +
+      '<td><strong>TOTAL ' + ano + '</strong></td>' +
+      '<td class="num"><strong>' + fmtBRL(totFat) + '</strong></td>' +
+      '<td class="num"><strong>' + fmtBRL(totApr) + '</strong></td>' +
+      '<td class="num ' + (totDif < 0 ? "neg" : "") + '"><strong>' + (totDif >= 0 ? "+" : "") + fmtBRL(totDif) + '</strong></td>' +
+      '<td>—</td>' +
+    '</tr>');
+
+    document.getElementById("afat-tbody").innerHTML = linhas.join("");
   }
 
 
