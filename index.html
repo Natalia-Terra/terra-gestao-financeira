@@ -189,6 +189,7 @@
               <button class="sb-sub" data-page="rh_beneficios" type="button">Benefícios</button>
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
+              <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
             </div>
           </div>
         </nav>
@@ -1188,6 +1189,83 @@
               <button class="btn-perigo" type="button" data-limpar="orcamentos">Limpar Orçamentos</button>
             </div>
             <div id="lim-status" class="status" hidden role="status" aria-live="polite"></div>
+          </div>
+        </section>
+
+
+        <!-- Página: RH > Bônus — Configuração (Entrega 7) -->
+        <section class="page" data-page="rh_bonus_config" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Bônus — Configuração</h1>
+            <p class="page-sub">Edite metas, pesos e escalas do programa. As mudanças refletem no Dashboard.</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:16px">
+            <label class="toolbar-inline">Período:
+              <select id="bcfg-periodo"><option value="">Carregando…</option></select>
+            </label>
+            <button class="btn-limpar" id="bcfg-btn-novo-periodo" type="button">+ Novo Período</button>
+            <span class="toolbar-label" id="bcfg-lbl"></span>
+          </div>
+
+          <!-- Abas -->
+          <div class="bcfg-tabs">
+            <button class="bcfg-tab ativo" data-bcfg-tab="empresa" type="button">Esfera Empresa</button>
+            <button class="bcfg-tab" data-bcfg-tab="areas" type="button">Esfera Áreas</button>
+            <button class="bcfg-tab" data-bcfg-tab="prof" type="button">Esfera Profissional</button>
+            <button class="bcfg-tab" data-bcfg-tab="periodos" type="button">Períodos</button>
+          </div>
+
+          <!-- Aba Empresa -->
+          <div class="bcfg-pane ativo" data-bcfg-pane="empresa">
+            <div class="card fat-card">
+              <div class="table-wrap">
+                <table class="tabela">
+                  <thead><tr><th>Meta</th><th>Descrição</th><th class="num">Valor da meta</th><th class="num">Peso</th><th>Escala</th><th></th></tr></thead>
+                  <tbody id="bcfg-empresa-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aba Áreas -->
+          <div class="bcfg-pane" data-bcfg-pane="areas" hidden>
+            <div class="card fat-card">
+              <div class="toolbar">
+                <button class="btn-ouro" id="bcfg-areas-btn-novo" type="button">+ Nova meta de área</button>
+                <span class="toolbar-label" id="bcfg-areas-lbl"></span>
+              </div>
+              <div class="table-wrap">
+                <table class="tabela">
+                  <thead><tr><th>Área (organograma)</th><th>Descrição</th><th>Indicador</th><th class="num">Peso</th><th></th></tr></thead>
+                  <tbody id="bcfg-areas-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aba Profissional -->
+          <div class="bcfg-pane" data-bcfg-pane="prof" hidden>
+            <div class="card fat-card">
+              <div class="table-wrap">
+                <table class="tabela">
+                  <thead><tr><th>Meta</th><th>Descrição</th><th class="num">Peso</th><th>Unidade</th><th>Escala</th><th></th></tr></thead>
+                  <tbody id="bcfg-prof-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aba Períodos -->
+          <div class="bcfg-pane" data-bcfg-pane="periodos" hidden>
+            <div class="card fat-card">
+              <div class="table-wrap">
+                <table class="tabela">
+                  <thead><tr><th>Nome</th><th>Início</th><th>Fim</th><th>Status</th><th></th></tr></thead>
+                  <tbody id="bcfg-periodos-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 

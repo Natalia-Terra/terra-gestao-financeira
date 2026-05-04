@@ -1473,3 +1473,112 @@ h3 { font-size: 16px; }
   color: var(--text3);
   font-style: italic;
 }
+
+/* =========================================================
+   CONFIG DE BÔNUS — abas
+   ========================================================= */
+.bcfg-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--borda);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.bcfg-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.bcfg-tab:hover {
+  color: var(--text);
+  background: var(--bg3);
+}
+.bcfg-tab.ativo {
+  color: var(--ouro-esc);
+  border-bottom-color: var(--ouro);
+}
+.bcfg-pane[hidden] { display: none; }
+
+/* Visualização compacta da escala numa célula da tabela */
+.bcfg-escala-prev {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+}
+.bcfg-escala-prev-faixa {
+  background: var(--bg3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--text2);
+  font-family: 'Menlo','Consolas',monospace;
+}
+
+/* Editor de escala (modal) — array de faixas */
+.bcfg-escala-edit {
+  border: 1px solid var(--borda);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--bg);
+  margin: 6px 0 12px;
+}
+.bcfg-escala-edit-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.bcfg-escala-row {
+  display: grid;
+  grid-template-columns: 90px 90px 1fr 28px;
+  gap: 6px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+.bcfg-escala-row input {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+}
+.bcfg-escala-row .bcfg-rm {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+}
+.bcfg-escala-row .bcfg-rm:hover { color: var(--text); }
+.bcfg-escala-row-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.bcfg-add-faixa {
+  background: var(--bg3);
+  border: 1px dashed var(--borda2);
+  color: var(--text2);
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 4px;
+}
+.bcfg-add-faixa:hover { background: var(--bg4); color: var(--text); }

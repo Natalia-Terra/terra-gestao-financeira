@@ -325,6 +325,7 @@
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
     if (pageId === "programa_bonus")  carregarProgramaBonusSeNecessario();
+    if (pageId === "rh_bonus_config") carregarConfigBonusSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
@@ -3670,25 +3671,43 @@
   var bonAreaMes = [];
   var bonCarregado = false;
 
-  // Escala: para Faturamento Bruto e Margem Líquida — % atingido (0..100) → % peso ganho
-  // Slide 21 (Faturamento) e 23 (Margem Líquida — usando interpretação A confirmada):
-  //   100% da meta → peso 100%
-  //    90% da meta → peso 80% (=8/10 ou 4/5 do peso integral)
-  //    80% da meta → peso 50%
-  //   < 80% → 0%
-  function escalaPesoLinear(pctAtingido, pesoBase) {
-    if (pctAtingido >= 100) return pesoBase;
-    if (pctAtingido >=  90) return pesoBase * 0.80;
-    if (pctAtingido >=  80) return pesoBase * 0.50;
-    return 0;
-  }
-
-  // Escala da Esfera Áreas (slide 19): meses cumpridos / 6 → peso ganho
-  // 6→100% (peso integral), 5→83% (≈0.833), 4→67%, 3→50%, 2→33%, 1→17%, 0→0
-  function escalaPesoArea(mesesCumpridos, pesoBase) {
-    var fator = { 0:0, 1:0.166, 2:0.333, 3:0.50, 4:0.666, 5:0.833, 6:1.0 };
-    var f = fator[Math.max(0, Math.min(6, mesesCumpridos))] || 0;
-    return pesoBase * f;
+  // ---- Aplicar escala configurável (do banco, escala_json) -----------------
+  // escala = { tipo: 'min'|'max', unidade, faixas: [{limite, peso_pct, label}, ...] }
+  // tipo "min": ganha a primeira faixa (ordem decrescente de limite) onde valor >= limite
+  // tipo "max": ganha a primeira faixa (ordem crescente de limite) onde valor <= limite
+  // Se faixa.limite === null em "max", essa é a faixa de "fora" (qualquer valor maior).
+  function aplicarEscala(escala, valor) {
+    if (!escala || !escala.faixas || valor == null || isNaN(valor)) {
+      return { peso_pct: 0, faixa: null };
+    }
+    var tipo = (escala.tipo || "min").toLowerCase();
+    var faixas = escala.faixas.slice();
+    if (tipo === "max") {
+      // Em "max", limite null vale como "infinito" (cabe sempre depois das outras)
+      faixas.sort(function (a, b) {
+        var la = a.limite == null ? Infinity : Number(a.limite);
+        var lb = b.limite == null ? Infinity : Number(b.limite);
+        return la - lb;
+      });
+      for (var i = 0; i < faixas.length; i++) {
+        var f = faixas[i];
+        var lim = f.limite == null ? Infinity : Number(f.limite);
+        if (Number(valor) <= lim) return { peso_pct: Number(f.peso_pct || 0), faixa: f };
+      }
+    } else {
+      // tipo "min" — descrescente (limite null vira -infinito)
+      faixas.sort(function (a, b) {
+        var la = a.limite == null ? -Infinity : Number(a.limite);
+        var lb = b.limite == null ? -Infinity : Number(b.limite);
+        return lb - la;
+      });
+      for (var j = 0; j < faixas.length; j++) {
+        var ff = faixas[j];
+        var lm = ff.limite == null ? -Infinity : Number(ff.limite);
+        if (Number(valor) >= lm) return { peso_pct: Number(ff.peso_pct || 0), faixa: ff };
+      }
+    }
+    return { peso_pct: 0, faixa: null };
   }
 
   function carregarProgramaBonusSeNecessario() {
@@ -3782,29 +3801,31 @@
     // Cálculo dos pesos
     var resultado = {};
 
-    // Faturamento Bruto (peso 10) → escala linear
+    // Faturamento Bruto → aplica escala do banco (sobre % atingido)
     var mFat = metasPorChave.faturamento_bruto;
     if (mFat) {
       var metaFat = Number(mFat.valor_meta);
       var pctAt  = metaFat > 0 ? (fatAcum / metaFat * 100) : 0;
-      var peso   = escalaPesoLinear(pctAt, Number(mFat.peso_pct));
+      var rFat   = aplicarEscala(mFat.escala_json, pctAt);
       resultado.faturamento_bruto = {
         meta: metaFat, valor: fatAcum, pctAtingido: pctAt,
-        pesoBase: Number(mFat.peso_pct), pesoGanho: peso, unidade: "BRL",
-        fonte: "orcamentos.nota_fiscal somado por data"
+        pesoBase: Number(mFat.peso_pct), pesoGanho: rFat.peso_pct, unidade: "BRL",
+        faixaLabel: rFat.faixa && rFat.faixa.label,
+        fonte: "orcamentos.nota_fiscal somado por data · escala em rh_bonus_config"
       };
     }
 
-    // Margem Líquida (peso 10) → escala linear sobre ML% / meta% (ex: ML 9% / meta 10% = 90% atingido)
+    // Margem Líquida → aplica escala do banco (sobre ML% / meta% × 100)
     var mML = metasPorChave.margem_liquida;
     if (mML) {
       var metaML = Number(mML.valor_meta);
       var pctAt2 = (mlPct != null && metaML > 0) ? (mlPct / metaML * 100) : null;
-      var peso2  = pctAt2 != null ? escalaPesoLinear(pctAt2, Number(mML.peso_pct)) : null;
+      var rML    = pctAt2 != null ? aplicarEscala(mML.escala_json, pctAt2) : { peso_pct: null, faixa: null };
       resultado.margem_liquida = {
         meta: metaML, valor: mlPct, pctAtingido: pctAt2,
-        pesoBase: Number(mML.peso_pct), pesoGanho: peso2, unidade: "pct",
-        fonte: "receitas_custos (receita − custo) / receita",
+        pesoBase: Number(mML.peso_pct), pesoGanho: rML.peso_pct, unidade: "pct",
+        faixaLabel: rML.faixa && rML.faixa.label,
+        fonte: "receitas_custos (receita − custo) / receita · escala em rh_bonus_config",
         receita: totReceita, custo: totCusto
       };
     }
@@ -3840,15 +3861,34 @@
     var metasDoPeriodo = bonMetasArea.filter(function (m) { return m.periodo_id === periodo.id; });
     if (!metasDoPeriodo.length) return [];
 
-    // Para cada meta, conta meses atingidos
+    // Escala-padrão de área (slide 19) caso a meta não tenha escala_json definida
+    var escalaPadrao = {
+      tipo: "min", unidade: "meses",
+      faixas: [
+        { limite: 6, peso_pct: 100, label: "6 meses" },
+        { limite: 5, peso_pct: 83,  label: "5 meses" },
+        { limite: 4, peso_pct: 67,  label: "4 meses" },
+        { limite: 3, peso_pct: 50,  label: "3 meses" },
+        { limite: 2, peso_pct: 33,  label: "2 meses" },
+        { limite: 1, peso_pct: 17,  label: "1 mês"   },
+        { limite: 0, peso_pct: 0,   label: "0 meses" }
+      ]
+    };
+
     return metasDoPeriodo.map(function (m) {
       var atingiu = bonAreaMes.filter(function (x) { return x.meta_id === m.id && x.atingiu; });
       var meses = atingiu.length;
-      var pesoGanho = escalaPesoArea(meses, Number(m.peso_pct || 30));
+      var escala = m.escala_json || escalaPadrao;
+      var r = aplicarEscala(escala, meses);
+      // A escala-padrão dá peso_pct em 0..100 (proporção). Convertemos pra peso real.
+      var fatorProp = (r.peso_pct || 0) / 100;
+      var pesoBase = Number(m.peso_pct || 30);
+      var pesoGanho = pesoBase * fatorProp;
       var path = (organogramaLista && organogramaLista.length) ? buildOrgPath(m.organograma_id) : ("#" + m.organograma_id);
       return {
         id: m.id, area: path, descricao: m.descricao, indicador: m.indicador_descritivo,
-        peso_base: Number(m.peso_pct || 30), meses_cumpridos: meses, peso_ganho: pesoGanho
+        peso_base: pesoBase, meses_cumpridos: meses, peso_ganho: pesoGanho,
+        faixaLabel: r.faixa && r.faixa.label
       };
     });
   }
@@ -3975,6 +4015,447 @@
     valText(document.getElementById("bon-m-prof-sub"), "Aguardando dados de RH");
 
     valText(document.getElementById("bon-m-total"), pesoEmpresa.toFixed(2).replace(".", ",") + "%");
+  }
+
+
+  // =========================================================================
+  // 35. RH > BÔNUS — CONFIGURAÇÃO (Entrega 7)
+  // =========================================================================
+
+  var bcfgPeriodos     = [];
+  var bcfgMetasEmpresa = [];
+  var bcfgMetasArea    = [];
+  var bcfgMetasProf    = [];
+  var bcfgPeriodoSel   = null;
+  var bcfgInicializado = false;
+
+  // Labels amigáveis
+  var BCFG_EMPRESA_LABELS = {
+    faturamento_bruto: "Faturamento Bruto",
+    margem_liquida:    "Rentabilidade (Margem Líquida)",
+    caixa_positivo:    "Fluxo de Caixa Positivo",
+    icc_6m:            "ICC ≥ 100% (6 meses)"
+  };
+  var BCFG_PROF_LABELS = {
+    conduta:     "Aderência ao Código de Conduta",
+    faltas_just: "Faltas Justificadas",
+    atrasos:     "Atrasos",
+    performance: "Avaliação de Performance",
+    penalidade:  "Penalidade por falta/atraso sem justificativa"
+  };
+
+  function carregarConfigBonusSeNecessario() {
+    // Garante que o organograma esteja carregado para o select de áreas
+    if (!organogramaCarregado) carregarOrganogramaParaSelectSeNecessario();
+
+    Promise.all([
+      client.from("bonif_periodos").select("*").order("inicio_em", { ascending: false }),
+      client.from("bonif_metas_empresa").select("*"),
+      client.from("bonif_metas_area").select("*"),
+      client.from("bonif_metas_profissional").select("*")
+    ]).then(function (rs) {
+      bcfgPeriodos     = (rs[0] && rs[0].data) || [];
+      bcfgMetasEmpresa = (rs[1] && rs[1].data) || [];
+      bcfgMetasArea    = (rs[2] && rs[2].data) || [];
+      bcfgMetasProf    = (rs[3] && rs[3].data) || [];
+
+      // Popular dropdown de período
+      var sel = document.getElementById("bcfg-periodo");
+      if (sel) {
+        sel.innerHTML = bcfgPeriodos.map(function (p) {
+          return '<option value="' + p.id + '">' + escHtml(p.nome) + '</option>';
+        }).join("");
+        var ativo = bcfgPeriodos.find(function (p) { return p.status === "ativo"; });
+        bcfgPeriodoSel = ativo ? ativo.id : (bcfgPeriodos[0] && bcfgPeriodos[0].id) || null;
+        if (bcfgPeriodoSel) sel.value = String(bcfgPeriodoSel);
+        sel.onchange = function () {
+          bcfgPeriodoSel = Number(sel.value);
+          renderConfigBonus();
+        };
+      }
+      if (!bcfgInicializado) ligarTabsBcfg();
+      renderConfigBonus();
+    });
+  }
+
+  function ligarTabsBcfg() {
+    bcfgInicializado = true;
+    document.querySelectorAll(".bcfg-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        var alvo = tab.getAttribute("data-bcfg-tab");
+        document.querySelectorAll(".bcfg-tab").forEach(function (t) { t.classList.toggle("ativo", t === tab); });
+        document.querySelectorAll(".bcfg-pane").forEach(function (p) {
+          p.hidden = p.getAttribute("data-bcfg-pane") !== alvo;
+          p.classList.toggle("ativo", p.getAttribute("data-bcfg-pane") === alvo);
+        });
+      });
+    });
+    var btnNovoP = document.getElementById("bcfg-btn-novo-periodo");
+    if (btnNovoP) btnNovoP.addEventListener("click", function () { abrirModalPeriodo(null); });
+    var btnNovaA = document.getElementById("bcfg-areas-btn-novo");
+    if (btnNovaA) btnNovaA.addEventListener("click", function () { abrirModalMetaArea(null); });
+  }
+
+  function renderConfigBonus() {
+    if (!bcfgPeriodoSel && bcfgPeriodos.length) bcfgPeriodoSel = bcfgPeriodos[0].id;
+    valText(document.getElementById("bcfg-lbl"), bcfgPeriodos.length + " período(s) cadastrado(s)");
+    renderBcfgEmpresa();
+    renderBcfgAreas();
+    renderBcfgProf();
+    renderBcfgPeriodos();
+  }
+
+  function escalaPreviewHtml(escala) {
+    if (!escala || !escala.faixas || !escala.faixas.length) return '<span class="bcfg-escala-prev-faixa">sem escala</span>';
+    return '<div class="bcfg-escala-prev">' + escala.faixas.map(function (f) {
+      var l = f.limite == null ? "∞" : f.limite;
+      var op = (escala.tipo === "max") ? "≤" : "≥";
+      return '<span class="bcfg-escala-prev-faixa" title="' + escHtml(f.label || "") + '">' + op + l + ' → ' + f.peso_pct + '%</span>';
+    }).join("") + '</div>';
+  }
+
+  // ---- Aba Empresa ---------------------------------------------------------
+  function renderBcfgEmpresa() {
+    var tbody = document.getElementById("bcfg-empresa-tbody");
+    if (!tbody) return;
+    var lista = bcfgMetasEmpresa.filter(function (m) { return m.periodo_id === bcfgPeriodoSel; });
+    var ordem = ["faturamento_bruto","margem_liquida","caixa_positivo","icc_6m"];
+    lista.sort(function (a, b) { return ordem.indexOf(a.meta_chave) - ordem.indexOf(b.meta_chave); });
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhuma meta. Selecione um período válido.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (m) {
+      var valTxt = m.unidade === "BRL" ? fmtBRL(m.valor_meta) : (Number(m.valor_meta) + (m.unidade === "pct" ? "%" : ""));
+      return '<tr>' +
+        '<td><strong>' + escHtml(BCFG_EMPRESA_LABELS[m.meta_chave] || m.meta_chave) + '</strong></td>' +
+        '<td>' + escHtml(m.descricao || "—") + '</td>' +
+        '<td class="num">' + escHtml(valTxt) + '</td>' +
+        '<td class="num">' + Number(m.peso_pct).toFixed(2).replace(".", ",") + '%</td>' +
+        '<td>' + escalaPreviewHtml(m.escala_json) + '</td>' +
+        '<td><button class="btn-limpar" data-bcfg-emp-edit="' + m.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-bcfg-emp-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bcfg-emp-edit"));
+        var m = bcfgMetasEmpresa.find(function (x) { return x.id === id; });
+        if (m) abrirModalMetaEmpresa(m);
+      });
+    });
+  }
+
+  // ---- Aba Áreas -----------------------------------------------------------
+  function renderBcfgAreas() {
+    var tbody = document.getElementById("bcfg-areas-tbody");
+    if (!tbody) return;
+    var lista = bcfgMetasArea.filter(function (m) { return m.periodo_id === bcfgPeriodoSel; });
+    valText(document.getElementById("bcfg-areas-lbl"), lista.length + " meta(s) de área");
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhuma meta de área cadastrada para este período. Clique em + Nova meta de área.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (m) {
+      var path = (organogramaLista && organogramaLista.length) ? buildOrgPath(m.organograma_id) : ("#" + m.organograma_id);
+      return '<tr>' +
+        '<td>' + escHtml(path) + '</td>' +
+        '<td>' + escHtml(m.descricao) + '</td>' +
+        '<td>' + escHtml(m.indicador_descritivo || "—") + '</td>' +
+        '<td class="num">' + Number(m.peso_pct).toFixed(2).replace(".", ",") + '%</td>' +
+        '<td><button class="btn-limpar" data-bcfg-area-edit="' + m.id + '">Editar</button> <button class="btn-limpar" data-bcfg-area-del="' + m.id + '">Excluir</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-bcfg-area-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bcfg-area-edit"));
+        var m = bcfgMetasArea.find(function (x) { return x.id === id; });
+        if (m) abrirModalMetaArea(m);
+      });
+    });
+    tbody.querySelectorAll("[data-bcfg-area-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bcfg-area-del"));
+        if (!confirm("Excluir esta meta de área?")) return;
+        client.from("bonif_metas_area").delete().eq("id", id).then(function (r) {
+          if (r.error) { alert("Erro: " + r.error.message); return; }
+          carregarConfigBonusSeNecessario();
+        });
+      });
+    });
+  }
+
+  // ---- Aba Profissional ----------------------------------------------------
+  function renderBcfgProf() {
+    var tbody = document.getElementById("bcfg-prof-tbody");
+    if (!tbody) return;
+    var lista = bcfgMetasProf.filter(function (m) { return m.periodo_id === bcfgPeriodoSel; });
+    var ordem = ["conduta","faltas_just","atrasos","performance","penalidade"];
+    lista.sort(function (a, b) { return ordem.indexOf(a.meta_chave) - ordem.indexOf(b.meta_chave); });
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhuma meta. Selecione um período válido.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (m) {
+      return '<tr>' +
+        '<td><strong>' + escHtml(BCFG_PROF_LABELS[m.meta_chave] || m.meta_chave) + '</strong></td>' +
+        '<td>' + escHtml(m.descricao || "—") + '</td>' +
+        '<td class="num">' + Number(m.peso_pct).toFixed(2).replace(".", ",") + '%</td>' +
+        '<td>' + escHtml(m.unidade) + '</td>' +
+        '<td>' + escalaPreviewHtml(m.escala_json) + '</td>' +
+        '<td><button class="btn-limpar" data-bcfg-prof-edit="' + m.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-bcfg-prof-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bcfg-prof-edit"));
+        var m = bcfgMetasProf.find(function (x) { return x.id === id; });
+        if (m) abrirModalMetaProf(m);
+      });
+    });
+  }
+
+  // ---- Aba Períodos --------------------------------------------------------
+  function renderBcfgPeriodos() {
+    var tbody = document.getElementById("bcfg-periodos-tbody");
+    if (!tbody) return;
+    if (!bcfgPeriodos.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhum período. Clique em + Novo Período.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = bcfgPeriodos.map(function (p) {
+      var stCls = p.status === "ativo" ? "solta" : "outras";
+      return '<tr>' +
+        '<td><strong>' + escHtml(p.nome) + '</strong></td>' +
+        '<td>' + fmtData(p.inicio_em) + '</td>' +
+        '<td>' + fmtData(p.fim_em) + '</td>' +
+        '<td><span class="badge-tipo ' + stCls + '">' + escHtml(p.status) + '</span></td>' +
+        '<td><button class="btn-limpar" data-bcfg-per-edit="' + p.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-bcfg-per-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-bcfg-per-edit"));
+        var p = bcfgPeriodos.find(function (x) { return x.id === id; });
+        if (p) abrirModalPeriodo(p);
+      });
+    });
+  }
+
+  // =========================================================================
+  // Editor de escala (campos dinâmicos)
+  // =========================================================================
+  // Constrói o HTML da seção de edição de escala dentro do modal.
+  // Após salvar, lê do DOM e devolve um JSONB { tipo, faixas: [...] }.
+  function escalaEditorHtml(escala) {
+    escala = escala || { tipo: "min", faixas: [] };
+    var rows = (escala.faixas || []).map(function (f, i) {
+      return '<div class="bcfg-escala-row" data-row="' + i + '">' +
+        '<input type="text" class="bcfg-lim" placeholder="(vazio = ∞)" value="' + (f.limite == null ? "" : escHtml(f.limite)) + '" />' +
+        '<input type="number" step="0.01" class="bcfg-peso" placeholder="peso %" value="' + (f.peso_pct == null ? "" : escHtml(f.peso_pct)) + '" />' +
+        '<input type="text" class="bcfg-label" placeholder="rótulo (opcional)" value="' + escHtml(f.label || "") + '" />' +
+        '<button type="button" class="bcfg-rm" title="Remover faixa">×</button>' +
+      '</div>';
+    }).join("");
+    return '<div class="bcfg-escala-edit" id="bcfg-escala-edit">' +
+      '<div class="bcfg-escala-edit-titulo">Escala (faixas)</div>' +
+      '<div class="bcfg-escala-row bcfg-escala-row-header">' +
+        '<span>Limite</span><span>Peso (%)</span><span>Rótulo (opcional)</span><span></span>' +
+      '</div>' +
+      '<div id="bcfg-escala-rows">' + rows + '</div>' +
+      '<button type="button" class="bcfg-add-faixa" id="bcfg-add-faixa">+ adicionar faixa</button>' +
+      '<div class="form-field" style="margin-top:10px"><label>Tipo da escala</label>' +
+      '<select id="bcfg-tipo">' +
+        '<option value="min"' + (escala.tipo === "min" ? " selected" : "") + '>"min" — ganha quando valor ≥ limite (mais é melhor)</option>' +
+        '<option value="max"' + (escala.tipo === "max" ? " selected" : "") + '>"max" — ganha quando valor ≤ limite (menos é melhor)</option>' +
+      '</select></div>' +
+    '</div>';
+  }
+
+  function escalaEditorLer() {
+    var tipo = (document.getElementById("bcfg-tipo") || {}).value || "min";
+    var faixas = [];
+    document.querySelectorAll("#bcfg-escala-rows .bcfg-escala-row").forEach(function (row) {
+      var lim   = (row.querySelector(".bcfg-lim") || {}).value;
+      var peso  = (row.querySelector(".bcfg-peso") || {}).value;
+      var label = (row.querySelector(".bcfg-label") || {}).value || "";
+      var lf = (lim === "" || lim == null) ? null : Number(lim);
+      var pf = (peso === "" || peso == null) ? 0 : Number(peso);
+      if (isNaN(pf)) pf = 0;
+      faixas.push({ limite: (isNaN(lf) ? null : lf), peso_pct: pf, label: label });
+    });
+    return { tipo: tipo, faixas: faixas };
+  }
+
+  function ligarBotoesEscala() {
+    var add = document.getElementById("bcfg-add-faixa");
+    if (add) {
+      add.addEventListener("click", function () {
+        var rows = document.getElementById("bcfg-escala-rows");
+        var n = rows.children.length;
+        var div = document.createElement("div");
+        div.className = "bcfg-escala-row";
+        div.dataset.row = String(n);
+        div.innerHTML =
+          '<input type="text" class="bcfg-lim" placeholder="(vazio = ∞)" />' +
+          '<input type="number" step="0.01" class="bcfg-peso" placeholder="peso %" />' +
+          '<input type="text" class="bcfg-label" placeholder="rótulo (opcional)" />' +
+          '<button type="button" class="bcfg-rm" title="Remover faixa">×</button>';
+        rows.appendChild(div);
+        ligarBotoesEscala();
+      });
+    }
+    document.querySelectorAll(".bcfg-rm").forEach(function (btn) {
+      btn.onclick = function () { btn.parentElement.remove(); };
+    });
+  }
+
+  // =========================================================================
+  // Modais de edição
+  // =========================================================================
+
+  function abrirModalPeriodo(p) {
+    p = p || {};
+    var editar = !!p.id;
+    abrirModal({
+      titulo: editar ? "Editar Período" : "Novo Período",
+      fields: [
+        { name: "nome",      label: "Nome (ex: 2026-1)", type: "text", valor: p.nome, required: true },
+        { name: "inicio_em", label: "Início",            type: "date", valor: p.inicio_em, required: true },
+        { name: "fim_em",    label: "Fim",               type: "date", valor: p.fim_em, required: true },
+        { name: "status",    label: "Status",            type: "select", valor: p.status || "ativo", options: ["ativo","encerrado"], required: true }
+      ],
+      onSubmit: function (v, done) {
+        var payload = { nome: v.nome, inicio_em: v.inicio_em, fim_em: v.fim_em, status: v.status };
+        var q = editar
+          ? client.from("bonif_periodos").update(payload).eq("id", p.id)
+          : client.from("bonif_periodos").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarConfigBonusSeNecessario();
+          // Invalida cache do dashboard
+          bonCarregado = false;
+          done(null);
+        });
+      }
+    });
+  }
+
+  function abrirModalMetaEmpresa(m) {
+    var nome = BCFG_EMPRESA_LABELS[m.meta_chave] || m.meta_chave;
+    abrirModal({
+      titulo: "Editar — " + nome,
+      fields: [
+        { name: "descricao",  label: "Descrição",                 type: "text",   valor: m.descricao },
+        { name: "valor_meta", label: "Valor da meta",             type: "number", valor: m.valor_meta, required: true },
+        { name: "peso_pct",   label: "Peso (%)",                  type: "number", valor: m.peso_pct, required: true },
+        { name: "unidade",    label: "Unidade",                   type: "select", valor: m.unidade, options: [{value:"BRL",label:"R$ (BRL)"},{value:"pct",label:"% (porcentagem)"},{value:"bool",label:"Sim/Não (binário)"}], required: true }
+      ],
+      onSubmit: function (v, done) {
+        var escala = escalaEditorLer();
+        var payload = {
+          descricao: v.descricao,
+          valor_meta: Number(v.valor_meta),
+          peso_pct: Number(v.peso_pct),
+          unidade: v.unidade,
+          escala_json: escala
+        };
+        client.from("bonif_metas_empresa").update(payload).eq("id", m.id).then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarConfigBonusSeNecessario();
+          bonCarregado = false;  // invalida dashboard
+          done(null);
+        });
+      }
+    });
+    // Injeta o editor de escala depois do form
+    setTimeout(function () {
+      var modalFields = document.getElementById("modal-fields");
+      var holder = document.createElement("div");
+      holder.innerHTML = escalaEditorHtml(m.escala_json);
+      modalFields.appendChild(holder.firstChild);
+      ligarBotoesEscala();
+    }, 0);
+  }
+
+  function abrirModalMetaProf(m) {
+    var nome = BCFG_PROF_LABELS[m.meta_chave] || m.meta_chave;
+    abrirModal({
+      titulo: "Editar — " + nome,
+      fields: [
+        { name: "descricao", label: "Descrição",          type: "text",   valor: m.descricao },
+        { name: "peso_pct",  label: "Peso (%)",           type: "number", valor: m.peso_pct, required: true },
+        { name: "unidade",   label: "Unidade",            type: "select", valor: m.unidade, options: ["bool","faltas_qtd","atrasos_qtd","nota_1a5","penalidade"], required: true },
+        { name: "ativa",     label: "Ativa?",             type: "select", valor: m.ativa === false ? "false" : "true", options: [{value:"true",label:"Sim"},{value:"false",label:"Não"}] }
+      ],
+      onSubmit: function (v, done) {
+        var escala = escalaEditorLer();
+        var payload = {
+          descricao: v.descricao,
+          peso_pct: Number(v.peso_pct),
+          unidade: v.unidade,
+          ativa: v.ativa === "true",
+          escala_json: escala
+        };
+        client.from("bonif_metas_profissional").update(payload).eq("id", m.id).then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarConfigBonusSeNecessario();
+          bonCarregado = false;
+          done(null);
+        });
+      }
+    });
+    setTimeout(function () {
+      var modalFields = document.getElementById("modal-fields");
+      var holder = document.createElement("div");
+      holder.innerHTML = escalaEditorHtml(m.escala_json);
+      modalFields.appendChild(holder.firstChild);
+      ligarBotoesEscala();
+    }, 0);
+  }
+
+  function abrirModalMetaArea(m) {
+    m = m || {};
+    var editar = !!m.id;
+    var opcoesOrg = (organogramaLista || []).slice().sort(function (a, b) {
+      return buildOrgPath(a.id).localeCompare(buildOrgPath(b.id));
+    }).map(function (n) { return { value: n.id, label: buildOrgPath(n.id) }; });
+
+    abrirModal({
+      titulo: editar ? "Editar meta de área" : "Nova meta de área",
+      fields: [
+        { name: "organograma_id", label: "Área (organograma)", type: "select", valor: m.organograma_id || "", options: opcoesOrg, required: true },
+        { name: "descricao",      label: "Descrição da meta",  type: "text",   valor: m.descricao, required: true },
+        { name: "indicador_descritivo", label: "Indicador (como medir)", type: "text", valor: m.indicador_descritivo },
+        { name: "peso_pct",       label: "Peso (%)",           type: "number", valor: m.peso_pct || 30, required: true }
+      ],
+      onSubmit: function (v, done) {
+        var escala = escalaEditorLer();
+        var payload = {
+          periodo_id: bcfgPeriodoSel,
+          organograma_id: Number(v.organograma_id),
+          descricao: v.descricao,
+          indicador_descritivo: v.indicador_descritivo,
+          peso_pct: Number(v.peso_pct),
+          escala_json: escala
+        };
+        var q = editar
+          ? client.from("bonif_metas_area").update(payload).eq("id", m.id)
+          : client.from("bonif_metas_area").insert(payload);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarConfigBonusSeNecessario();
+          bonCarregado = false;
+          done(null);
+        });
+      }
+    });
+    setTimeout(function () {
+      var modalFields = document.getElementById("modal-fields");
+      var holder = document.createElement("div");
+      holder.innerHTML = escalaEditorHtml(m.escala_json);
+      modalFields.appendChild(holder.firstChild);
+      ligarBotoesEscala();
+    }, 0);
   }
 
 })();
