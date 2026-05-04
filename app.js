@@ -340,6 +340,8 @@
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
     if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
+    if (pageId === "caixa_saldo")        carregarCaixaSaldoSeNecessario();
+    if (pageId === "caixa_compromissos") carregarCompromissosSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -1789,6 +1791,48 @@
       alvo: "folha_pagamento + folha_pagamento_rubricas + atualiza centro_custo_id",
       especial: true,
       dicas: "Uma aba mensal (ex: 'Outubro'). Cruza nome → funcionário, atribui CC, cria linha em folha_pagamento (mes_ref derivado da data na linha 3) e povoa folha_pagamento_rubricas para cada coluna não-vazia."
+    },
+    caixa_saldo_mensal: {
+      nomeLegivel: "Saldo de Caixa Mensal",
+      alvo: "caixa_saldo_mensal",
+      colunas: {
+        "mes":          "mes_ref",
+        "mes_ref":      "mes_ref",
+        "mês":          "mes_ref",
+        "mês ref":      "mes_ref",
+        "saldo":        "saldo_final",
+        "saldo final":  "saldo_final",
+        "saldo_final":  "saldo_final",
+        "observacao":   "observacoes",
+        "observação":   "observacoes",
+        "observacoes":  "observacoes",
+        "observações":  "observacoes",
+        "obs":          "observacoes"
+      },
+      obrigatorias: ["mes_ref","saldo_final"],
+      onConflict: "mes_ref",
+      dicas: "Colunas: mes_ref (YYYY-MM ou data), saldo_final (negativos OK), observacao (opcional). UPSERT pela coluna mes_ref."
+    },
+    compromissos_financeiros: {
+      nomeLegivel: "Compromissos Financeiros",
+      alvo: "compromissos_financeiros",
+      colunas: {
+        "vencimento":  "vencimento",
+        "data":        "vencimento",
+        "descricao":   "descricao",
+        "descrição":   "descricao",
+        "valor":       "valor",
+        "tipo":        "tipo",
+        "categoria":   "tipo",
+        "pago em":     "pago_em",
+        "pago_em":     "pago_em",
+        "data pgto":   "pago_em",
+        "observacao":  "observacao",
+        "observação":  "observacao",
+        "obs":         "observacao"
+      },
+      obrigatorias: ["vencimento","descricao","valor","tipo"],
+      dicas: "Colunas: vencimento (data), descricao, valor, tipo (folha|fornecedor|imposto|aluguel|outro), pago_em (opcional — só preencher quando pago)."
     }
   };
 
@@ -1909,15 +1953,21 @@
             var v = row[cab];
             if (v === "" || v === null || v === undefined) { out[col] = null; return; }
             // Campos numéricos
-            if (["venda","adiantamento","recebimento","resultado_financeiro","a_receber","nota_fiscal","venda_sem_nf","a_faturar","valor","valor_nf","custo","ano","mes"].indexOf(col) !== -1 && col !== "nota_fiscal") {
+            if (["venda","adiantamento","recebimento","resultado_financeiro","a_receber","nota_fiscal","venda_sem_nf","a_faturar","valor","valor_nf","custo","ano","mes","saldo_final"].indexOf(col) !== -1 && col !== "nota_fiscal") {
               var n = Number(String(v).replace(/\./g,"").replace(",", "."));
               out[col] = isNaN(n) ? null : n;
               return;
             }
             // Datas — SheetJS cellDates:true já entrega Date
-            if (["data","competencia","emissao"].indexOf(col) !== -1) {
+            if (["data","competencia","emissao","vencimento","pago_em"].indexOf(col) !== -1) {
               if (v instanceof Date) { out[col] = v.toISOString().slice(0,10); return; }
               out[col] = String(v).slice(0,10);
+              return;
+            }
+            // mes_ref — aceita "YYYY-MM", "MM/YYYY", Date, etc — sempre vira "YYYY-MM-01"
+            if (col === "mes_ref") {
+              var mr = parseMesRef(v);
+              out[col] = mr ? (mr + "-01") : null;
               return;
             }
             out[col] = String(v);
@@ -3281,7 +3331,10 @@
         terminar();
         return;
       }
-      client.from(tpl.alvo).insert(lotes[idx]).then(function (r) {
+      var query = tpl.onConflict
+        ? client.from(tpl.alvo).upsert(lotes[idx], { onConflict: tpl.onConflict })
+        : client.from(tpl.alvo).insert(lotes[idx]);
+      query.then(function (r) {
         if (r.error) {
           erros.push("Lote " + (idx + 1) + ": " + r.error.message);
         } else {
@@ -3299,6 +3352,8 @@
       } else {
         setImpStatus("Importação concluída. " + inseridos + " registro(s) inseridos em " + tpl.alvo + ".", "ok");
         // Invalida caches afetados para o usuário ver os dados novos
+        if (tpl.alvo === "caixa_saldo_mensal")     { caixaSaldoCarregado = false; }
+        if (tpl.alvo === "compromissos_financeiros"){ compromissosCarregado = false; }
         if (tpl.alvo === "orcamentos" || tpl.alvo === "movimentos") {
           orcamentosCarregados = false;
           movimentosCompletos = []; orcamentosLista = [];
@@ -3833,6 +3888,10 @@
           renderProgramaBonus();
         };
       }
+      // Dispara cargas auxiliares (caixa + compromissos) em paralelo — destravam Caixa Positivo e ICC
+      if (!caixaSaldoCarregado && !caixaSaldoCarregando)   carregarCaixaSaldoSeNecessario();
+      if (!compromissosCarregado && !compromissosCarregando) carregarCompromissosSeNecessario();
+
       // Garante que receitas_custos esteja carregado para os cálculos
       if (!rcCarregado) {
         carregarConsolidadoSeNecessario();
@@ -3922,26 +3981,85 @@
       };
     }
 
-    // Caixa Positivo (peso 5) — depende de caixa_saldo_mensal (vazio ainda)
+    // Caixa Positivo (peso 5) — saldo_final > 0 em todos os meses do período
     var mCx = metasPorChave.caixa_positivo;
     if (mCx) {
-      resultado.caixa_positivo = {
-        meta: 1, valor: null, pctAtingido: null,
-        pesoBase: Number(mCx.peso_pct), pesoGanho: null, unidade: "bool",
-        faltaDado: true,
-        fonte: "caixa_saldo_mensal — sem dados ainda. Importe os saldos mensais para ativar."
-      };
+      if (!caixaSaldoCarregado || !caixaSaldoLista.length) {
+        resultado.caixa_positivo = {
+          meta: 1, valor: null, pctAtingido: null,
+          pesoBase: Number(mCx.peso_pct), pesoGanho: null, unidade: "bool",
+          faltaDado: true,
+          fonte: "caixa_saldo_mensal — sem dados ainda. Importe os saldos via Importar > Saldo de Caixa Mensal."
+        };
+      } else {
+        // Conta meses do período (anoIni-mesIni até anoFim-mesFim) com saldo > 0
+        var totalMeses = 0, mesesPositivos = 0, mesesAusentes = 0;
+        for (var ano = anoIni; ano <= anoFim; ano++) {
+          var mIni = (ano === anoIni) ? mesIni : 1;
+          var mFim = (ano === anoFim) ? mesFim : 12;
+          for (var m = mIni; m <= mFim; m++) {
+            totalMeses++;
+            var iso = ano + "-" + (m < 10 ? "0" + m : m) + "-01";
+            var reg = caixaSaldoLista.find(function (r) { return String(r.mes_ref).slice(0,10) === iso; });
+            if (!reg) mesesAusentes++;
+            else if (Number(reg.saldo_final) > 0) mesesPositivos++;
+          }
+        }
+        var pctAtCx = totalMeses ? (mesesPositivos / totalMeses) : 0;
+        // Regra do PPT: TODOS os meses positivos = 100% do peso. Caso contrário, 0.
+        var pesoGanhoCx = (mesesPositivos === totalMeses && mesesAusentes === 0) ? Number(mCx.peso_pct) : 0;
+        resultado.caixa_positivo = {
+          meta: 1,
+          valor: mesesPositivos + " de " + totalMeses + " meses positivos" + (mesesAusentes ? " (" + mesesAusentes + " sem dado)" : ""),
+          pctAtingido: pctAtCx,
+          pesoBase: Number(mCx.peso_pct), pesoGanho: pesoGanhoCx,
+          unidade: "bool",
+          faltaDado: mesesAusentes > 0,
+          fonte: "caixa_saldo_mensal — saldo_final > 0 em todos os meses do período"
+        };
+      }
     }
 
-    // ICC ≥ 100% (peso 5) — depende de caixa + compromissos_financeiros
+    // ICC ≥ 100% (peso 5) — saldo de caixa atual cobre compromissos próximos 6 meses
     var mIcc = metasPorChave.icc_6m;
     if (mIcc) {
-      resultado.icc_6m = {
-        meta: 100, valor: null, pctAtingido: null,
-        pesoBase: Number(mIcc.peso_pct), pesoGanho: null, unidade: "pct",
-        faltaDado: true,
-        fonte: "ICC = saldo de caixa atual ÷ compromissos próximos 6m. Falta importar compromissos_financeiros."
-      };
+      var faltaCx = !caixaSaldoCarregado || !caixaSaldoLista.length;
+      var faltaCp = !compromissosCarregado;
+      if (faltaCx || faltaCp) {
+        var pendentes = [];
+        if (faltaCx) pendentes.push("saldo de caixa");
+        if (faltaCp) pendentes.push("compromissos");
+        resultado.icc_6m = {
+          meta: 100, valor: null, pctAtingido: null,
+          pesoBase: Number(mIcc.peso_pct), pesoGanho: null, unidade: "pct",
+          faltaDado: true,
+          fonte: "ICC depende de: " + pendentes.join(" + ") + ". Importe via Importar."
+        };
+      } else {
+        // Saldo mais recente
+        var saldoAtual = Number(caixaSaldoLista[0].saldo_final || 0);
+        // Compromissos pendentes nos próximos 183 dias
+        var hoje = new Date(); hoje.setHours(0,0,0,0);
+        var d6 = new Date(); d6.setDate(d6.getDate() + 183);
+        var hojeIso = hoje.toISOString().slice(0,10);
+        var d6iso   = d6.toISOString().slice(0,10);
+        var totalCompr = (compromissosLista || []).filter(function (c) {
+          return !c.pago_em && c.vencimento >= hojeIso && c.vencimento <= d6iso;
+        }).reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
+
+        var iccPct = totalCompr > 0 ? (saldoAtual / totalCompr) * 100 : (saldoAtual > 0 ? 999 : 0);
+        var pctAtIcc = totalCompr > 0 ? Math.min(1, saldoAtual / totalCompr) : (saldoAtual > 0 ? 1 : 0);
+        var pesoGanhoIcc = (iccPct >= 100) ? Number(mIcc.peso_pct) : 0;
+        resultado.icc_6m = {
+          meta: 100,
+          valor: iccPct >= 999 ? "Sem compromissos próximos" : (iccPct.toFixed(0) + "%"),
+          pctAtingido: pctAtIcc,
+          pesoBase: Number(mIcc.peso_pct), pesoGanho: pesoGanhoIcc,
+          unidade: "pct",
+          faltaDado: false,
+          fonte: "ICC = R$ " + fmtBRL(saldoAtual).replace("R$","").trim() + " (saldo mais recente) ÷ R$ " + fmtBRL(totalCompr).replace("R$","").trim() + " (compromissos próx. 6m)"
+        };
+      }
     }
 
     return resultado;
@@ -4800,6 +4918,206 @@
     showPage("bonus_indiv_detalhe");
   }
 
+
+
+  // =========================================================================
+  // CAIXA — Saldo Mensal (Entrega 9)
+  // =========================================================================
+
+  var caixaSaldoLista = [];
+  var caixaSaldoCarregado = false;
+  var caixaSaldoCarregando = false;
+
+  function carregarCaixaSaldoSeNecessario() {
+    if (caixaSaldoCarregado || caixaSaldoCarregando) {
+      if (caixaSaldoCarregado) renderCaixaSaldo();
+      return;
+    }
+    caixaSaldoCarregando = true;
+    var tbody = document.getElementById("cxs-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr>';
+
+    client.from("caixa_saldo_mensal")
+      .select("mes_ref, saldo_final, observacoes, atualizado_em")
+      .order("mes_ref", { ascending: false })
+      .then(function (r) {
+        caixaSaldoCarregando = false;
+        if (r.error) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+          return;
+        }
+        caixaSaldoLista = r.data || [];
+        caixaSaldoCarregado = true;
+        renderCaixaSaldo();
+      });
+
+    var busca = document.getElementById("cxs-busca");
+    if (busca && !busca.dataset.bound) {
+      busca.dataset.bound = "1";
+      busca.addEventListener("input", renderCaixaSaldo);
+    }
+    var btnLimpar = document.getElementById("cxs-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var b = document.getElementById("cxs-busca"); if (b) b.value = "";
+        renderCaixaSaldo();
+      });
+    }
+  }
+
+  function renderCaixaSaldo() {
+    var tbody = document.getElementById("cxs-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("cxs-busca") || {}).value || "").trim().toLowerCase();
+    var filtrados = caixaSaldoLista.filter(function (r) {
+      if (!busca) return true;
+      return String(r.mes_ref).toLowerCase().indexOf(busca) !== -1;
+    });
+
+    valText(document.getElementById("cxs-m-qtd"), fmtInt(caixaSaldoLista.length));
+    var ult = caixaSaldoLista[0];
+    valText(document.getElementById("cxs-m-ult"), ult ? fmtBRL(ult.saldo_final) : "—");
+    valText(document.getElementById("cxs-m-ult-mes"), ult ? mesRef(ult.mes_ref) : "—");
+    var ultimos12 = caixaSaldoLista.slice(0, 12);
+    var positivos = ultimos12.filter(function (r) { return Number(r.saldo_final) > 0; }).length;
+    valText(document.getElementById("cxs-m-pos"), positivos + " / " + Math.min(12, caixaSaldoLista.length));
+    valText(document.getElementById("cxs-lbl"), filtrados.length + " de " + caixaSaldoLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="tbl-vazio">Nenhum mês cadastrado. Importe via Importar > Saldo de Caixa Mensal.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (r) {
+      var classe = Number(r.saldo_final) >= 0 ? "" : "neg";
+      return '<tr>' +
+        '<td>' + escHtml(mesRef(r.mes_ref)) + '</td>' +
+        '<td class="num ' + classe + '">' + fmtBRL(r.saldo_final) + '</td>' +
+        '<td>' + escHtml(r.observacoes || "") + '</td>' +
+        '<td>' + escHtml(fmtData(r.atualizado_em)) + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  function mesRef(d) {
+    if (!d) return "—";
+    var s = String(d).slice(0, 7); // YYYY-MM
+    var partes = s.split("-");
+    if (partes.length < 2) return s;
+    var nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    var idx = parseInt(partes[1], 10) - 1;
+    if (idx < 0 || idx > 11) return s;
+    return nomes[idx] + "/" + partes[0];
+  }
+
+  // =========================================================================
+  // CAIXA — Compromissos Financeiros (Entrega 9)
+  // =========================================================================
+
+  var compromissosLista = [];
+  var compromissosCarregado = false;
+  var compromissosCarregando = false;
+
+  function carregarCompromissosSeNecessario() {
+    if (compromissosCarregado || compromissosCarregando) {
+      if (compromissosCarregado) renderCompromissos();
+      return;
+    }
+    compromissosCarregando = true;
+    var tbody = document.getElementById("cmp-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr>';
+
+    client.from("compromissos_financeiros")
+      .select("id, vencimento, descricao, valor, tipo, pago_em, observacao")
+      .order("vencimento", { ascending: true })
+      .then(function (r) {
+        compromissosCarregando = false;
+        if (r.error) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+          return;
+        }
+        compromissosLista = r.data || [];
+        compromissosCarregado = true;
+        renderCompromissos();
+      });
+
+    var busca = document.getElementById("cmp-busca");
+    if (busca && !busca.dataset.bound) {
+      busca.dataset.bound = "1";
+      busca.addEventListener("input", renderCompromissos);
+    }
+    var selTipo = document.getElementById("cmp-tipo");
+    if (selTipo && !selTipo.dataset.bound) {
+      selTipo.dataset.bound = "1";
+      selTipo.addEventListener("change", renderCompromissos);
+    }
+    var selStatus = document.getElementById("cmp-status");
+    if (selStatus && !selStatus.dataset.bound) {
+      selStatus.dataset.bound = "1";
+      selStatus.addEventListener("change", renderCompromissos);
+    }
+    var btnLimpar = document.getElementById("cmp-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var b = document.getElementById("cmp-busca"); if (b) b.value = "";
+        var t = document.getElementById("cmp-tipo"); if (t) t.value = "";
+        var s = document.getElementById("cmp-status"); if (s) s.value = "";
+        renderCompromissos();
+      });
+    }
+  }
+
+  function renderCompromissos() {
+    var tbody = document.getElementById("cmp-tbody");
+    if (!tbody) return;
+    var busca  = ((document.getElementById("cmp-busca")  || {}).value || "").trim().toLowerCase();
+    var tipo   = ((document.getElementById("cmp-tipo")   || {}).value || "").trim();
+    var status = ((document.getElementById("cmp-status") || {}).value || "").trim();
+    var hojeIso = new Date().toISOString().slice(0, 10);
+
+    var filtrados = compromissosLista.filter(function (r) {
+      if (busca && (r.descricao || "").toLowerCase().indexOf(busca) === -1) return false;
+      if (tipo && r.tipo !== tipo) return false;
+      if (status === "pendente" && r.pago_em) return false;
+      if (status === "pago" && !r.pago_em) return false;
+      if (status === "vencido" && (r.pago_em || r.vencimento >= hojeIso)) return false;
+      return true;
+    });
+
+    var pendentes = compromissosLista.filter(function (r) { return !r.pago_em && r.vencimento >= hojeIso; });
+    var vencidos  = compromissosLista.filter(function (r) { return !r.pago_em && r.vencimento <  hojeIso; });
+    // Próximos 6 meses (aproximação: 183 dias)
+    var d6 = new Date(); d6.setDate(d6.getDate() + 183);
+    var d6iso = d6.toISOString().slice(0, 10);
+    var proximos6 = compromissosLista.filter(function (r) {
+      return !r.pago_em && r.vencimento >= hojeIso && r.vencimento <= d6iso;
+    });
+    var totalProx6 = proximos6.reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
+
+    valText(document.getElementById("cmp-m-pen"),  fmtInt(pendentes.length));
+    valText(document.getElementById("cmp-m-tot6"), fmtBRL(totalProx6));
+    valText(document.getElementById("cmp-m-venc"), fmtInt(vencidos.length));
+    valText(document.getElementById("cmp-lbl"), filtrados.length + " de " + compromissosLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhum compromisso bate com os filtros. Importe via Importar > Compromissos Financeiros.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (r) {
+      var st, classe;
+      if (r.pago_em) { st = "Pago"; classe = "tag tag-ok"; }
+      else if (r.vencimento < hojeIso) { st = "Vencido"; classe = "tag tag-danger"; }
+      else { st = "Pendente"; classe = "tag tag-warn"; }
+      return '<tr>' +
+        '<td>' + escHtml(fmtData(r.vencimento)) + '</td>' +
+        '<td>' + escHtml(r.descricao) + '</td>' +
+        '<td><span class="badge-tipo">' + escHtml(r.tipo) + '</span></td>' +
+        '<td class="num">' + fmtBRL(r.valor) + '</td>' +
+        '<td><span class="' + classe + '">' + st + '</span></td>' +
+      '</tr>';
+    }).join("");
+  }
 
 
   // =========================================================================

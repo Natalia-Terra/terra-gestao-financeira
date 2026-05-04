@@ -1695,3 +1695,24 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 .page-header { margin-bottom: 12px; }
 .page-header:empty { display: none; }
 .page-header .btn-voltar { margin-bottom: 0; }
+
+
+/* =========================================================
+   TAGS de status (Compromissos: Pago/Pendente/Vencido)
+   ========================================================= */
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+.tag-ok     { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+.tag-warn   { background: var(--warn-bg);    color: var(--warn);    border-color: var(--warn); }
+.tag-danger { background: var(--danger-bg);  color: var(--danger);  border-color: var(--danger); }
+
+/* Saldo negativo na tabela de Caixa */
+.tabela td.num.neg { color: var(--danger); font-weight: 600; }

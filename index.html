@@ -185,6 +185,16 @@
             </div>
           </div>
 
+          <div class="sb-group" data-macro="caixa">
+            <button class="sb-group-header" type="button" title="Caixa">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h2"/><path d="M12 15h5"/></svg></span><span class="sb-label">Caixa</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="caixa_saldo" type="button">Saldo Mensal</button>
+              <button class="sb-sub" data-page="caixa_compromissos" type="button">Compromissos</button>
+            </div>
+          </div>
+
           <div class="sb-group" data-macro="rh">
             <button class="sb-group-header" type="button" title="Dep. Pessoal e RH">
               <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="sb-label">Dep. Pessoal e RH</span><span class="sb-caret">▾</span>
@@ -723,6 +733,8 @@
                   <option value="saida_estoque">Saída de Estoque (CPV-Matéria Prima)</option>
                   <option value="funcionarios_tc">Funcionários ativos (Planilha TC)</option>
                   <option value="despesas_folha_mensal">Despesas Folha Mensal (com cruzamento de CC)</option>
+                  <option value="caixa_saldo_mensal">Saldo de Caixa Mensal</option>
+                  <option value="compromissos_financeiros">Compromissos Financeiros</option>
                 </select>
               </label>
               <input type="file" id="imp-arquivo" accept=".xlsx,.xls" />
@@ -1342,6 +1354,76 @@
                 <tbody id="bind-tbody">
                   <tr><td colspan="7" class="tbl-vazio">Aguardando dados de RH (frequência, medidas disciplinares, avaliações).</td></tr>
                 </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Caixa > Saldo Mensal -->
+        <section class="page" data-page="caixa_saldo" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Saldo de Caixa Mensal</h1>
+            <p class="page-sub">Saldo final por mês — insumo para Caixa Positivo e ICC do Programa de Bônus</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Meses cadastrados</div><div class="metric-value" id="cxs-m-qtd">—</div><div class="metric-sub">no histórico</div></div>
+            <div class="metric-card"><div class="metric-label">Último saldo</div><div class="metric-value" id="cxs-m-ult">—</div><div class="metric-sub" id="cxs-m-ult-mes">—</div></div>
+            <div class="metric-card"><div class="metric-label">Meses positivos (12 últimos)</div><div class="metric-value" id="cxs-m-pos">—</div><div class="metric-sub">de até 12</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="cxs-busca" placeholder="Buscar por mês (YYYY-MM)…" />
+              <button class="btn-limpar" id="cxs-btn-limpar" type="button">Limpar</button>
+              <span class="toolbar-label" id="cxs-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês</th><th class="num">Saldo final</th><th>Observação</th><th>Atualizado</th></tr></thead>
+                <tbody id="cxs-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Caixa > Compromissos Financeiros -->
+        <section class="page" data-page="caixa_compromissos" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Compromissos Financeiros</h1>
+            <p class="page-sub">Contas a pagar previstas — usado no cálculo de ICC (cobertura de 6 meses)</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="cmp-m-pen">—</div><div class="metric-sub">com vencimento futuro</div></div>
+            <div class="metric-card"><div class="metric-label">Total a pagar (próximos 6m)</div><div class="metric-value" id="cmp-m-tot6">—</div><div class="metric-sub">soma dos vencimentos</div></div>
+            <div class="metric-card"><div class="metric-label">Vencidos</div><div class="metric-value" id="cmp-m-venc">—</div><div class="metric-sub">não pagos</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="cmp-busca" placeholder="Buscar descrição…" />
+              <select id="cmp-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="folha">Folha</option>
+                <option value="fornecedor">Fornecedor</option>
+                <option value="imposto">Imposto</option>
+                <option value="aluguel">Aluguel</option>
+                <option value="outro">Outro</option>
+              </select>
+              <select id="cmp-status">
+                <option value="">Todos</option>
+                <option value="pendente">Pendentes</option>
+                <option value="pago">Pagos</option>
+                <option value="vencido">Vencidos</option>
+              </select>
+              <button class="btn-limpar" id="cmp-btn-limpar" type="button">Limpar</button>
+              <span class="toolbar-label" id="cmp-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th class="num">Valor</th><th>Status</th></tr></thead>
+                <tbody id="cmp-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
