@@ -966,6 +966,10 @@
               <div class="config-card-title">Trocar minha senha</div>
               <div class="config-card-desc">Atualize a senha da sua conta</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_auditoria">
+              <div class="config-card-title">Auditoria</div>
+              <div class="config-card-desc">Histórico de alterações registradas pelas triggers — quem mudou o quê e quando</div>
+            </button>
             <button class="config-card" type="button" data-subpage="cfg_usuarios">
               <div class="config-card-title">Usuários</div>
               <div class="config-card-desc">Editar nome, perfil e flag de senha temporária (criação e exclusão no painel do Supabase)</div>
@@ -1134,6 +1138,7 @@
                 <option value="nao">Apenas não aplicáveis</option>
               </select>
               <button class="btn-limpar" id="cf-btn-limpar" type="button">✕ Limpar</button>
+              <button class="btn-limpar" id="cf-btn-export" type="button" title="Exportar XLSX">⤓ Exportar XLSX</button>
               <span class="toolbar-label" id="cf-lbl"></span>
             </div>
             <div class="table-wrap">
@@ -1265,6 +1270,52 @@
                   <tbody id="bcfg-periodos-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- Configuração > Auditoria -->
+        <section class="page" data-page="cfg_auditoria" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Auditoria</h1>
+            <p class="page-sub">Histórico de alterações no banco — populado pelas triggers das tabelas críticas</p>
+          </div>
+          <button class="btn-voltar" type="button" data-goto="configuracao">‹ voltar para Configuração</button>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Eventos no filtro</div><div class="metric-value" id="aud-m-qtd">—</div><div class="metric-sub">após filtros</div></div>
+            <div class="metric-card"><div class="metric-label">Total registrado</div><div class="metric-value" id="aud-m-tot">—</div><div class="metric-sub">desde o início</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="aud-busca" placeholder="Buscar (registro_id, usuário…)" />
+              <select id="aud-tabela"><option value="">Todas as tabelas</option></select>
+              <select id="aud-tipo">
+                <option value="">Todas as ações</option>
+                <option value="INSERT">INSERT</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+              <input type="month" id="aud-mes" />
+              <button class="btn-limpar" id="aud-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="aud-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>Tabela</th>
+                    <th>Ação</th>
+                    <th>Registro</th>
+                    <th>Usuário</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="aud-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
             </div>
           </div>
         </section>

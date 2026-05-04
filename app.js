@@ -41,7 +41,6 @@
   var btnToggleSidebar   = document.getElementById("btn-toggle-sidebar");
 
   // Dashboard
-  var debugEl     = document.getElementById("debug-saida");
   var dashStatus  = document.getElementById("dash-status");
   var mOrcamentos = document.getElementById("m-orcamentos");
   var mVendido    = document.getElementById("m-vendido");
@@ -74,11 +73,6 @@
     dashStatus.textContent = msg;
     dashStatus.className = "status " + (tipo || "");
     dashStatus.hidden = false;
-  }
-
-  function setDebug(obj) {
-    try { debugEl.textContent = JSON.stringify(obj, null, 2); }
-    catch (e) { debugEl.textContent = String(obj); }
   }
 
   function fmtBRL(valor) {
@@ -157,6 +151,8 @@
   function verificarSenhaTempEEntrar(user) {
     client.from("perfis").select("nome, perfil, senha_temporaria").eq("id", user.id).single()
       .then(function (r) {
+        // Atualiza ultimo_acesso em paralelo (fire-and-forget)
+        client.from("perfis").update({ ultimo_acesso: new Date().toISOString() }).eq("id", user.id).then(function () {});
         if (!r.error && r.data && r.data.senha_temporaria === true) {
           entrarModoTrocaSenha(user, /*obrigatoria=*/true);
         } else {
@@ -326,6 +322,7 @@
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
     if (pageId === "programa_bonus")  carregarProgramaBonusSeNecessario();
     if (pageId === "rh_bonus_config") carregarConfigBonusSeNecessario();
+    if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
@@ -374,7 +371,6 @@
 
     Promise.all([q1, q2]).then(function () {
       setDashStatus(null);
-      setDebug(debug);
     });
   }
 
@@ -452,6 +448,10 @@
     ligarFiltros("bn-",  renderBeneficios);
     ligarFiltros("fl-",  renderFolha);
     ligarFiltros("ir-",  renderImpostos);
+    ligarFiltros("aud-", renderAuditoria);
+
+    var btnExpCfop = document.getElementById("cf-btn-export");
+    if (btnExpCfop) btnExpCfop.addEventListener("click", exportarCfopXlsx);
 
     // Botões "+ Novo" do RH
     var btnNovoFun = document.getElementById("fn-btn-novo");
@@ -4456,6 +4456,138 @@
       modalFields.appendChild(holder.firstChild);
       ligarBotoesEscala();
     }, 0);
+  }
+
+
+  // =========================================================================
+  // 36. AUDITORIA — visualização de logs (Configuração > Auditoria)
+  // =========================================================================
+  var audLista = [];
+  var audCarregado = false;
+
+  function carregarAuditoriaSeNecessario() {
+    document.getElementById("aud-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr>';
+    // Limita a últimos 1000 eventos para não estourar
+    client.from("auditoria")
+      .select("id, tabela, registro_id, acao, usuario_nome, criado_em")
+      .order("id", { ascending: false })
+      .limit(1000)
+      .then(function (r) {
+        if (r.error) {
+          document.getElementById("aud-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+          return;
+        }
+        audLista = r.data || [];
+        audCarregado = true;
+        // Popular dropdown de tabelas
+        var sel = document.getElementById("aud-tabela");
+        if (sel) {
+          var tabelas = {};
+          audLista.forEach(function (e) { if (e.tabela) tabelas[e.tabela] = true; });
+          var ks = Object.keys(tabelas).sort();
+          var atual = sel.value;
+          sel.innerHTML = '<option value="">Todas as tabelas</option>' +
+            ks.map(function (t) { return '<option value="' + escHtml(t) + '">' + escHtml(t) + '</option>'; }).join("");
+          if (atual) sel.value = atual;
+        }
+        renderAuditoria();
+      });
+  }
+
+  function renderAuditoria() {
+    if (!audCarregado) return;
+    var tbody = document.getElementById("aud-tbody");
+    var busca   = (document.getElementById("aud-busca").value || "").trim().toLowerCase();
+    var tabela  = document.getElementById("aud-tabela").value;
+    var tipo    = document.getElementById("aud-tipo").value;
+    var mes     = document.getElementById("aud-mes").value;
+
+    var filtrados = audLista.filter(function (e) {
+      if (tabela && e.tabela !== tabela) return false;
+      if (tipo && e.acao !== tipo) return false;
+      if (mes && String(e.criado_em || "").slice(0,7) !== mes) return false;
+      return matchBusca(busca, [e.tabela, e.registro_id, e.usuario_nome, e.acao]);
+    });
+
+    valText(document.getElementById("aud-m-qtd"), fmtInt(filtrados.length));
+    valText(document.getElementById("aud-m-tot"), fmtInt(audLista.length));
+    valText(document.getElementById("aud-lbl"), filtrados.length + " de " + audLista.length + " (limit 1000)");
+
+    function badgeAcao(acao) {
+      var classe = acao === "INSERT" ? "solta" : (acao === "DELETE" ? "outras" : "assist");
+      return '<span class="badge-tipo ' + classe + '">' + escHtml(acao) + '</span>';
+    }
+    function fmtTs(iso) {
+      if (!iso) return "—";
+      var s = String(iso);
+      var d = s.slice(0,10).split("-");
+      var t = s.slice(11,16);
+      if (d.length !== 3) return iso;
+      return d[2] + "/" + d[1] + "/" + d[0] + " " + t;
+    }
+
+    preencherTbody(tbody, filtrados.slice(0, 500).map(function (e) {
+      return '<tr>' +
+        '<td class="mono">' + fmtTs(e.criado_em) + '</td>' +
+        '<td class="mono">' + escHtml(e.tabela) + '</td>' +
+        '<td>' + badgeAcao(e.acao) + '</td>' +
+        '<td class="mono">' + escHtml(e.registro_id || "—") + '</td>' +
+        '<td>' + escHtml(e.usuario_nome || "—") + '</td>' +
+        '<td><button class="btn-limpar" data-aud-detail="' + e.id + '">Detalhe</button></td>' +
+      '</tr>';
+    }), 6, "Nenhum evento.");
+
+    tbody.querySelectorAll("[data-aud-detail]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-aud-detail"));
+        client.from("auditoria").select("*").eq("id", id).single().then(function (r) {
+          if (r.error) { alert("Erro: " + r.error.message); return; }
+          var d = r.data;
+          var antes  = d.dados_antes  ? JSON.stringify(d.dados_antes,  null, 2) : "(sem)";
+          var depois = d.dados_depois ? JSON.stringify(d.dados_depois, null, 2) : "(sem)";
+          alert(
+            "Tabela: " + d.tabela + "\nAção: " + d.acao + "\nRegistro: " + (d.registro_id || "—") +
+            "\nUsuário: " + (d.usuario_nome || "—") + "\nQuando: " + d.criado_em +
+            "\n\n=== Antes ===\n" + antes + "\n\n=== Depois ===\n" + depois
+          );
+        });
+      });
+    });
+  }
+
+  // =========================================================================
+  // 37. EXPORT CFOP — Configuração > CFOP > botão Exportar
+  // =========================================================================
+  function exportarCfopXlsx() {
+    if (typeof window.XLSX === "undefined") {
+      alert("Biblioteca XLSX ainda carregando. Tente em alguns segundos.");
+      return;
+    }
+    if (!cfopCarregado || !cfopLista.length) {
+      alert("Carregue a tabela CFOP primeiro (clique no menu Configuração > CFOP).");
+      return;
+    }
+    // Separar em duas abas: Aplicáveis × Não aplicáveis
+    var apl = cfopLista.filter(function (c) { return c.aplicavel; });
+    var nao = cfopLista.filter(function (c) { return !c.aplicavel; });
+    function toRows(arr) {
+      return arr.map(function (c) {
+        return {
+          "CFOP":           c.cfop,
+          "CFOP formatado": c.cfop_formatado || "",
+          "Grupo":          c.grupo || "",
+          "Descrição":      c.descricao || "",
+          "Vigência":       c.vigencia || ""
+        };
+      });
+    }
+    var wb = window.XLSX.utils.book_new();
+    var w1 = window.XLSX.utils.json_to_sheet(toRows(apl));
+    var w2 = window.XLSX.utils.json_to_sheet(toRows(nao));
+    window.XLSX.utils.book_append_sheet(wb, w1, "Aplicaveis");
+    window.XLSX.utils.book_append_sheet(wb, w2, "Nao aplicaveis");
+    var nome = "cfop-aplicaveis-vs-nao-" + new Date().toISOString().slice(0,10) + ".xlsx";
+    window.XLSX.writeFile(wb, nome);
   }
 
 })();
