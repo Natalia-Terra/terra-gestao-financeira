@@ -4709,7 +4709,7 @@
     }
     // Placeholder com colunas vazias — preenchemos quando importarmos frequencia/conduta/avaliações
     tbody.innerHTML = filtrados.slice(0, 100).map(function (f) {
-      return '<tr>' +
+      return '<tr class="linha-clicavel" data-fid="' + f.id + '" title="Ver detalhamento">' +
         '<td>' + escHtml(f.nome) + '</td>' +
         '<td class="num">—</td>' +
         '<td class="num">—</td>' +
@@ -4721,7 +4721,80 @@
     }).join("") + (filtrados.length > 100
       ? '<tr><td colspan="7" class="tbl-vazio">… exibindo 100 de ' + filtrados.length + '. Cálculo individual ativa quando importarmos frequencia_mensal, medidas_disciplinares e avaliacao_desempenho.</td></tr>'
       : "");
+
+    tbody.querySelectorAll("tr.linha-clicavel").forEach(function (tr) {
+      tr.addEventListener("click", function () {
+        var fid = Number(tr.getAttribute("data-fid"));
+        if (fid) abrirDetalheBonusIndividual(fid);
+      });
+    });
   }
+
+  // ----- Detalhamento por funcionário (drill-down) -----
+  function abrirDetalheBonusIndividual(funcionarioId) {
+    var f = (funcionariosLista || []).filter(function (x) { return x.id === funcionarioId; })[0];
+    if (!f) return;
+    var sel = document.getElementById("bind-periodo");
+    var periodoSel = sel ? Number(sel.value) : null;
+    var periodo = bonPeriodos.find(function (p) { return p.id === periodoSel; });
+
+    valText(document.getElementById("bind-det-nome"), f.nome || "—");
+    var orgPath = (typeof buildOrgPath === "function" && f.organograma_id) ? buildOrgPath(f.organograma_id) : "";
+    var sub = [f.cargo || "—", orgPath || "Sem posição no organograma",
+               periodo ? (periodo.nome + " · " + fmtData(periodo.inicio_em) + " a " + fmtData(periodo.fim_em)) : "Sem período"]
+      .filter(Boolean).join(" · ");
+    valText(document.getElementById("bind-det-sub"), sub);
+
+    valText(document.getElementById("bind-det-total"), "— / 40%");
+    valText(document.getElementById("bind-det-dados"), "Aguardando importação");
+
+    // Renderiza 5 cards (Conduta, Faltas just., Atrasos, Performance, Penalidade)
+    var cards = [
+      {
+        titulo: "Conduta", peso: "12,5%",
+        regra: "Sem advertência ou medida disciplinar no semestre = 100% do peso. Cada ocorrência registrada em medidas_disciplinares deduz proporcionalmente.",
+        fonte: "RH > medidas_disciplinares",
+        valor: "—", status: "aguardando"
+      },
+      {
+        titulo: "Faltas justificadas", peso: "6,25%",
+        regra: "Até 1/mês = 100%. Acima disso, deduz pela escala configurada em RH > Bônus — Configuração > Profissional.",
+        fonte: "RH > frequencia_mensal",
+        valor: "—", status: "aguardando"
+      },
+      {
+        titulo: "Atrasos", peso: "6,25%",
+        regra: "Até 2/mês = 100% (= 12 no semestre). 13º atraso em diante deduz pela escala configurada.",
+        fonte: "RH > frequencia_mensal",
+        valor: "—", status: "aguardando"
+      },
+      {
+        titulo: "Performance", peso: "15%",
+        regra: "Avaliação semestral nota 1 a 5. Conversão pela escala configurada (5 = 100%, 4 = 75%, 3 = 50%, abaixo = 0% por padrão).",
+        fonte: "RH > avaliacao_desempenho",
+        valor: "—", status: "aguardando"
+      },
+      {
+        titulo: "Penalidade", peso: "−12,5%",
+        regra: "Cada falta ou atraso SEM justificativa subtrai 12,5% do total. Pode levar o resultado a zero, não a negativo.",
+        fonte: "RH > frequencia_mensal (faltas_nao_just, atrasos)",
+        valor: "—", status: "aguardando"
+      }
+    ];
+    var cont = document.getElementById("bind-det-cards");
+    cont.innerHTML = cards.map(function (c) {
+      return '<div class="bon-card">' +
+        '<div class="bon-card-titulo">' + escHtml(c.titulo) + ' <span class="muted">(' + escHtml(c.peso) + ')</span></div>' +
+        '<div class="bon-card-valor">' + escHtml(c.valor) + '</div>' +
+        '<div class="bon-card-bar"><div class="bon-card-bar-fill" style="width:0%"></div></div>' +
+        '<div class="bon-card-regra">' + escHtml(c.regra) + '</div>' +
+        '<div class="bon-card-fonte"><strong>Fonte:</strong> ' + escHtml(c.fonte) + ' <span class="muted-tag">aguardando importação</span></div>' +
+      '</div>';
+    }).join("");
+
+    showPage("bonus_indiv_detalhe");
+  }
+
 
 
   // =========================================================================

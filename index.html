@@ -147,7 +147,6 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="dashboard" type="button">Visão geral</button>
               <button class="sb-sub" data-page="programa_bonus" type="button">Programa de Bônus</button>
-              <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
           </div>
 
@@ -191,6 +190,7 @@
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
               <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
+              <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
           </div>
         </nav>
@@ -1294,11 +1294,12 @@
         </section>
 
 
-        <!-- Página: Dashboard > Bônus Individual (Esfera Profissional) -->
+        <!-- Página: RH > Bônus Individual (Esfera Profissional) -->
         <section class="page" data-page="programa_bonus_individual" hidden>
           <div class="page-header">
             <h1 class="page-title">Bônus Individual</h1>
             <p class="page-sub">Esfera Profissional (40%) — cálculo por funcionário · Conduta · Faltas · Atrasos · Performance · Penalidade</p>
+            <p class="page-sub muted" style="margin-top:4px"><em>Clique em uma linha para ver o detalhamento do funcionário.</em></p>
           </div>
 
           <div class="toolbar" style="margin-bottom:16px">
@@ -1337,6 +1338,24 @@
                 </tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        <!-- Página: Bônus Individual > Detalhamento por funcionário -->
+        <section class="page" data-page="bonus_indiv_detalhe" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="programa_bonus_individual">← Bônus Individual</button>
+            <h1 class="page-title" id="bind-det-nome">—</h1>
+            <p class="page-sub" id="bind-det-sub">Cargo · Posição organograma · Período</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total no período</div><div class="metric-value" id="bind-det-total">—</div><div class="metric-sub">de 40% — esfera Profissional</div></div>
+            <div class="metric-card"><div class="metric-label">Estado dos dados</div><div class="metric-value" id="bind-det-dados">—</div><div class="metric-sub">frequência · conduta · avaliação</div></div>
+          </div>
+
+          <div class="bon-grid" id="bind-det-cards">
+            <!-- 5 cards renderizados em JS: Conduta · Faltas · Atrasos · Performance · Penalidade -->
           </div>
         </section>
 
