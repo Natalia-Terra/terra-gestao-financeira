@@ -902,8 +902,58 @@ h3 { font-size: 16px; }
   color: var(--ouro-esc);
 }
 .modal-content .form-field input,
-.modal-content .form-field select {
+.modal-content .form-field select,
+.modal-content .form-field textarea {
   background: var(--bg);
+}
+.modal-content .form-field textarea {
+  width: 100%;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  resize: vertical;
+  min-height: 64px;
+}
+.modal-content .form-field textarea:focus {
+  outline: none;
+  border-color: var(--ouro);
+}
+
+/* Modal mais largo quando há seções (form com 30+ campos) */
+.modal-content:has(.form-section) {
+  max-width: 760px;
+}
+.form-section {
+  border: 1px solid var(--borda);
+  border-radius: var(--r-md);
+  padding: 12px 16px 4px;
+  margin: 0 0 16px;
+  background: var(--bg);
+}
+.form-section legend {
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ouro-esc);
+}
+.form-section .form-field {
+  display: inline-block;
+  width: calc(50% - 12px);
+  margin: 0 6px 12px;
+  vertical-align: top;
+}
+.form-section .form-field-wide {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+}
+@media (max-width: 640px) {
+  .form-section .form-field { width: 100%; margin-left: 0; margin-right: 0; }
 }
 .modal-acoes {
   display: flex;

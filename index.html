@@ -746,18 +746,21 @@
           <div class="card fat-card">
             <div class="toolbar">
               <input class="input-search" type="text" id="fn-busca" placeholder="Buscar nome, cargo ou CPF…" />
-              <select id="fn-status">
+              <select id="fn-status" title="Status">
                 <option value="ativos">Ativos</option>
                 <option value="desligados">Desligados</option>
-                <option value="">Todos</option>
+                <option value="">Todos os status</option>
               </select>
+              <select id="fn-livro" title="Livro"><option value="">Todos os livros</option></select>
+              <select id="fn-cc" title="Centro de Custo"><option value="">Todos os centros</option></select>
+              <select id="fn-org" title="Posição no Organograma"><option value="">Todas as posições</option></select>
               <button class="btn-ouro" id="fn-btn-novo" type="button">+ Novo funcionário</button>
               <span class="toolbar-label" id="fn-lbl"></span>
             </div>
             <div class="table-wrap">
               <table class="tabela">
-                <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
-                <tbody id="fn-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+                <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Centro de Custo</th><th>Posição (organograma)</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
+                <tbody id="fn-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1135,7 +1138,7 @@
   <!-- Supabase JS SDK v2 via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- SheetJS (XLSX) para a tela de Importar — carrega com defer pois não é crítico no boot -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <!-- html2canvas + jsPDF para a tela de Organograma → PDF -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>

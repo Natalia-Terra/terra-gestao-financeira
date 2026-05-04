@@ -521,7 +521,7 @@
   }
 
   function ligarFiltros(prefixo, renderFn) {
-    var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel"];
+    var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel", "livro", "cc", "org"];
     ids.forEach(function (suf) {
       var el = document.getElementById(prefixo + suf);
       if (!el) return;
@@ -1398,7 +1398,6 @@
       ? "Sua senha atual é temporária. Defina uma nova para continuar."
       : "Escolha uma nova senha. Você vai continuar logada após salvar.";
     document.getElementById("btn-troca-cancelar").hidden = obrigatoria;
-
     document.getElementById("troca-nova").value = "";
     document.getElementById("troca-confirma").value = "";
     document.getElementById("troca-erro").hidden = true;
@@ -1761,7 +1760,7 @@
   function normalizarCabecalho(nome) {
     return String(nome || "")
       .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // remove acentos
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")  // remove acentos
       .replace(/[_\-.]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
@@ -1876,7 +1875,8 @@
   function abrirModal(config) {
     modalConfig = config;
     modalTitulo.textContent = config.titulo;
-    modalFields.innerHTML = config.fields.map(function (f) {
+
+    function renderField(f) {
       var id = "mf-" + f.name;
       var req = f.required ? " required" : "";
       var valor = f.valor !== undefined && f.valor !== null ? String(f.valor) : "";
@@ -1889,14 +1889,37 @@
         }).join("");
         return '<div class="form-field"><label for="' + id + '">' + escHtml(f.label) + '</label><select id="' + id + '" name="' + f.name + '"' + req + '>' + opts + '</select></div>';
       }
+      if (f.type === "textarea") {
+        return '<div class="form-field form-field-wide"><label for="' + id + '">' + escHtml(f.label) + '</label><textarea id="' + id + '" name="' + f.name + '" rows="3"' + req + '>' + escHtml(valor) + '</textarea></div>';
+      }
       return '<div class="form-field"><label for="' + id + '">' + escHtml(f.label) + '</label><input id="' + id + '" name="' + f.name + '" type="' + (f.type || "text") + '" value="' + escHtml(valor) + '"' + req + ' /></div>';
-    }).join("");
+    }
+
+    // Suporte a seções: agrupar por f.group; campos sem group ficam num grupo "" inicial.
+    var groupsOrder = [];
+    var groupsMap = {};
+    config.fields.forEach(function (f) {
+      var g = f.group || "";
+      if (!(g in groupsMap)) { groupsMap[g] = []; groupsOrder.push(g); }
+      groupsMap[g].push(f);
+    });
+    if (groupsOrder.length === 1 && groupsOrder[0] === "") {
+      // Modal simples (sem seções) — preserva comportamento antigo.
+      modalFields.innerHTML = config.fields.map(renderField).join("");
+    } else {
+      modalFields.innerHTML = groupsOrder.map(function (g) {
+        var inner = groupsMap[g].map(renderField).join("");
+        if (!g) return '<div class="form-section-anon">' + inner + '</div>';
+        return '<fieldset class="form-section"><legend>' + escHtml(g) + '</legend>' + inner + '</fieldset>';
+      }).join("");
+    }
+
     modalErro.hidden = true;
     modalSalvar.disabled = false;
     modalSalvar.textContent = "Salvar";
     modalOverlay.hidden = false;
     setTimeout(function () {
-      var first = modalFields.querySelector("input, select");
+      var first = modalFields.querySelector("input, select, textarea");
       if (first) first.focus();
     }, 0);
   }
@@ -2089,33 +2112,108 @@
 
   var funcionariosLista = [];
   var funcionariosCarregado = false;
+  var organogramaLista = [];
+  var organogramaCarregado = false;
+  var organogramaPathCache = {};
+
+  // Constrói "Família › Diretoria › Núcleo › Área › Atividade" para um id
+  function buildOrgPath(id) {
+    if (id == null) return "";
+    if (organogramaPathCache[id]) return organogramaPathCache[id];
+    var byId = {};
+    organogramaLista.forEach(function (n) { byId[n.id] = n; });
+    var parts = [];
+    var cur = byId[id];
+    var safety = 0;
+    while (cur && safety++ < 20) {
+      parts.unshift(cur.posicao || ("#" + cur.id));
+      cur = cur.parent_id != null ? byId[cur.parent_id] : null;
+    }
+    var path = parts.join(" › ");
+    organogramaPathCache[id] = path;
+    return path;
+  }
+
+  function carregarOrganogramaParaSelectSeNecessario(cb) {
+    if (organogramaCarregado) { if (cb) cb(); return; }
+    client.from("organograma").select("id, parent_id, posicao, grupo, ordem").order("id").then(function (r) {
+      organogramaLista = (r && r.data) || [];
+      organogramaCarregado = true;
+      organogramaPathCache = {};
+      if (cb) cb();
+    });
+  }
 
   function carregarFuncionariosSeNecessario() {
-    // Carrega CCs em paralelo (necessários pro select do modal)
+    // Centros de custo + organograma carregam em paralelo (selects do modal e filtros).
     if (!centrosCustoLista || !centrosCustoLista.length) {
       client.from("centros_custo").select("id, codigo, descricao").order("codigo").then(function (rc) {
         centrosCustoLista = (rc && rc.data) || [];
+        popularSelectsFuncionarios();
       });
     }
+    carregarOrganogramaParaSelectSeNecessario(popularSelectsFuncionarios);
     client.from("funcionarios").select("*").order("nome", { ascending: true }).then(function (r) {
       if (r.error) {
-        document.getElementById("fn-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        document.getElementById("fn-tbody").innerHTML = '<tr><td colspan="9" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
         return;
       }
       funcionariosLista = r.data || [];
       funcionariosCarregado = true;
+      popularSelectsFuncionarios();
       renderFuncionarios();
     });
+  }
+
+  function popularSelectsFuncionarios() {
+    var selLivro = document.getElementById("fn-livro");
+    var selCc    = document.getElementById("fn-cc");
+    var selOrg   = document.getElementById("fn-org");
+
+    if (selLivro && funcionariosLista.length) {
+      var livros = {};
+      funcionariosLista.forEach(function (f) { if (f.livro) livros[f.livro] = true; });
+      var atual = selLivro.value;
+      var ks = Object.keys(livros).sort();
+      selLivro.innerHTML = '<option value="">Todos os livros</option>' +
+        ks.map(function (k) { return '<option value="' + escHtml(k) + '">Livro ' + escHtml(k) + '</option>'; }).join("");
+      if (atual && ks.indexOf(atual) !== -1) selLivro.value = atual;
+    }
+
+    if (selCc && centrosCustoLista && centrosCustoLista.length) {
+      var atualCc = selCc.value;
+      selCc.innerHTML = '<option value="">Todos os centros</option>' +
+        centrosCustoLista.map(function (c) { return '<option value="' + c.id + '">' + escHtml(c.codigo + " — " + c.descricao) + '</option>'; }).join("");
+      if (atualCc) selCc.value = atualCc;
+    }
+
+    if (selOrg && organogramaLista.length) {
+      var atualOrg = selOrg.value;
+      // Ordena por path (deixa hierarquia legível)
+      var lst = organogramaLista.slice().sort(function (a, b) { return buildOrgPath(a.id).localeCompare(buildOrgPath(b.id)); });
+      selOrg.innerHTML = '<option value="">Todas as posições</option>' +
+        lst.map(function (n) { return '<option value="' + n.id + '">' + escHtml(buildOrgPath(n.id)) + '</option>'; }).join("");
+      if (atualOrg) selOrg.value = atualOrg;
+    }
   }
 
   function renderFuncionarios() {
     var tbody  = document.getElementById("fn-tbody");
     var busca  = (document.getElementById("fn-busca").value || "").trim().toLowerCase();
     var status = document.getElementById("fn-status").value;
+    var livro  = document.getElementById("fn-livro").value;
+    var ccSel  = document.getElementById("fn-cc").value;
+    var orgSel = document.getElementById("fn-org").value;
+
+    var ccById = {};
+    (centrosCustoLista || []).forEach(function (c) { ccById[c.id] = c.codigo + " — " + c.descricao; });
 
     var filtrados = funcionariosLista.filter(function (f) {
       if (status === "ativos" && f.data_demissao) return false;
       if (status === "desligados" && !f.data_demissao) return false;
+      if (livro && (f.livro || "") !== livro) return false;
+      if (ccSel && String(f.centro_custo_id || "") !== String(ccSel)) return false;
+      if (orgSel && String(f.organograma_id || "") !== String(orgSel)) return false;
       return matchBusca(busca, [f.nome, f.cargo, f.cpf]);
     });
 
@@ -2129,16 +2227,20 @@
     valText(document.getElementById("fn-lbl"), filtrados.length + " de " + funcionariosLista.length);
 
     preencherTbody(tbody, filtrados.map(function (f) {
+      var ccTxt = f.centro_custo_id ? (ccById[f.centro_custo_id] || ("#" + f.centro_custo_id)) : "—";
+      var orgTxt = f.organograma_id ? buildOrgPath(f.organograma_id) : "—";
       return '<tr>' +
         '<td>' + escHtml(f.nome) + '</td>' +
         '<td class="mono">' + escHtml(f.cpf || "—") + '</td>' +
         '<td>' + escHtml(f.cargo || "—") + '</td>' +
+        '<td>' + escHtml(ccTxt) + '</td>' +
+        '<td title="' + escHtml(orgTxt) + '">' + escHtml(orgTxt) + '</td>' +
         '<td>' + fmtData(f.data_admissao) + '</td>' +
         '<td>' + (f.data_demissao ? fmtData(f.data_demissao) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
         '<td class="num">' + fmtBRL(f.salario_base) + '</td>' +
         '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button></td>' +
       '</tr>';
-    }), 7);
+    }), 9);
 
     tbody.querySelectorAll("[data-fn-edit]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -2155,44 +2257,81 @@
     var opcoesCc = [{ value: "", label: "—" }].concat(
       (centrosCustoLista || []).map(function (c) { return { value: c.id, label: c.codigo + " — " + c.descricao }; })
     );
+    var opcoesOrg = [{ value: "", label: "—" }].concat(
+      (organogramaLista || []).slice().sort(function (a, b) {
+        return buildOrgPath(a.id).localeCompare(buildOrgPath(b.id));
+      }).map(function (n) { return { value: n.id, label: buildOrgPath(n.id) }; })
+    );
+
     abrirModal({
       titulo: editar ? "Editar funcionário" : "Novo funcionário",
       fields: [
-        { name: "nome",            label: "Nome completo",     type: "text",   valor: f.nome, required: true },
-        { name: "centro_custo_id", label: "Centro de Custo",   type: "select", valor: f.centro_custo_id || "", options: opcoesCc },
-        { name: "status",          label: "Status",            type: "select", valor: f.status || "ATIVO", options: ["ATIVO","INATIVO","AFASTADO"], required: true },
-        { name: "cargo",           label: "Função / Cargo",    type: "text",   valor: f.cargo },
-        { name: "cbo",             label: "CBO",               type: "text",   valor: f.cbo },
-        { name: "salario_base",    label: "Salário base (R$)", type: "number", valor: f.salario_base },
-        { name: "data_admissao",   label: "Data de admissão",  type: "date",   valor: f.data_admissao },
-        { name: "data_demissao",   label: "Data de demissão (vazio se ativo)", type: "date", valor: f.data_demissao },
-        { name: "data_nascimento", label: "Data de nascimento",type: "date",   valor: f.data_nascimento },
-        { name: "cpf",             label: "CPF",               type: "text",   valor: f.cpf },
-        { name: "rg",              label: "RG",                type: "text",   valor: f.rg },
-        { name: "pis",             label: "PIS",               type: "text",   valor: f.pis },
-        { name: "ctps",            label: "CTPS",              type: "text",   valor: f.ctps },
-        { name: "telefone",        label: "Telefone",          type: "text",   valor: f.telefone },
-        { name: "email",           label: "E-mail",            type: "text",   valor: f.email },
-        { name: "endereco",        label: "Endereço",          type: "text",   valor: f.endereco },
-        { name: "cidade",          label: "Cidade",            type: "text",   valor: f.cidade },
-        { name: "cep",             label: "CEP",               type: "text",   valor: f.cep },
-        { name: "banco",           label: "Banco",             type: "text",   valor: f.banco },
-        { name: "agencia",         label: "Agência",           type: "text",   valor: f.agencia },
-        { name: "conta",           label: "Conta",             type: "text",   valor: f.conta },
-        { name: "pix",             label: "Chave PIX",         type: "text",   valor: f.pix },
-        { name: "observacoes",     label: "Observações",       type: "text",   valor: f.observacoes }
+        // ===== Pessoais
+        { group: "Dados pessoais", name: "nome",            label: "Nome completo",       type: "text", valor: f.nome, required: true },
+        { group: "Dados pessoais", name: "cpf",             label: "CPF",                 type: "text", valor: f.cpf },
+        { group: "Dados pessoais", name: "rg",              label: "RG",                  type: "text", valor: f.rg },
+        { group: "Dados pessoais", name: "data_nascimento", label: "Data de nascimento",  type: "date", valor: f.data_nascimento },
+        { group: "Dados pessoais", name: "filhos",          label: "Filhos",              type: "text", valor: f.filhos },
+
+        // ===== Contato e endereço
+        { group: "Contato e endereço", name: "telefone",        label: "Telefone",         type: "text", valor: f.telefone },
+        { group: "Contato e endereço", name: "telefone_recado", label: "Telefone recado",  type: "text", valor: f.telefone_recado },
+        { group: "Contato e endereço", name: "email",           label: "E-mail",           type: "text", valor: f.email },
+        { group: "Contato e endereço", name: "endereco",        label: "Endereço",         type: "text", valor: f.endereco },
+        { group: "Contato e endereço", name: "complemento",     label: "Complemento",      type: "text", valor: f.complemento },
+        { group: "Contato e endereço", name: "bairro",          label: "Bairro",           type: "text", valor: f.bairro },
+        { group: "Contato e endereço", name: "cidade",          label: "Cidade",           type: "text", valor: f.cidade },
+        { group: "Contato e endereço", name: "cep",             label: "CEP",              type: "text", valor: f.cep },
+
+        // ===== Trabalho
+        { group: "Trabalho",       name: "status",               label: "Status",                                type: "select", valor: f.status || "ATIVO", options: ["ATIVO","INATIVO","AFASTADO"], required: true },
+        { group: "Trabalho",       name: "cargo",                label: "Função / Cargo",                        type: "text",   valor: f.cargo },
+        { group: "Trabalho",       name: "cbo",                  label: "CBO",                                   type: "text",   valor: f.cbo },
+        { group: "Trabalho",       name: "salario_base",         label: "Salário base (R$)",                     type: "number", valor: f.salario_base },
+        { group: "Trabalho",       name: "centro_custo_id",      label: "Centro de Custo",                       type: "select", valor: f.centro_custo_id || "", options: opcoesCc },
+        { group: "Trabalho",       name: "organograma_id",       label: "Posição no Organograma",                type: "select", valor: f.organograma_id || "",  options: opcoesOrg },
+        { group: "Trabalho",       name: "data_admissao",        label: "Data de admissão",                      type: "date",   valor: f.data_admissao },
+        { group: "Trabalho",       name: "data_demissao",        label: "Data de demissão (vazio se ativo)",     type: "date",   valor: f.data_demissao },
+        { group: "Trabalho",       name: "primeira_experiencia", label: "1ª Experiência",                        type: "date",   valor: f.primeira_experiencia },
+        { group: "Trabalho",       name: "segunda_experiencia",  label: "2ª Experiência",                        type: "date",   valor: f.segunda_experiencia },
+        { group: "Trabalho",       name: "data_aso",             label: "Data ASO",                              type: "date",   valor: f.data_aso },
+        { group: "Trabalho",       name: "vencimento_aso",       label: "Vencimento ASO",                        type: "date",   valor: f.vencimento_aso },
+        { group: "Trabalho",       name: "integracao",           label: "Integração",                            type: "text",   valor: f.integracao },
+
+        // ===== Documentos
+        { group: "Documentos",     name: "ctps",                 label: "CTPS",                                  type: "text",   valor: f.ctps },
+        { group: "Documentos",     name: "serie",                label: "Série",                                 type: "text",   valor: f.serie },
+        { group: "Documentos",     name: "pis",                  label: "PIS",                                   type: "text",   valor: f.pis },
+        { group: "Documentos",     name: "cnh",                  label: "CNH",                                   type: "text",   valor: f.cnh },
+        { group: "Documentos",     name: "cnh_categoria",        label: "Categoria CNH",                         type: "text",   valor: f.cnh_categoria },
+        { group: "Documentos",     name: "titulo_eleitor",       label: "Título de Eleitor",                     type: "text",   valor: f.titulo_eleitor },
+        { group: "Documentos",     name: "e_social",             label: "E-Social",                              type: "text",   valor: f.e_social },
+        { group: "Documentos",     name: "livro",                label: "Livro",                                 type: "text",   valor: f.livro },
+
+        // ===== Bancário e observações
+        { group: "Bancário e observações", name: "banco",       label: "Banco",        type: "text", valor: f.banco },
+        { group: "Bancário e observações", name: "agencia",     label: "Agência",      type: "text", valor: f.agencia },
+        { group: "Bancário e observações", name: "conta",       label: "Conta",        type: "text", valor: f.conta },
+        { group: "Bancário e observações", name: "pix",         label: "Chave PIX",    type: "text", valor: f.pix },
+        { group: "Bancário e observações", name: "observacoes", label: "Observações",  type: "textarea", valor: f.observacoes }
       ],
       onSubmit: function (v, done) {
         var payload = {
           nome: v.nome,
           centro_custo_id: v.centro_custo_id ? Number(v.centro_custo_id) : null,
+          organograma_id:  v.organograma_id  ? Number(v.organograma_id)  : null,
           status: v.status, cargo: v.cargo, cbo: v.cbo,
           salario_base: v.salario_base || 0,
           data_admissao: v.data_admissao, data_demissao: v.data_demissao,
+          primeira_experiencia: v.primeira_experiencia, segunda_experiencia: v.segunda_experiencia,
+          data_aso: v.data_aso, vencimento_aso: v.vencimento_aso,
           data_nascimento: v.data_nascimento,
-          cpf: v.cpf, rg: v.rg, pis: v.pis, ctps: v.ctps,
-          telefone: v.telefone, email: v.email,
-          endereco: v.endereco, cidade: v.cidade, cep: v.cep,
+          cpf: v.cpf, rg: v.rg, pis: v.pis, ctps: v.ctps, serie: v.serie,
+          cnh: v.cnh, cnh_categoria: v.cnh_categoria, titulo_eleitor: v.titulo_eleitor,
+          e_social: v.e_social, livro: v.livro,
+          telefone: v.telefone, telefone_recado: v.telefone_recado, email: v.email,
+          endereco: v.endereco, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, cep: v.cep,
+          filhos: v.filhos, integracao: v.integracao,
           banco: v.banco, agencia: v.agencia, conta: v.conta, pix: v.pix,
           observacoes: v.observacoes
         };
@@ -2201,6 +2340,7 @@
           : client.from("funcionarios").insert(payload);
         q.then(function (r) {
           if (r.error) { done(r.error.message); return; }
+          funcionariosCarregado = false;
           carregarFuncionariosSeNecessario();
           done(null);
         });
@@ -3253,13 +3393,17 @@
         var linhas = [];
         for (var i = 2; i < raw.length; i++) {
           var row = raw[i] || [];
-          var status = String(pegar(row, ["status"]) || "").trim().toUpperCase();
-          if (status !== "ATIVO") continue;
+          var rawStatus = String(pegar(row, ["status"]) || "").trim().toUpperCase();
+          // Importa todos (ativos, inativos, afastados) — histórico completo.
+          var status = rawStatus.indexOf("INAT") === 0 ? "INATIVO"
+                     : rawStatus.indexOf("AFAST") === 0 ? "AFASTADO"
+                     : rawStatus.indexOf("ATIV") === 0 ? "ATIVO"
+                     : "INATIVO";
           var nome = pegar(row, ["nome"]);
           if (!nome) continue;
           linhas.push({
             nome: String(nome).trim(),
-            status: "ATIVO",
+            status: status,
             cpf: pegar(row, ["cpf"]),
             rg: pegar(row, ["rg"]),
             pis: pegar(row, ["pis"]),
@@ -3296,9 +3440,9 @@
             e_social: pegar(row, ["e social","e-social"])
           });
         }
-        impParsed = { linhas: linhas, cabs: ["nome","cargo","cpf","status","salario_base"], tipo: "funcionarios_tc" };
-        renderPreviewImport(linhas, ["nome","cargo","cpf","status","salario_base"]);
-        setImpStatus("Pré-visualização: " + linhas.length + " funcionário(s) ATIVO(S) prontos para importar (sem CC ainda).", "ok");
+        impParsed = { linhas: linhas, cabs: ["nome","status","cargo","cpf","salario_base"], tipo: "funcionarios_tc" };
+        renderPreviewImport(linhas, ["nome","status","cargo","cpf","salario_base"]);
+        setImpStatus("Pré-visualização: " + linhas.length + " funcionário(s) prontos para importar.", "ok");
         atualizarEstadoImport();
       } catch (e) { setImpStatus("Erro: " + e.message, "erro"); }
     };
@@ -3306,24 +3450,15 @@
   }
 
   function confirmarUpsertFuncionarios(linhas) {
-    if (!confirm("Importar " + linhas.length + " funcionário(s) ATIVO(S)?\n\nOnConflict por CPF; quem não tem CPF cria como novo registro.")) return;
+    if (!confirm("Importar " + linhas.length + " funcionário(s)?\n\nO histórico aceita CPFs duplicados (readmissões geram registros separados).")) return;
     impBtnConf.disabled = true;
     setImpStatus("Inserindo funcionários…", "carregando");
-    // Separar quem tem CPF (UPSERT) de quem não tem (INSERT direto)
-    var comCpf  = linhas.filter(function (l) { return l.cpf; });
-    var semCpf  = linhas.filter(function (l) { return !l.cpf; });
-    var promises = [];
-    if (comCpf.length) {
-      promises.push(client.from("funcionarios").upsert(comCpf, { onConflict: "cpf" }));
-    }
-    if (semCpf.length) {
-      promises.push(client.from("funcionarios").insert(semCpf));
-    }
-    Promise.all(promises).then(function (rs) {
+    client.from("funcionarios").insert(linhas).then(function (r) {
       impBtnConf.disabled = false;
-      var erro = rs.find(function (r) { return r.error; });
-      if (erro) { setImpStatus("Erro: " + erro.error.message, "erro"); return; }
-      setImpStatus("Importação concluída. " + linhas.length + " funcionários (" + comCpf.length + " com CPF / " + semCpf.length + " sem CPF). Atribua o Centro de Custo importando 'Despesas Folha Mensal' depois.", "ok");
+      if (r.error) { setImpStatus("Erro: " + r.error.message, "erro"); return; }
+      var ativos = linhas.filter(function (l) { return l.status === "ATIVO"; }).length;
+      var inativos = linhas.length - ativos;
+      setImpStatus("Importação concluída. " + linhas.length + " funcionários (" + ativos + " ativos / " + inativos + " inativos/afastados). Vincule Centro de Custo e Posição via Editar.", "ok");
       funcionariosCarregado = false;
       impParsed = null;
     });
