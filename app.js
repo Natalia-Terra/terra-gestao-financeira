@@ -1023,39 +1023,91 @@
 
   function renderDespesas() {
     var tbody = document.getElementById("desp-tbody");
+    var thead = document.getElementById("desp-thead");
     var busca = (document.getElementById("desp-busca").value || "").trim().toLowerCase();
     var ano   = document.getElementById("desp-ano").value;
     var mes   = document.getElementById("desp-mes").value;
-
-    var filtrados = rcLista.filter(function (r) {
-      if (r.categoria !== "custo") return false;
-      if (ano && String(r.ano) !== ano) return false;
-      if (mes && String(r.mes) !== mes) return false;
-      return matchBusca(busca, [r.subcategoria]);
-    });
-
-    var soma = 0;
-    filtrados.forEach(function (r) { soma += Number(r.valor || 0); });
-
-    valText(document.getElementById("desp-m-qtd"), fmtInt(filtrados.length));
-    valText(document.getElementById("desp-m-valor"), fmtBRL(soma));
-    valText(document.getElementById("desp-lbl"), filtrados.length + " lançamentos");
-
-    filtrados.sort(function (a, b) {
-      if (a.ano !== b.ano) return b.ano - a.ano;
-      return b.mes - a.mes;
-    });
-
+    var fonte = (document.getElementById("desp-fonte") || {}).value || "rc";
     var nomeMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-    preencherTbody(tbody, filtrados.map(function (r) {
-      var key = r.ano + "|" + r.mes + "|" + (r.subcategoria || "");
-      return '<tr class="linha-clicavel" data-desp-key="' + escHtml(key) + '" title="Ver detalhe">' +
+
+    if (fonte === "rc") {
+      thead.innerHTML = '<tr><th>Ano</th><th>Mês</th><th>Subcategoria</th><th class="num">Valor</th></tr>';
+      var filtrados = (rcLista || []).filter(function (r) {
+        if (r.categoria !== "custo") return false;
+        if (ano && String(r.ano) !== ano) return false;
+        if (mes && String(r.mes) !== mes) return false;
+        return matchBusca(busca, [r.subcategoria]);
+      });
+      var soma = 0;
+      filtrados.forEach(function (r) { soma += Number(r.valor || 0); });
+      valText(document.getElementById("desp-m-qtd"), fmtInt(filtrados.length));
+      valText(document.getElementById("desp-m-valor"), fmtBRL(soma));
+      valText(document.getElementById("desp-lbl"), filtrados.length + " linhas (rc agregado)");
+      filtrados.sort(function (a, b) {
+        if (a.ano !== b.ano) return b.ano - a.ano;
+        return b.mes - a.mes;
+      });
+      preencherTbody(tbody, filtrados.map(function (r) {
+        var key = "rc|" + r.ano + "|" + r.mes + "|" + (r.subcategoria || "");
+        return '<tr class="linha-clicavel" data-desp-key="' + escHtml(key) + '" title="Ver detalhe">' +
+          '<td>' + r.ano + '</td>' +
+          '<td>' + nomeMes[r.mes - 1] + '</td>' +
+          '<td>' + escHtml(r.subcategoria || "—") + '</td>' +
+          '<td class="num">' + fmtBRL(r.valor) + '</td>' +
+        '</tr>';
+      }), 4);
+      return;
+    }
+
+    // Fonte movimentos: agrega movimentos com plano_contas.tipo_custo='despesa' por mês × DRE
+    thead.innerHTML = '<tr><th>Ano</th><th>Mês</th><th>DRE (Classificação)</th><th class="num">Qtd</th><th class="num">Valor</th></tr>';
+    var contaPorId = {};
+    (planoContas || []).forEach(function (p) { contaPorId[p.id] = p; });
+
+    var agregado = {};
+    var totalLanc = 0;
+    (movimentosCompletos || []).forEach(function (m) {
+      if (!m.plano_contas_id) return;
+      var conta = contaPorId[m.plano_contas_id];
+      if (!conta || conta.tipo_custo !== "despesa") return;
+      var d = String(m.data || "").slice(0, 10);
+      if (d.length < 7) return;
+      var a = Number(d.slice(0, 4));
+      var ms = Number(d.slice(5, 7));
+      if (ano && String(a) !== ano) return;
+      if (mes && String(ms) !== mes) return;
+      var dre = conta.dre || "—";
+      if (busca && !matchBusca(busca, [dre, conta.descritivo])) return;
+      var key = a + "|" + ms + "|" + dre;
+      if (!agregado[key]) agregado[key] = { ano: a, mes: ms, dre: dre, qtd: 0, valor: 0 };
+      agregado[key].qtd += 1;
+      agregado[key].valor += Number(m.valor || m.custo || 0);
+      totalLanc += 1;
+    });
+    var lista = Object.values(agregado).sort(function (a, b) {
+      if (a.ano !== b.ano) return b.ano - a.ano;
+      if (a.mes !== b.mes) return b.mes - a.mes;
+      return String(a.dre).localeCompare(String(b.dre));
+    });
+    var soma2 = lista.reduce(function (s, r) { return s + r.valor; }, 0);
+    valText(document.getElementById("desp-m-qtd"), fmtInt(totalLanc));
+    valText(document.getElementById("desp-m-valor"), fmtBRL(soma2));
+    valText(document.getElementById("desp-lbl"), lista.length + " grupos (DRE × mês)");
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhum movimento classificado como Despesa no filtro. Importe planilha de movimentos com coluna conta para classificar.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (r) {
+      var key = "mov|" + r.ano + "|" + r.mes + "|" + r.dre;
+      return '<tr class="linha-clicavel" data-desp-key="' + escHtml(key) + '" title="Ver lançamentos individuais">' +
         '<td>' + r.ano + '</td>' +
         '<td>' + nomeMes[r.mes - 1] + '</td>' +
-        '<td>' + escHtml(r.subcategoria || "—") + '</td>' +
+        '<td>' + escHtml(r.dre) + '</td>' +
+        '<td class="num">' + fmtInt(r.qtd) + '</td>' +
         '<td class="num">' + fmtBRL(r.valor) + '</td>' +
       '</tr>';
-    }), 4);
+    }).join("");
   }
 
   // =========================================================================
@@ -6370,30 +6422,86 @@
   // ----- Detalhe de Despesa/Custo (clica em linha de Despesas) -----
   function abrirDetalheDespesa(key) {
     var partes = (key || "").split("|");
-    var ano = Number(partes[0]), mes = Number(partes[1]), subcat = partes[2] || "";
     var nomesMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-    var titulo = "Despesa — " + (subcat || "(sem subcategoria)") + " · " + nomesMes[mes-1] + "/" + ano;
-
-    var linha = (rcLista || []).filter(function (r) {
-      return r.categoria === "custo" && r.ano === ano && r.mes === mes && (r.subcategoria || "") === subcat;
-    })[0];
-
-    var info = "";
-    if (linha) {
-      info = '<table class="tabela tabela-mini" style="margin-bottom:14px"><tbody>' +
-        '<tr><th>Ano</th><td>' + ano + '</td></tr>' +
-        '<tr><th>Mês</th><td>' + nomesMes[mes-1] + '</td></tr>' +
-        '<tr><th>Subcategoria</th><td>' + escHtml(subcat || '—') + '</td></tr>' +
-        '<tr><th>Valor agregado</th><td>' + fmtBRL(linha.valor) + '</td></tr>' +
-      '</tbody></table>';
+    var prefixo, ano, mes, chaveExtra;
+    if (partes[0] === "rc" || partes[0] === "mov") {
+      prefixo = partes[0];
+      ano = Number(partes[1]); mes = Number(partes[2]); chaveExtra = partes[3] || "";
+    } else {
+      prefixo = "rc"; ano = Number(partes[0]); mes = Number(partes[1]); chaveExtra = partes[2] || "";
     }
 
-    var aviso = '<div class="status alerta" style="margin:10px 0">' +
-      '⚠ A tela de Despesas hoje lê de <code>receitas_custos</code>, que é uma <strong>tabela de valores agregados por mês × subcategoria</strong> — sem detalhe de lançamentos individuais.<br>' +
-      'Para drill-down até a linha de movimento, é preciso a migração 15 (link <code>movimentos.plano_contas_id</code>).' +
+    if (prefixo === "rc") {
+      var titulo = "Despesa — " + (chaveExtra || "(sem subcategoria)") + " · " + nomesMes[mes-1] + "/" + ano;
+      var linha = (rcLista || []).filter(function (r) {
+        return r.categoria === "custo" && r.ano === ano && r.mes === mes && (r.subcategoria || "") === chaveExtra;
+      })[0];
+      var info = "";
+      if (linha) {
+        info = '<table class="tabela tabela-mini" style="margin-bottom:14px"><tbody>' +
+          '<tr><th>Ano</th><td>' + ano + '</td></tr>' +
+          '<tr><th>Mês</th><td>' + nomesMes[mes-1] + '</td></tr>' +
+          '<tr><th>Subcategoria</th><td>' + escHtml(chaveExtra || '—') + '</td></tr>' +
+          '<tr><th>Valor agregado</th><td>' + fmtBRL(linha.valor) + '</td></tr>' +
+        '</tbody></table>';
+      }
+      var aviso = '<div class="status alerta" style="margin:10px 0">' +
+        '⚠ Esta linha vem de <code>receitas_custos</code> (agregado mensal). Para ver lançamentos individuais, troque a fonte da tela para <strong>"Lançamentos classificados (movimentos)"</strong>.' +
+        '</div>';
+      abrirModalDetalhe(titulo, info + aviso);
+      return;
+    }
+
+    // prefixo === "mov"
+    var dre = chaveExtra;
+    var titulo2 = "Despesa — " + dre + " · " + nomesMes[mes-1] + "/" + ano;
+    var contaPorId = {};
+    (planoContas || []).forEach(function (p) { contaPorId[p.id] = p; });
+
+    var ini = ano + "-" + String(mes).padStart(2, "0") + "-01";
+    var d2 = new Date(ano, mes, 0);
+    var fim = ano + "-" + String(mes).padStart(2, "0") + "-" + String(d2.getDate()).padStart(2, "0");
+
+    var movs = (movimentosCompletos || []).filter(function (m) {
+      if (!m.plano_contas_id) return false;
+      var conta = contaPorId[m.plano_contas_id];
+      if (!conta || conta.dre !== dre) return false;
+      var d = String(m.data || "").slice(0, 10);
+      if (d < ini || d > fim) return false;
+      return true;
+    });
+    movs.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
+    var totalMov = movs.reduce(function (s, m) { return s + Number(m.valor || m.custo || 0); }, 0);
+
+    var cards =
+      '<div class="grid-metrics" style="margin-bottom:14px">' +
+        '<div class="metric-card"><div class="metric-label">Lançamentos</div><div class="metric-value">' + fmtInt(movs.length) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Total</div><div class="metric-value">' + fmtBRL(totalMov) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Ticket médio</div><div class="metric-value">' + (movs.length ? fmtBRL(totalMov / movs.length) : "—") + '</div></div>' +
       '</div>';
 
-    abrirModalDetalhe(titulo, info + aviso);
+    var tabela;
+    if (!movs.length) {
+      tabela = '<p class="muted">Nenhum movimento classificado para esta DRE/mês.</p>';
+    } else {
+      tabela = '<div class="table-wrap" style="max-height:380px;overflow-y:auto">' +
+        '<table class="tabela"><thead><tr><th>Data</th><th>Orçamento</th><th>Cliente</th><th>Item</th><th>Conta</th><th class="num">Valor</th></tr></thead><tbody>' +
+        movs.slice(0, 200).map(function (m) {
+          var conta = contaPorId[m.plano_contas_id];
+          return '<tr>' +
+            '<td>' + fmtData(m.data) + '</td>' +
+            '<td class="mono">' + escHtml(m.orcamento || '—') + '</td>' +
+            '<td>' + escHtml(m.nome || '—') + '</td>' +
+            '<td>' + escHtml(m.item || '—') + '</td>' +
+            '<td><span class="muted">' + escHtml((conta && conta.descritivo) || '—') + '</span></td>' +
+            '<td class="num">' + fmtBRL(m.valor || m.custo || 0) + '</td>' +
+          '</tr>';
+        }).join("") +
+        (movs.length > 200 ? '<tr><td colspan="6" class="tbl-vazio">… 200 de ' + movs.length + '</td></tr>' : '') +
+        '</tbody></table></div>';
+    }
+
+    abrirModalDetalhe(titulo2, cards + tabela);
   }
 
 
