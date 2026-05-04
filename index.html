@@ -156,6 +156,16 @@
             </div>
           </div>
 
+          <div class="sb-group" data-macro="receita">
+            <button class="sb-group-header" type="button" title="Receita">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-5"/><path d="M14 8h5v5"/></svg></span><span class="sb-label">Receita</span><span class="sb-caret">▾</span>
+            </button>
+            <div class="sb-group-items">
+              <button class="sb-sub" data-page="apr_dashboard" type="button">Por Apropriação</button>
+              <button class="sb-sub" data-page="apr_faturamento" type="button">Por Faturamento</button>
+            </div>
+          </div>
+
           <div class="sb-group" data-macro="financeiro">
             <button class="sb-group-header" type="button" title="Financeiro">
               <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1-2-2 2 2 0 0 1 2-2h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-4"/><path d="M21 13v-2a2 2 0 0 0-2-2H15a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2Z"/><circle cx="16" cy="12" r=".8" fill="currentColor"/></svg></span><span class="sb-label">Financeiro</span><span class="sb-caret">▾</span>
@@ -164,8 +174,6 @@
               <button class="sb-sub" data-page="consolidado" type="button">Consolidado</button>
               <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
               <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
-              <button class="sb-sub" data-page="dre" type="button">DRE</button>
-              <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
             </div>
           </div>
 
@@ -176,14 +184,6 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
               <button class="sb-sub" data-page="faturamento" type="button">Gestão de Faturamento</button>
-            </div>
-          </div>
-
-          <div class="sb-group" data-macro="faturamento">
-            <button class="sb-group-header" type="button" title="Faturamento">
-              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg></span><span class="sb-label">Faturamento</span><span class="sb-caret">▾</span>
-            </button>
-            <div class="sb-group-items">
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
             </div>
           </div>
@@ -194,29 +194,27 @@
             </button>
             <div class="sb-group-items">
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
+              <div class="sb-subgroup-header">━ Custo Direto ━</div>
+              <button class="sb-sub sb-sub-nested" data-page="cust_direto_via_os" type="button">Via OS</button>
+              <button class="sb-sub sb-sub-nested" data-page="cust_direto_lanc" type="button">Lançamento Direto</button>
+              <button class="sb-sub" data-page="cust_indireto" type="button">Custo Indireto</button>
               <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
+              <button class="sb-sub" data-page="cust_area" type="button">Custo por Área</button>
+              <button class="sb-sub" data-page="apr_excluidas" type="button">OSs excluídas</button>
               <button class="sb-sub" data-page="entregas" type="button">Entregas pendentes</button>
             </div>
           </div>
 
-          <div class="sb-group" data-macro="apropriacao">
-            <button class="sb-group-header" type="button" title="Apropriação">
-              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-5"/><path d="M14 8h5v5"/></svg></span><span class="sb-label">Apropriação</span><span class="sb-caret">▾</span>
+          <div class="sb-group" data-macro="contabilidade">
+            <button class="sb-group-header" type="button" title="Contabilidade Gerencial">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l4-4 4 4 4-7 6 6"/><path d="M3 21h18"/></svg></span><span class="sb-label">Contabilidade Gerencial</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
-              <button class="sb-sub" data-page="apr_dashboard" type="button">Dashboard</button>
-              <button class="sb-sub" data-page="apr_excluidas" type="button">OSs excluídas</button>
-            </div>
-          </div>
-
-          <div class="sb-group" data-macro="fluxo">
-            <button class="sb-group-header" type="button" title="Fluxo de Caixa">
-              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l4-4 4 4 4-7 6 6"/><path d="M3 21h18"/></svg></span><span class="sb-label">Fluxo de Caixa</span><span class="sb-caret">▾</span>
-            </button>
-            <div class="sb-group-items">
-              <button class="sb-sub" data-page="fluxo_visao" type="button">Visão 12 meses</button>
+              <button class="sb-sub" data-page="fluxo_visao" type="button">Fluxo de Caixa</button>
               <button class="sb-sub" data-page="fluxo_contas" type="button">Contas Bancárias</button>
               <button class="sb-sub" data-page="fluxo_saldos" type="button">Saldos Mensais</button>
+              <button class="sb-sub" data-page="dre" type="button">DRE</button>
+              <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
             </div>
           </div>
 
@@ -1589,6 +1587,62 @@
 
           <div class="bon-grid" id="bind-det-cards">
             <!-- 5 cards renderizados em JS: Conduta · Faltas · Atrasos · Performance · Penalidade -->
+          </div>
+        </section>
+
+
+        <!-- Receita > Por Faturamento (placeholder Pacote 4) -->
+        <section class="page" data-page="apr_faturamento" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Receita por Faturamento</h1>
+            <p class="page-sub">Receita reconhecida pela emissão de Nota Fiscal — mês a mês</p>
+          </div>
+          <div class="card fat-card">
+            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 4). Vai mostrar receita mensal somando NFs emitidas, comparada com Receita por Apropriação.</p>
+          </div>
+        </section>
+
+        <!-- Custeio > Custo Direto > Via OS (placeholder Pacote 5) -->
+        <section class="page" data-page="cust_direto_via_os" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Custo Direto — Via OS</h1>
+            <p class="page-sub">Matéria-prima baixada via apontamento de OS (DRE: CPV - Direto)</p>
+          </div>
+          <div class="card fat-card">
+            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai consolidar saídas de estoque por subcategoria (madeiras, ferragens, lustros, etc) usando os_evolucao_mensal.</p>
+          </div>
+        </section>
+
+        <!-- Custeio > Custo Direto > Lançamento Direto (placeholder Pacote 5) -->
+        <section class="page" data-page="cust_direto_lanc" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Custo Direto — Lançamento Direto</h1>
+            <p class="page-sub">Lançamentos diretos em CPV - Matéria Prima e CPV - Viagens (sem baixa de OS)</p>
+          </div>
+          <div class="card fat-card">
+            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai listar lançamentos cuja conta tem DRE = CPV - Matéria Prima ou CPV - Viagens, sem OS preenchida.</p>
+          </div>
+        </section>
+
+        <!-- Custeio > Custo Indireto (placeholder Pacote 5) -->
+        <section class="page" data-page="cust_indireto" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Custo Indireto</h1>
+            <p class="page-sub">Custos vinculados à produção indiretamente — folha de CCs PCPM/Estoque/Projetos + 14 contas selecionadas de infraestrutura</p>
+          </div>
+          <div class="card fat-card">
+            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai consolidar (a) folha de funcionários cujo CC tem tipo_custo=indireto + (b) lançamentos em contas com tipo_custo=indireto (água, energia, condomínio, EPI, etc).</p>
+          </div>
+        </section>
+
+        <!-- Custeio > Custo por Área (placeholder Pacote 5) -->
+        <section class="page" data-page="cust_area" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Custo por Área</h1>
+            <p class="page-sub">Custos rateados por área do organograma — folha por CC + rateio % de despesas compartilhadas</p>
+          </div>
+          <div class="card fat-card">
+            <p class="muted" style="padding:14px">⚙ Em construção (Pacote 5). Vai usar rateio_areas para distribuir contas selecionadas + somar folha por área via centro_custo do funcionário.</p>
           </div>
         </section>
 

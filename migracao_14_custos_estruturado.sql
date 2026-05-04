@@ -1,0 +1,5 @@
+-- Migração 14 — Estrutura de Custos detalhada (Pacote 1 da Entrega 11)
+-- Adiciona DRE descritiva e tipo_custo (direto/indireto/despesa) em
+-- centros_custo e plano_contas + tabela rateio_areas para rateio %
+-- de despesas compartilhadas entre áreas do organograma.
+-- Conteúdo aplicado via Supabase MCP em 2026-05-04.
