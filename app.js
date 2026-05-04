@@ -701,7 +701,7 @@
     var html = filtrados.map(function (r) {
       var tipo = tipoPorOrcamento[r.orcamento] || "—";
       return (
-        '<tr>' +
+        '<tr class="linha-clicavel" data-orc="' + escHtml(r.orcamento) + '" title="Ver detalhe">' +
           '<td>' + fmtData(r.data) + '</td>' +
           '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
           '<td>' + escHtml(r.nome || "—") + '</td>' +
@@ -802,7 +802,7 @@
     vendTbody.innerHTML = filtrados.map(function (r) {
       var tipo = tipoPorOrcamento[r.orcamento] || "—";
       return (
-        '<tr>' +
+        '<tr class="linha-clicavel" data-orc="' + escHtml(r.orcamento) + '" title="Ver detalhe">' +
           '<td>' + fmtData(r.data) + '</td>' +
           '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
           '<td>' + escHtml(r.nome || "—") + '</td>' +
@@ -953,7 +953,7 @@
     valText(document.getElementById("nf-lbl"), filtrados.length + " NF");
 
     preencherTbody(tbody, filtrados.map(function (m) {
-      return '<tr>' +
+      return '<tr class="linha-clicavel" data-mvid="' + escHtml(m.id) + '" title="Ver detalhe da NF">' +
         '<td>' + fmtData(m.data) + '</td>' +
         '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
         '<td>' + escHtml(m.nome || "—") + '</td>' +
@@ -1040,7 +1040,8 @@
 
     var nomeMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
     preencherTbody(tbody, filtrados.map(function (r) {
-      return '<tr>' +
+      var key = r.ano + "|" + r.mes + "|" + (r.subcategoria || "");
+      return '<tr class="linha-clicavel" data-desp-key="' + escHtml(key) + '" title="Ver detalhe">' +
         '<td>' + r.ano + '</td>' +
         '<td>' + nomeMes[r.mes - 1] + '</td>' +
         '<td>' + escHtml(r.subcategoria || "—") + '</td>' +
@@ -1075,7 +1076,7 @@
     valText(document.getElementById("mov-lbl"), filtrados.length + " de " + movimentosCompletos.length);
 
     var linhas = filtrados.slice(0, 500).map(function (m) {
-      return '<tr>' +
+      return '<tr class="linha-clicavel" data-mvid="' + escHtml(m.id) + '" title="Ver detalhe do lançamento">' +
         '<td>' + fmtData(m.data) + '</td>' +
         '<td class="mono">' + escHtml(m.orcamento) + '</td>' +
         '<td>' + escHtml(m.nome || "—") + '</td>' +
@@ -6111,6 +6112,174 @@
 
 
   // =========================================================================
+  // MODAIS DE DETALHE (Pacote 6 da Entrega 11)
+  // =========================================================================
+
+  // Modal genérico de exibição (não-form). Usa overlay próprio, não interfere
+  // no abrirModal() de CRUD.
+  function abrirModalDetalhe(titulo, contentHtml) {
+    // Remove qualquer modal de detalhe anterior
+    var anterior = document.getElementById("modal-detalhe-overlay");
+    if (anterior) anterior.parentNode.removeChild(anterior);
+
+    var html =
+      '<div class="modal-overlay" id="modal-detalhe-overlay">' +
+        '<div class="modal-content modal-detalhe">' +
+          '<h2>' + escHtml(titulo) + '</h2>' +
+          '<div class="modal-detalhe-body">' + contentHtml + '</div>' +
+          '<div class="modal-acoes">' +
+            '<button type="button" class="btn-limpar" id="modal-detalhe-fechar">Fechar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    var div = document.createElement("div");
+    div.innerHTML = html;
+    document.body.appendChild(div.firstChild);
+
+    function fechar() {
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov) ov.parentNode.removeChild(ov);
+    }
+    document.getElementById("modal-detalhe-fechar").addEventListener("click", fechar);
+    document.getElementById("modal-detalhe-overlay").addEventListener("click", function (ev) {
+      if (ev.target.id === "modal-detalhe-overlay") fechar();
+    });
+  }
+
+  // ----- Detalhe de Orçamento (clica em linha de Vendas ou Gestão Faturamento) -----
+  function abrirDetalheOrcamento(orcamento) {
+    var orc = (orcamentosLista || []).filter(function (o) { return o.orcamento === orcamento; })[0];
+    if (!orc) { abrirModalDetalhe("Orçamento " + orcamento, "<p class=\"muted\">Orçamento não encontrado.</p>"); return; }
+
+    var movs = (movimentosCompletos || []).filter(function (m) { return m.orcamento === orcamento; });
+    var tipo = tipoPorOrcamento[orcamento] || "—";
+
+    // Cards de status financeiro
+    var cards =
+      '<div class="grid-metrics" style="margin-bottom:14px">' +
+        '<div class="metric-card"><div class="metric-label">Venda</div><div class="metric-value">' + fmtBRL(orc.venda) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Recebido</div><div class="metric-value">' + fmtBRL(orc.recebimento) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">A Receber</div><div class="metric-value ' + (Number(orc.a_receber)>0 ? 'destaque':'') + '">' + fmtBRL(orc.a_receber) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">NF Emitida</div><div class="metric-value">' + fmtBRL(orc.nota_fiscal) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">A Faturar</div><div class="metric-value ' + (Number(orc.a_faturar)>0 ? 'destaque':'') + '">' + fmtBRL(orc.a_faturar) + '</div></div>' +
+      '</div>';
+
+    // Header
+    var header =
+      '<p style="margin:0 0 12px"><strong>Cliente:</strong> ' + escHtml(orc.nome || '—') + ' · ' +
+      '<strong>Tipo:</strong> ' + badgeTipo(tipo) + ' · ' +
+      '<strong>Data:</strong> ' + fmtData(orc.data) + ' · ' +
+      '<strong>Parceiro:</strong> ' + escHtml(orc.parceiro || '—') + '</p>';
+
+    // Movimentos vinculados
+    movs.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
+    var movHtml;
+    if (!movs.length) {
+      movHtml = '<p class="muted">Nenhum movimento registrado para este orçamento.</p>';
+    } else {
+      movHtml = '<div class="table-wrap" style="max-height:300px;overflow-y:auto">' +
+        '<table class="tabela"><thead><tr><th>Data</th><th>Natureza</th><th>NF</th><th>OS</th><th>Item</th><th class="num">Valor</th></tr></thead>' +
+        '<tbody>' + movs.map(function (m) {
+          return '<tr>' +
+            '<td>' + fmtData(m.data) + '</td>' +
+            '<td>' + escHtml(m.natureza || '—') + '</td>' +
+            '<td class="mono">' + escHtml(m.nota_fiscal || '—') + '</td>' +
+            '<td class="mono">' + escHtml(m.os || '—') + '</td>' +
+            '<td>' + escHtml(m.item || '—') + '</td>' +
+            '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody></table></div>';
+    }
+
+    abrirModalDetalhe("Orçamento " + orcamento,
+      header + cards +
+      '<h3 style="margin:14px 0 8px">Movimentos vinculados (' + movs.length + ')</h3>' + movHtml
+    );
+  }
+
+  // ----- Detalhe de Movimento (Lançamento ou NF) -----
+  function abrirDetalheMovimento(mvId) {
+    var mv = (movimentosCompletos || []).filter(function (m) { return String(m.id) === String(mvId); })[0];
+    if (!mv) { abrirModalDetalhe("Lançamento", "<p class=\"muted\">Lançamento não encontrado.</p>"); return; }
+
+    var ehNF = mv.natureza === "Nota Fiscal";
+    var titulo = ehNF ? ("NF " + (mv.nota_fiscal || mv.id)) : ("Lançamento #" + mv.id);
+
+    // Campos do movimento
+    var campos =
+      '<div class="grid-metrics" style="margin-bottom:14px">' +
+        '<div class="metric-card"><div class="metric-label">Data</div><div class="metric-value" style="font-size:18px">' + fmtData(mv.data) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Valor</div><div class="metric-value">' + fmtBRL(mv.valor) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Natureza</div><div class="metric-value" style="font-size:16px">' + escHtml(mv.natureza || '—') + '</div></div>' +
+      '</div>' +
+      '<table class="tabela tabela-mini" style="margin-bottom:14px"><tbody>' +
+        '<tr><th>Orçamento</th><td class="mono">' + escHtml(mv.orcamento || '—') + '</td></tr>' +
+        '<tr><th>Cliente</th><td>' + escHtml(mv.nome || '—') + '</td></tr>' +
+        '<tr><th>Tipo</th><td>' + badgeTipo(mv.tipo || '—') + '</td></tr>' +
+        '<tr><th>Nota Fiscal</th><td class="mono">' + escHtml(mv.nota_fiscal || '—') + '</td></tr>' +
+        '<tr><th>OS</th><td class="mono">' + escHtml(mv.os || '—') + '</td></tr>' +
+        '<tr><th>Item</th><td>' + escHtml(mv.item || '—') + '</td></tr>' +
+        '<tr><th>Custo</th><td>' + (mv.custo != null ? fmtBRL(mv.custo) : '—') + '</td></tr>' +
+        '<tr><th>Comentários</th><td>' + escHtml(mv.comentarios || '—') + '</td></tr>' +
+      '</tbody></table>';
+
+    // Outros movimentos do mesmo orçamento
+    var irmaos = (movimentosCompletos || []).filter(function (m) {
+      return mv.orcamento && m.orcamento === mv.orcamento && m.id !== mv.id;
+    });
+    irmaos.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
+
+    var irmHtml = "";
+    if (mv.orcamento && irmaos.length) {
+      irmHtml = '<h3 style="margin:14px 0 8px">Outros lançamentos do orçamento ' + escHtml(mv.orcamento) + ' (' + irmaos.length + ')</h3>' +
+        '<div class="table-wrap" style="max-height:240px;overflow-y:auto">' +
+        '<table class="tabela"><thead><tr><th>Data</th><th>Natureza</th><th>OS</th><th class="num">Valor</th></tr></thead><tbody>' +
+        irmaos.slice(0, 50).map(function (m) {
+          return '<tr>' +
+            '<td>' + fmtData(m.data) + '</td>' +
+            '<td>' + escHtml(m.natureza || '—') + '</td>' +
+            '<td class="mono">' + escHtml(m.os || '—') + '</td>' +
+            '<td class="num">' + fmtBRL(m.valor) + '</td>' +
+          '</tr>';
+        }).join("") +
+        (irmaos.length > 50 ? '<tr><td colspan="4" class="tbl-vazio">… 50 de ' + irmaos.length + '</td></tr>' : '') +
+        '</tbody></table></div>';
+    }
+
+    abrirModalDetalhe(titulo, campos + irmHtml);
+  }
+
+  // ----- Detalhe de Despesa/Custo (clica em linha de Despesas) -----
+  function abrirDetalheDespesa(key) {
+    var partes = (key || "").split("|");
+    var ano = Number(partes[0]), mes = Number(partes[1]), subcat = partes[2] || "";
+    var nomesMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+    var titulo = "Despesa — " + (subcat || "(sem subcategoria)") + " · " + nomesMes[mes-1] + "/" + ano;
+
+    var linha = (rcLista || []).filter(function (r) {
+      return r.categoria === "custo" && r.ano === ano && r.mes === mes && (r.subcategoria || "") === subcat;
+    })[0];
+
+    var info = "";
+    if (linha) {
+      info = '<table class="tabela tabela-mini" style="margin-bottom:14px"><tbody>' +
+        '<tr><th>Ano</th><td>' + ano + '</td></tr>' +
+        '<tr><th>Mês</th><td>' + nomesMes[mes-1] + '</td></tr>' +
+        '<tr><th>Subcategoria</th><td>' + escHtml(subcat || '—') + '</td></tr>' +
+        '<tr><th>Valor agregado</th><td>' + fmtBRL(linha.valor) + '</td></tr>' +
+      '</tbody></table>';
+    }
+
+    var aviso = '<div class="status alerta" style="margin:10px 0">' +
+      '⚠ A tela de Despesas hoje lê de <code>receitas_custos</code>, que é uma <strong>tabela de valores agregados por mês × subcategoria</strong> — sem detalhe de lançamentos individuais.<br>' +
+      'Para drill-down até a linha de movimento, é preciso a migração 15 (link <code>movimentos.plano_contas_id</code>).' +
+      '</div>';
+
+    abrirModalDetalhe(titulo, info + aviso);
+  }
+
+
+  // =========================================================================
   // BOOT FINAL — delegação global de cliques em botões estáticos.
   // Garante que .config-card[data-subpage], [data-goto] e [data-limpar]
   // SEMPRE funcionem, mesmo se ativarPaginaOrcamentos() falhar por qualquer
@@ -6145,6 +6314,24 @@
         abrirDetalheBonusIndividual(fid);
         return;
       }
+    }
+    // Detalhe de Orçamento (Vendas, Gestão de Faturamento)
+    var trOrc = t.closest("tr.linha-clicavel[data-orc]");
+    if (trOrc) {
+      var oc = trOrc.getAttribute("data-orc");
+      if (oc && typeof abrirDetalheOrcamento === "function") { abrirDetalheOrcamento(oc); return; }
+    }
+    // Detalhe de Movimento (Notas Fiscais, Lançamentos)
+    var trMv = t.closest("tr.linha-clicavel[data-mvid]");
+    if (trMv) {
+      var mvid = trMv.getAttribute("data-mvid");
+      if (mvid && typeof abrirDetalheMovimento === "function") { abrirDetalheMovimento(mvid); return; }
+    }
+    // Detalhe de Despesa
+    var trDesp = t.closest("tr.linha-clicavel[data-desp-key]");
+    if (trDesp) {
+      var key = trDesp.getAttribute("data-desp-key");
+      if (key && typeof abrirDetalheDespesa === "function") { abrirDetalheDespesa(key); return; }
     }
   });
 

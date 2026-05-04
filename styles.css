@@ -1793,3 +1793,57 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   margin-right: 4px;
 }
 .sidebar.colapsada .sb-subgroup-header { display: none; }
+
+
+/* =========================================================
+   MODAL DE DETALHE (drill-down em linhas)
+   ========================================================= */
+.modal-content.modal-detalhe {
+  max-width: 760px;
+}
+.modal-detalhe-body { font-size: 13px; }
+.modal-detalhe-body h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ouro-esc);
+  margin: 14px 0 8px;
+  letter-spacing: .03em;
+}
+.modal-detalhe-body .grid-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.modal-detalhe-body .metric-card { padding: 10px 12px; }
+.modal-detalhe-body .metric-card .metric-value { font-size: 16px; }
+.modal-detalhe-body .metric-card .metric-label { font-size: 10px; }
+
+/* Tabela mini chave/valor */
+.tabela-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  border: 1px solid var(--borda);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.tabela-mini th {
+  text-align: left;
+  background: var(--bg3);
+  color: var(--text2);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  width: 140px;
+  vertical-align: top;
+  border-right: 1px solid var(--borda);
+}
+.tabela-mini td {
+  padding: 6px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--borda);
+  vertical-align: top;
+}
+.tabela-mini tr:last-child th,
+.tabela-mini tr:last-child td { border-bottom: none; }
