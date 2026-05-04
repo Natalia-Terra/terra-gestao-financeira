@@ -342,6 +342,10 @@
     if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
     if (pageId === "caixa_saldo")        carregarCaixaSaldoSeNecessario();
     if (pageId === "caixa_compromissos") carregarCompromissosSeNecessario();
+    if (pageId === "fluxo_contas")       carregarContasBancariasSeNecessario();
+    if (pageId === "fluxo_saldos")       carregarSaldosContasSeNecessario();
+    if (pageId === "fluxo_receb_prev")   carregarRecebimentosPrevistosSeNecessario();
+    if (pageId === "fluxo_visao")        carregarFluxoVisaoSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -5117,6 +5121,544 @@
         '<td><span class="' + classe + '">' + st + '</span></td>' +
       '</tr>';
     }).join("");
+  }
+
+
+  // =========================================================================
+  // FLUXO DE CAIXA — Contas Bancárias (Entrega 10)
+  // =========================================================================
+
+  var contasBancariasLista = [];
+  var contasBancariasCarregado = false;
+  var contasBancariasCarregando = false;
+
+  function carregarContasBancariasSeNecessario() {
+    if (contasBancariasCarregado) { renderContasBancarias(); return; }
+    if (contasBancariasCarregando) return;
+    contasBancariasCarregando = true;
+    var tbody = document.getElementById("cb-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr>';
+
+    client.from("contas_bancarias").select("*").order("ordem").order("nome").then(function (r) {
+      contasBancariasCarregando = false;
+      if (r.error) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+        return;
+      }
+      contasBancariasLista = r.data || [];
+      contasBancariasCarregado = true;
+      renderContasBancarias();
+    });
+
+    var busca = document.getElementById("cb-busca");
+    if (busca && !busca.dataset.bound) { busca.dataset.bound = "1"; busca.addEventListener("input", renderContasBancarias); }
+    var btnNovo = document.getElementById("cb-btn-novo");
+    if (btnNovo && !btnNovo.dataset.bound) { btnNovo.dataset.bound = "1"; btnNovo.addEventListener("click", function () { abrirModalContaBancaria(null); }); }
+  }
+
+  function renderContasBancarias() {
+    var tbody = document.getElementById("cb-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("cb-busca")||{}).value||"").trim().toLowerCase();
+    var filtrados = contasBancariasLista.filter(function (c) {
+      if (!busca) return true;
+      return matchBusca(busca, [c.nome, c.banco, c.agencia, c.conta]);
+    });
+    valText(document.getElementById("cb-lbl"), filtrados.length + " de " + contasBancariasLista.length);
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhuma conta cadastrada. Clique em + Nova conta.</td></tr>';
+      return;
+    }
+    var tipoLabel = { conta_corrente: "Conta corrente", poupanca: "Poupança", aplicacao: "Aplicação", outro: "Outro" };
+    tbody.innerHTML = filtrados.map(function (c) {
+      var st = c.ativa ? '<span class="tag tag-ok">Ativa</span>' : '<span class="tag tag-warn">Inativa</span>';
+      return '<tr>' +
+        '<td><strong>' + escHtml(c.nome) + '</strong></td>' +
+        '<td>' + escHtml(c.banco) + '</td>' +
+        '<td>' + escHtml(tipoLabel[c.tipo] || c.tipo) + '</td>' +
+        '<td>' + escHtml(c.agencia || "—") + '</td>' +
+        '<td>' + escHtml(c.conta || "—") + '</td>' +
+        '<td>' + st + '</td>' +
+        '<td><button type="button" class="btn-acao" data-cb-edit="' + c.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-cb-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-cb-edit"));
+        var c = contasBancariasLista.find(function (x) { return x.id === id; });
+        if (c) abrirModalContaBancaria(c);
+      });
+    });
+  }
+
+  function abrirModalContaBancaria(c) {
+    var ehNovo = !c;
+    abrirModal({
+      titulo: ehNovo ? "Nova conta bancária" : "Editar conta — " + (c.nome || ""),
+      fields: [
+        { name: "nome",      label: "Nome (apelido)", type: "text",   required: true,  valor: c && c.nome },
+        { name: "banco",     label: "Banco",          type: "select", required: true,  valor: c && c.banco,
+          options: [
+            { value: "Itaú", label: "Itaú" },
+            { value: "BB", label: "Banco do Brasil" },
+            { value: "CEF", label: "Caixa Econômica" },
+            { value: "XP", label: "XP Investimentos" },
+            { value: "Bradesco", label: "Bradesco" },
+            { value: "Santander", label: "Santander" },
+            { value: "Sicoob", label: "Sicoob" },
+            { value: "Sicredi", label: "Sicredi" },
+            { value: "Inter", label: "Inter" },
+            { value: "Outro", label: "Outro" }
+          ] },
+        { name: "tipo",      label: "Tipo",          type: "select", required: true, valor: c && c.tipo,
+          options: [
+            { value: "conta_corrente", label: "Conta corrente" },
+            { value: "poupanca",       label: "Poupança" },
+            { value: "aplicacao",      label: "Aplicação" },
+            { value: "outro",          label: "Outro" }
+          ] },
+        { name: "agencia",   label: "Agência",  type: "text", valor: c && c.agencia },
+        { name: "conta",     label: "Conta",    type: "text", valor: c && c.conta },
+        { name: "ordem",     label: "Ordem (menor = aparece primeiro)", type: "number", valor: c && c.ordem !== undefined ? c.ordem : 100 },
+        { name: "ativa",     label: "Ativa?",   type: "select", valor: c ? (c.ativa ? "true" : "false") : "true",
+          options: [{ value: "true", label: "Sim" }, { value: "false", label: "Não" }] },
+        { name: "observacao", label: "Observação", type: "textarea", valor: c && c.observacao }
+      ],
+      onSubmit: function (values, done) {
+        var payload = {
+          nome: values.nome,
+          banco: values.banco,
+          tipo: values.tipo,
+          agencia: values.agencia,
+          conta: values.conta,
+          ordem: values.ordem !== null ? Number(values.ordem) : 100,
+          ativa: values.ativa === "true",
+          observacao: values.observacao
+        };
+        var q = ehNovo
+          ? client.from("contas_bancarias").insert(payload).select().single()
+          : client.from("contas_bancarias").update(payload).eq("id", c.id).select().single();
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          contasBancariasCarregado = false;
+          carregarContasBancariasSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // FLUXO DE CAIXA — Saldos Mensais por Conta (Entrega 10)
+  // =========================================================================
+
+  var saldosContasLista = [];
+  var saldosContasCarregado = false;
+  var saldosContasCarregando = false;
+
+  function carregarSaldosContasSeNecessario() {
+    if (!contasBancariasCarregado) carregarContasBancariasSeNecessario();
+    if (saldosContasCarregado) { renderSaldosContas(); popularSelectsSaldosContas(); return; }
+    if (saldosContasCarregando) return;
+    saldosContasCarregando = true;
+    var tbody = document.getElementById("sc-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr>';
+
+    client.from("saldos_contas").select("*").order("mes_ref", { ascending: false }).then(function (r) {
+      saldosContasCarregando = false;
+      if (r.error) { if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>'; return; }
+      saldosContasLista = r.data || [];
+      saldosContasCarregado = true;
+      popularSelectsSaldosContas();
+      renderSaldosContas();
+    });
+
+    var btnNovo = document.getElementById("sc-btn-novo");
+    if (btnNovo && !btnNovo.dataset.bound) { btnNovo.dataset.bound = "1"; btnNovo.addEventListener("click", function () { abrirModalSaldoConta(null); }); }
+    ["sc-conta","sc-mes"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) { el.dataset.bound = "1"; el.addEventListener("change", renderSaldosContas); el.addEventListener("input", renderSaldosContas); }
+    });
+    var btnLimpar = document.getElementById("sc-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var c = document.getElementById("sc-conta"); if (c) c.value = "";
+        var m = document.getElementById("sc-mes");   if (m) m.value = "";
+        renderSaldosContas();
+      });
+    }
+  }
+
+  function popularSelectsSaldosContas() {
+    var sel = document.getElementById("sc-conta");
+    if (!sel) return;
+    var atual = sel.value;
+    sel.innerHTML = '<option value="">Todas as contas</option>' +
+      contasBancariasLista.filter(function (c) { return c.ativa; }).map(function (c) {
+        return '<option value="' + c.id + '">' + escHtml(c.nome) + '</option>';
+      }).join("");
+    sel.value = atual;
+  }
+
+  function renderSaldosContas() {
+    var tbody = document.getElementById("sc-tbody");
+    if (!tbody) return;
+    var contaSel = ((document.getElementById("sc-conta")||{}).value||"").trim();
+    var mesSel   = ((document.getElementById("sc-mes")  ||{}).value||"").trim();
+    var contasMap = {};
+    contasBancariasLista.forEach(function (c) { contasMap[c.id] = c; });
+
+    var filtrados = saldosContasLista.filter(function (s) {
+      if (contaSel && String(s.conta_id) !== contaSel) return false;
+      if (mesSel && String(s.mes_ref).slice(0,7) !== mesSel) return false;
+      return true;
+    });
+    valText(document.getElementById("sc-lbl"), filtrados.length + " de " + saldosContasLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhum saldo lançado. Clique em + Lançar saldo.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (s) {
+      var c = contasMap[s.conta_id] || {};
+      var classeR = Number(s.saldo_final_realizado) >= 0 ? "" : "neg";
+      var classeP = Number(s.saldo_final_projetado) >= 0 ? "" : "neg";
+      return '<tr>' +
+        '<td>' + escHtml(mesRef(s.mes_ref)) + '</td>' +
+        '<td>' + escHtml(c.nome || "(conta removida)") + '</td>' +
+        '<td class="num ' + classeR + '">' + (s.saldo_final_realizado != null ? fmtBRL(s.saldo_final_realizado) : "—") + '</td>' +
+        '<td class="num ' + classeP + '">' + (s.saldo_final_projetado != null ? fmtBRL(s.saldo_final_projetado) : "—") + '</td>' +
+        '<td>' + escHtml(s.observacao || "") + '</td>' +
+        '<td><button type="button" class="btn-acao" data-sc-edit="' + s.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-sc-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-sc-edit"));
+        var s = saldosContasLista.find(function (x) { return x.id === id; });
+        if (s) abrirModalSaldoConta(s);
+      });
+    });
+  }
+
+  function abrirModalSaldoConta(s) {
+    var ehNovo = !s;
+    var contas = contasBancariasLista.filter(function (c) { return c.ativa; });
+    if (!contas.length) { alert("Cadastre uma conta bancária antes de lançar saldo."); return; }
+    abrirModal({
+      titulo: ehNovo ? "Lançar saldo" : "Editar saldo",
+      fields: [
+        { name: "conta_id", label: "Conta", type: "select", required: true,
+          valor: s && s.conta_id,
+          options: contas.map(function (c) { return { value: c.id, label: c.nome + " — " + c.banco }; }) },
+        { name: "mes_ref", label: "Mês de referência (YYYY-MM)", type: "month", required: true,
+          valor: s && s.mes_ref ? String(s.mes_ref).slice(0,7) : "" },
+        { name: "saldo_inicial",         label: "Saldo inicial (só 1º mês da conta)", type: "number", valor: s && s.saldo_inicial },
+        { name: "saldo_final_realizado", label: "Saldo final realizado",              type: "number", valor: s && s.saldo_final_realizado },
+        { name: "saldo_final_projetado", label: "Saldo final projetado",              type: "number", valor: s && s.saldo_final_projetado },
+        { name: "observacao",            label: "Observação",                          type: "textarea", valor: s && s.observacao }
+      ],
+      onSubmit: function (values, done) {
+        var payload = {
+          conta_id: Number(values.conta_id),
+          mes_ref: values.mes_ref ? values.mes_ref + "-01" : null,
+          saldo_inicial: values.saldo_inicial,
+          saldo_final_realizado: values.saldo_final_realizado,
+          saldo_final_projetado: values.saldo_final_projetado,
+          observacao: values.observacao
+        };
+        var q = ehNovo
+          ? client.from("saldos_contas").upsert(payload, { onConflict: "conta_id,mes_ref" }).select().single()
+          : client.from("saldos_contas").update(payload).eq("id", s.id).select().single();
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          saldosContasCarregado = false;
+          carregarSaldosContasSeNecessario();
+          fluxoVisaoCarregado = false; // invalida tela 12 meses
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // FLUXO DE CAIXA — Recebimentos Previstos (Entrega 10)
+  // =========================================================================
+
+  var recebimentosPrevLista = [];
+  var recebimentosPrevCarregado = false;
+  var recebimentosPrevCarregando = false;
+
+  function carregarRecebimentosPrevistosSeNecessario() {
+    if (!orcamentosCarregados) carregarOrcamentosSeNecessario();
+    if (recebimentosPrevCarregado) { renderRecebimentosPrev(); return; }
+    if (recebimentosPrevCarregando) return;
+    recebimentosPrevCarregando = true;
+    var tbody = document.getElementById("rp-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr>';
+
+    client.from("recebimentos_previstos").select("*").order("data_prevista").then(function (r) {
+      recebimentosPrevCarregando = false;
+      if (r.error) { if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>'; return; }
+      recebimentosPrevLista = r.data || [];
+      recebimentosPrevCarregado = true;
+      renderRecebimentosPrev();
+    });
+
+    var btnNovo = document.getElementById("rp-btn-novo");
+    if (btnNovo && !btnNovo.dataset.bound) { btnNovo.dataset.bound = "1"; btnNovo.addEventListener("click", function () { abrirModalRecebPrev(null); }); }
+    ["rp-busca","rp-status"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) { el.dataset.bound = "1"; el.addEventListener("input", renderRecebimentosPrev); el.addEventListener("change", renderRecebimentosPrev); }
+    });
+    var btnLimpar = document.getElementById("rp-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var b = document.getElementById("rp-busca"); if (b) b.value = "";
+        var s = document.getElementById("rp-status"); if (s) s.value = "";
+        renderRecebimentosPrev();
+      });
+    }
+  }
+
+  function renderRecebimentosPrev() {
+    var tbody = document.getElementById("rp-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("rp-busca")||{}).value||"").trim().toLowerCase();
+    var status = ((document.getElementById("rp-status")||{}).value||"").trim();
+    var hojeIso = new Date().toISOString().slice(0,10);
+
+    var filtrados = recebimentosPrevLista.filter(function (r) {
+      if (busca) {
+        var cliente = clientePorOrcamento[r.orcamento] || "";
+        if (!matchBusca(busca, [r.orcamento, cliente])) return false;
+      }
+      if (status === "pendente" && r.recebido_em) return false;
+      if (status === "recebido" && !r.recebido_em) return false;
+      if (status === "vencido" && (r.recebido_em || r.data_prevista >= hojeIso)) return false;
+      return true;
+    });
+
+    var pendentes = recebimentosPrevLista.filter(function (r) { return !r.recebido_em; });
+    var vencidos  = pendentes.filter(function (r) { return r.data_prevista < hojeIso; });
+    var d12 = new Date(); d12.setMonth(d12.getMonth() + 12);
+    var d12iso = d12.toISOString().slice(0,10);
+    var prox12 = pendentes.filter(function (r) { return r.data_prevista <= d12iso; });
+    var totalProx12 = prox12.reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
+
+    valText(document.getElementById("rp-m-pen"),   fmtInt(pendentes.length));
+    valText(document.getElementById("rp-m-tot12"), fmtBRL(totalProx12));
+    valText(document.getElementById("rp-m-venc"),  fmtInt(vencidos.length));
+    valText(document.getElementById("rp-lbl"), filtrados.length + " de " + recebimentosPrevLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio">Nenhuma parcela. Clique em + Nova parcela ou importe via Importar.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (r) {
+      var st, classe;
+      if (r.recebido_em)              { st = "Recebido"; classe = "tag tag-ok"; }
+      else if (r.data_prevista < hojeIso) { st = "Vencido";  classe = "tag tag-danger"; }
+      else                             { st = "Pendente"; classe = "tag tag-warn"; }
+      var cliente = clientePorOrcamento[r.orcamento] || "—";
+      return '<tr>' +
+        '<td>' + escHtml(fmtData(r.data_prevista)) + '</td>' +
+        '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+        '<td>' + escHtml(cliente) + '</td>' +
+        '<td class="num">' + fmtInt(r.parcela) + '</td>' +
+        '<td class="num">' + fmtBRL(r.valor) + '</td>' +
+        '<td>' + escHtml(r.recebido_em ? fmtData(r.recebido_em) : "—") + '</td>' +
+        '<td><span class="' + classe + '">' + st + '</span></td>' +
+        '<td><button type="button" class="btn-acao" data-rp-edit="' + r.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-rp-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-rp-edit"));
+        var rec = recebimentosPrevLista.find(function (x) { return x.id === id; });
+        if (rec) abrirModalRecebPrev(rec);
+      });
+    });
+  }
+
+  function abrirModalRecebPrev(r) {
+    var ehNovo = !r;
+    var orcamentoOpts = (orcamentosLista || []).map(function (o) {
+      return { value: o.orcamento, label: o.orcamento + " — " + (o.nome || "") };
+    });
+    abrirModal({
+      titulo: ehNovo ? "Nova parcela prevista" : "Editar parcela",
+      fields: [
+        { name: "orcamento",     label: "Orçamento", type: "select", required: true,
+          valor: r && r.orcamento, options: orcamentoOpts },
+        { name: "parcela",       label: "Nº parcela",     type: "number", valor: r ? r.parcela : 1 },
+        { name: "data_prevista", label: "Data prevista",  type: "date",   required: true, valor: r && r.data_prevista },
+        { name: "valor",         label: "Valor",          type: "number", required: true, valor: r && r.valor },
+        { name: "recebido_em",   label: "Recebido em (deixe vazio se pendente)", type: "date", valor: r && r.recebido_em },
+        { name: "observacao",    label: "Observação",     type: "textarea", valor: r && r.observacao }
+      ],
+      onSubmit: function (values, done) {
+        var payload = {
+          orcamento: values.orcamento,
+          parcela: Number(values.parcela) || 1,
+          data_prevista: values.data_prevista,
+          valor: Number(values.valor),
+          recebido_em: values.recebido_em || null,
+          observacao: values.observacao
+        };
+        var q = ehNovo
+          ? client.from("recebimentos_previstos").insert(payload).select().single()
+          : client.from("recebimentos_previstos").update(payload).eq("id", r.id).select().single();
+        q.then(function (rs) {
+          if (rs.error) { done(rs.error.message); return; }
+          recebimentosPrevCarregado = false;
+          carregarRecebimentosPrevistosSeNecessario();
+          fluxoVisaoCarregado = false;
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // FLUXO DE CAIXA — Visão 12 meses (Entrega 10)
+  // =========================================================================
+
+  var fluxoVisaoCarregado = false;
+
+  function carregarFluxoVisaoSeNecessario() {
+    // Garante que todas as fontes estejam carregadas
+    if (!contasBancariasCarregado)   carregarContasBancariasSeNecessario();
+    if (!saldosContasCarregado)      carregarSaldosContasSeNecessario();
+    if (!recebimentosPrevCarregado)  carregarRecebimentosPrevistosSeNecessario();
+    if (!compromissosCarregado)      carregarCompromissosSeNecessario();
+    if (!orcamentosCarregados)       carregarOrcamentosSeNecessario();
+
+    var iniInput = document.getElementById("flv-mes-ini");
+    if (iniInput && !iniInput.value) {
+      var hoje = new Date();
+      iniInput.value = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0");
+    }
+
+    var iv = setInterval(function () {
+      if (contasBancariasCarregado && saldosContasCarregado && recebimentosPrevCarregado && compromissosCarregado && orcamentosCarregados) {
+        clearInterval(iv);
+        renderFluxoVisao();
+      }
+    }, 150);
+
+    if (iniInput && !iniInput.dataset.bound) { iniInput.dataset.bound = "1"; iniInput.addEventListener("change", renderFluxoVisao); }
+    var modo = document.getElementById("flv-modo");
+    if (modo && !modo.dataset.bound) { modo.dataset.bound = "1"; modo.addEventListener("change", renderFluxoVisao); }
+    var btnRec = document.getElementById("flv-btn-recarregar");
+    if (btnRec && !btnRec.dataset.bound) {
+      btnRec.dataset.bound = "1";
+      btnRec.addEventListener("click", function () {
+        contasBancariasCarregado = false; saldosContasCarregado = false;
+        recebimentosPrevCarregado = false; compromissosCarregado = false;
+        carregarFluxoVisaoSeNecessario();
+      });
+    }
+  }
+
+  function renderFluxoVisao() {
+    var iniVal = (document.getElementById("flv-mes-ini")||{}).value || "";
+    var modo = (document.getElementById("flv-modo")||{}).value || "comparar";
+    if (!iniVal) {
+      var hoje = new Date();
+      iniVal = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0");
+    }
+    var ano = Number(iniVal.slice(0,4)), mes = Number(iniVal.slice(5,7));
+    // Gera 12 meses a partir do mês inicial
+    var meses = [];
+    for (var i = 0; i < 12; i++) {
+      var a = ano, m = mes + i;
+      while (m > 12) { m -= 12; a++; }
+      meses.push({ ano: a, mes: m, iso: a + "-" + String(m).padStart(2,"0") + "-01", label: mesRef(a + "-" + String(m).padStart(2,"0")) });
+    }
+    valText(document.getElementById("flv-lbl"), meses[0].label + " a " + meses[11].label);
+
+    // ----- Calcula valores por mês -----
+    var hojeIso = new Date().toISOString().slice(0,10);
+    var dadosMes = meses.map(function (m) {
+      var inicioMes = m.iso;
+      var fimMes = (function () {
+        var d = new Date(m.ano, m.mes, 0);
+        return d.toISOString().slice(0,10);
+      })();
+      // Saldo final realizado e projetado: soma de saldos_contas no mês
+      var saldosMes = saldosContasLista.filter(function (s) { return String(s.mes_ref).slice(0,10) === inicioMes; });
+      var saldoFinalReal = saldosMes.reduce(function (acc, s) { return acc + Number(s.saldo_final_realizado || 0); }, 0);
+      var saldoFinalProj = saldosMes.reduce(function (acc, s) { return acc + Number(s.saldo_final_projetado || s.saldo_final_realizado || 0); }, 0);
+      var temReal = saldosMes.some(function (s) { return s.saldo_final_realizado != null; });
+      var temProj = saldosMes.some(function (s) { return s.saldo_final_projetado != null || s.saldo_final_realizado != null; });
+
+      // Entradas: recebimentos previstos no mês (projetado = todos; realizado = só com recebido_em no mês)
+      var recProj = recebimentosPrevLista.filter(function (r) { return r.data_prevista >= inicioMes && r.data_prevista <= fimMes; })
+        .reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
+      var recReal = recebimentosPrevLista.filter(function (r) { return r.recebido_em && r.recebido_em >= inicioMes && r.recebido_em <= fimMes; })
+        .reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
+
+      // Saídas: compromissos (projetado = todos com vencimento no mês; realizado = pago_em no mês)
+      var sProj = (compromissosLista || []).filter(function (c) { return c.vencimento >= inicioMes && c.vencimento <= fimMes; })
+        .reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
+      var sReal = (compromissosLista || []).filter(function (c) { return c.pago_em && c.pago_em >= inicioMes && c.pago_em <= fimMes; })
+        .reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
+
+      return {
+        mes: m,
+        saldoFinalReal: temReal ? saldoFinalReal : null,
+        saldoFinalProj: temProj ? saldoFinalProj : null,
+        entProj: recProj, entReal: recReal,
+        saiProj: sProj, saiReal: sReal
+      };
+    });
+
+    // Saldo inicial M = saldo final M-1
+    dadosMes.forEach(function (d, i) {
+      d.saldoInicialReal = i === 0 ? null : (dadosMes[i-1].saldoFinalReal != null ? dadosMes[i-1].saldoFinalReal : null);
+      d.saldoInicialProj = i === 0 ? null : (dadosMes[i-1].saldoFinalProj != null ? dadosMes[i-1].saldoFinalProj : null);
+    });
+
+    // ----- Monta cabeçalho -----
+    var thead = document.getElementById("flv-thead");
+    var html = '<tr><th class="flv-rotulo">&nbsp;</th>';
+    meses.forEach(function (m) {
+      var span = (modo === "comparar") ? 2 : 1;
+      html += '<th class="flv-mes" colspan="' + span + '">' + escHtml(m.label) + '</th>';
+    });
+    html += '</tr>';
+    if (modo === "comparar") {
+      html += '<tr><th class="flv-rotulo">&nbsp;</th>';
+      meses.forEach(function () {
+        html += '<th class="flv-sub-p">P</th><th class="flv-sub-r">R</th>';
+      });
+      html += '</tr>';
+    }
+    thead.innerHTML = html;
+
+    // ----- Monta corpo -----
+    function celValor(p, r) {
+      function fmt(v) { return v == null ? '<span class="muted">—</span>' : fmtBRL(v); }
+      function classeNeg(v) { return (v != null && v < 0) ? "neg" : ""; }
+      if (modo === "comparar") return '<td class="num ' + classeNeg(p) + '">' + fmt(p) + '</td><td class="num ' + classeNeg(r) + '">' + fmt(r) + '</td>';
+      if (modo === "projetado") return '<td class="num ' + classeNeg(p) + '">' + fmt(p) + '</td>';
+      return '<td class="num ' + classeNeg(r) + '">' + fmt(r) + '</td>';
+    }
+
+    var rows = [];
+    rows.push('<tr class="flv-grupo"><td class="flv-rotulo">SALDO INICIAL</td>' + dadosMes.map(function (d) { return celValor(d.saldoInicialProj, d.saldoInicialReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-grupo flv-entrada"><td class="flv-rotulo">+ ENTRADAS</td>' + dadosMes.map(function (d) { return celValor(d.entProj, d.entReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Recebimentos</td>' + dadosMes.map(function (d) { return celValor(d.entProj, d.entReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-grupo flv-saida"><td class="flv-rotulo">− SAÍDAS</td>' + dadosMes.map(function (d) { return celValor(-d.saiProj, -d.saiReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Compromissos</td>' + dadosMes.map(function (d) { return celValor(-d.saiProj, -d.saiReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-grupo flv-final"><td class="flv-rotulo">SALDO FINAL</td>' + dadosMes.map(function (d) { return celValor(d.saldoFinalProj, d.saldoFinalReal); }).join("") + '</tr>');
+
+    document.getElementById("flv-tbody").innerHTML = rows.join("");
+
+    fluxoVisaoCarregado = true;
   }
 
 

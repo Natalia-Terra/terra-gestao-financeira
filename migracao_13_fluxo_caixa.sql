@@ -1,0 +1,5 @@
+-- Migração 13 — Fluxo de Caixa (Entrega 10)
+-- Tabelas: contas_bancarias, saldos_contas, recebimentos_previstos,
+-- entradas_outras, saidas_outras + RLS + triggers (auditoria + touch).
+-- Conteúdo aplicado via Supabase MCP em 2026-05-04.
+-- Ver migracao detalhada no histórico do Supabase ou no Git tag entrega-10.

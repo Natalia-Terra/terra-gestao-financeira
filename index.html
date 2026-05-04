@@ -165,7 +165,7 @@
               <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
               <button class="sb-sub" data-page="faturamento" type="button">Orçamentos</button>
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
-              <button class="sb-sub" data-page="recebimentos" type="button">Recebimentos</button>
+              <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
               <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
               <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
@@ -185,13 +185,16 @@
             </div>
           </div>
 
-          <div class="sb-group" data-macro="caixa">
-            <button class="sb-group-header" type="button" title="Caixa">
-              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h2"/><path d="M12 15h5"/></svg></span><span class="sb-label">Caixa</span><span class="sb-caret">▾</span>
+          <div class="sb-group" data-macro="fluxo">
+            <button class="sb-group-header" type="button" title="Fluxo de Caixa">
+              <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l4-4 4 4 4-7 6 6"/><path d="M3 21h18"/></svg></span><span class="sb-label">Fluxo de Caixa</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
-              <button class="sb-sub" data-page="caixa_saldo" type="button">Saldo Mensal</button>
-              <button class="sb-sub" data-page="caixa_compromissos" type="button">Compromissos</button>
+              <button class="sb-sub" data-page="fluxo_visao" type="button">Visão 12 meses</button>
+              <button class="sb-sub" data-page="fluxo_contas" type="button">Contas Bancárias</button>
+              <button class="sb-sub" data-page="fluxo_saldos" type="button">Saldos Mensais</button>
+              <button class="sb-sub" data-page="fluxo_receb_prev" type="button">Recebimentos Previstos</button>
+              <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
             </div>
           </div>
 
@@ -470,7 +473,7 @@
 
         <!-- Recebimentos — 4c -->
         <section class="page" data-page="recebimentos" hidden>
-          <div class="page-header"><h1 class="page-title">Recebimentos</h1><p class="page-sub">Entradas de caixa — origem: movimentos com natureza "Recebimento"</p></div>
+          <div class="page-header"><h1 class="page-title">Contas a Receber</h1><p class="page-sub">Recebidos, a receber e vencidos — busca, mês e tipo</p></div>
           <div class="grid-metrics">
             <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="rec-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
             <div class="metric-card"><div class="metric-label">Valor recebido</div><div class="metric-value" id="rec-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
@@ -1354,6 +1357,119 @@
                 <tbody id="bind-tbody">
                   <tr><td colspan="7" class="tbl-vazio">Aguardando dados de RH (frequência, medidas disciplinares, avaliações).</td></tr>
                 </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Fluxo de Caixa > Visão 12 meses -->
+        <section class="page" data-page="fluxo_visao" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Fluxo de Caixa — Visão 12 meses</h1>
+            <p class="page-sub">Saldo Inicial · Entradas · Saídas · Saldo Final — Projetado vs Realizado</p>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:14px">
+            <label class="toolbar-inline">A partir de:
+              <input type="month" id="flv-mes-ini" />
+            </label>
+            <label class="toolbar-inline">Modo:
+              <select id="flv-modo">
+                <option value="comparar">Comparar (Projetado × Realizado)</option>
+                <option value="projetado">Só Projetado</option>
+                <option value="realizado">Só Realizado</option>
+              </select>
+            </label>
+            <button class="btn-limpar" id="flv-btn-recarregar" type="button">Recarregar</button>
+            <span class="toolbar-label" id="flv-lbl"></span>
+          </div>
+
+          <div class="card fat-card">
+            <div class="table-wrap" id="flv-wrap">
+              <table class="tabela tabela-flv" id="flv-tabela">
+                <thead id="flv-thead"></thead>
+                <tbody id="flv-tbody"><tr><td class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Fluxo de Caixa > Contas Bancárias -->
+        <section class="page" data-page="fluxo_contas" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Contas Bancárias</h1>
+            <p class="page-sub">Contas correntes, poupanças e aplicações usadas no Fluxo de Caixa</p>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="cb-busca" placeholder="Buscar nome ou banco…" />
+            <button class="btn-ouro" id="cb-btn-novo" type="button">+ Nova conta</button>
+            <span class="toolbar-label" id="cb-lbl"></span>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Nome</th><th>Banco</th><th>Tipo</th><th>Agência</th><th>Conta</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="cb-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Fluxo de Caixa > Saldos Mensais -->
+        <section class="page" data-page="fluxo_saldos" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Saldos Mensais por Conta</h1>
+            <p class="page-sub">Saldo final realizado por conta e mês — alimenta a Visão 12 meses e o Programa de Bônus</p>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <label class="toolbar-inline">Conta:
+              <select id="sc-conta"><option value="">Todas</option></select>
+            </label>
+            <label class="toolbar-inline">Mês:
+              <input type="month" id="sc-mes" />
+            </label>
+            <button class="btn-ouro" id="sc-btn-novo" type="button">+ Lançar saldo</button>
+            <button class="btn-limpar" id="sc-btn-limpar" type="button">Limpar filtros</button>
+            <span class="toolbar-label" id="sc-lbl"></span>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Mês</th><th>Conta</th><th class="num">Saldo final realizado</th><th class="num">Projetado</th><th>Observação</th><th>Ações</th></tr></thead>
+                <tbody id="sc-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Página: Fluxo de Caixa > Recebimentos Previstos -->
+        <section class="page" data-page="fluxo_receb_prev" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Recebimentos Previstos</h1>
+            <p class="page-sub">Parcelas previstas por orçamento — base para Contas a Receber e entradas projetadas</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="rp-m-pen">—</div><div class="metric-sub">não recebidas</div></div>
+            <div class="metric-card"><div class="metric-label">Total a receber (próx 12m)</div><div class="metric-value" id="rp-m-tot12">—</div><div class="metric-sub">soma das parcelas pendentes</div></div>
+            <div class="metric-card"><div class="metric-label">Vencidas</div><div class="metric-value" id="rp-m-venc">—</div><div class="metric-sub">prazo passou e não recebeu</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="rp-busca" placeholder="Buscar orçamento ou cliente…" />
+            <select id="rp-status">
+              <option value="">Todos</option>
+              <option value="pendente">Pendentes</option>
+              <option value="recebido">Recebidos</option>
+              <option value="vencido">Vencidos</option>
+            </select>
+            <button class="btn-ouro" id="rp-btn-novo" type="button">+ Nova parcela</button>
+            <button class="btn-limpar" id="rp-btn-limpar" type="button">Limpar</button>
+            <span class="toolbar-label" id="rp-lbl"></span>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data prevista</th><th>Orçamento</th><th>Cliente</th><th class="num">Parcela</th><th class="num">Valor</th><th>Recebido em</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="rp-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>

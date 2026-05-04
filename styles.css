@@ -1716,3 +1716,54 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 
 /* Saldo negativo na tabela de Caixa */
 .tabela td.num.neg { color: var(--danger); font-weight: 600; }
+
+
+/* =========================================================
+   FLUXO DE CAIXA — Visão 12 meses
+   ========================================================= */
+.tabela-flv { min-width: 100%; }
+.tabela-flv .flv-rotulo {
+  text-align: left;
+  font-weight: 700;
+  background: var(--bg2);
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  border-right: 2px solid var(--borda2);
+  white-space: nowrap;
+  min-width: 180px;
+}
+.tabela-flv thead th.flv-mes {
+  text-align: center;
+  background: linear-gradient(180deg, var(--bg3) 0%, var(--bg) 100%);
+  color: var(--ouro-esc);
+  font-family: 'Quattrocento', Georgia, serif;
+  font-size: 13px;
+  border-bottom: 1px solid var(--borda2);
+}
+.tabela-flv thead th.flv-sub-p, .tabela-flv thead th.flv-sub-r {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--bg2);
+  color: var(--text3);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--borda);
+}
+.tabela-flv thead th.flv-sub-r { color: var(--ouro-esc); }
+.tabela-flv tbody tr.flv-grupo > td {
+  font-weight: 700;
+  background: var(--bg3);
+  border-top: 1px solid var(--borda2);
+}
+.tabela-flv tbody tr.flv-detalhe > td { background: var(--bg2); font-size: 12px; color: var(--text2); }
+.tabela-flv tbody tr.flv-entrada > td.flv-rotulo { color: var(--success); }
+.tabela-flv tbody tr.flv-saida   > td.flv-rotulo { color: var(--danger); }
+.tabela-flv tbody tr.flv-final   > td             { background: var(--bg4); border-top: 2px solid var(--ouro-esc); }
+.tabela-flv td.num { padding: 6px 10px; min-width: 95px; }
+
+/* Em telas mais largas, o table-wrap vira scrollable só se necessário */
+.fat-card .table-wrap:has(.tabela-flv) {
+  overflow-x: auto;
+  overflow-y: visible;
+}
