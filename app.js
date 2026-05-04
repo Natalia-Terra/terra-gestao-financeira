@@ -2515,6 +2515,8 @@
         q.then(function (r) {
           if (r.error) { done(r.error.message); return; }
           funcionariosCarregado = false;
+          folhaCustoCarregado = false;   // CC do func afeta Custo Indireto + por Área
+          bonCarregado = false;           // Bônus Individual usa lista de funcionarios
           carregarFuncionariosSeNecessario();
           done(null);
         });
@@ -3381,14 +3383,28 @@
         setImpStatus("Importação terminou com avisos. Inseridos: " + inseridos + " · Erros em " + erros.length + " lote(s): " + erros.slice(0,3).join(" | "), "alerta");
       } else {
         setImpStatus("Importação concluída. " + inseridos + " registro(s) inseridos em " + tpl.alvo + ".", "ok");
-        // Invalida caches afetados para o usuário ver os dados novos
-        if (tpl.alvo === "caixa_saldo_mensal")     { caixaSaldoCarregado = false; }
-        if (tpl.alvo === "compromissos_financeiros"){ compromissosCarregado = false; }
+        // Invalida caches afetados (incluindo telas derivadas: Visão 12m, Bônus, Apropriação)
+        if (tpl.alvo === "caixa_saldo_mensal") {
+          caixaSaldoCarregado = false;
+          fluxoVisaoCarregado = false;   // Visão 12m
+          bonCarregado = false;          // Caixa Positivo no Bônus
+        }
+        if (tpl.alvo === "compromissos_financeiros") {
+          compromissosCarregado = false;
+          fluxoVisaoCarregado = false;   // Visão 12m (saídas projetadas)
+          bonCarregado = false;          // ICC no Bônus
+        }
         if (tpl.alvo === "orcamentos" || tpl.alvo === "movimentos") {
           orcamentosCarregados = false;
           movimentosCompletos = []; orcamentosLista = [];
+          aprCarregado = false;          // Apropriação usa cliente_por_orcamento
+          bonCarregado = false;          // Faturamento Bruto + ML
+          fluxoVisaoCarregado = false;   // Visão 12m usa orcamentos+movs
         }
-        if (tpl.alvo === "receitas_custos") { rcCarregado = false; rcLista = []; }
+        if (tpl.alvo === "receitas_custos") {
+          rcCarregado = false; rcLista = [];
+          bonCarregado = false;          // Margem Líquida no Bônus
+        }
       }
       impParsed = null;
     };
@@ -3661,6 +3677,8 @@
       var inativos = linhas.length - ativos;
       setImpStatus("Importação concluída. " + linhas.length + " funcionários (" + ativos + " ativos / " + inativos + " inativos/afastados). Vincule Centro de Custo e Posição via Editar.", "ok");
       funcionariosCarregado = false;
+      folhaCustoCarregado = false;
+      bonCarregado = false;
       impParsed = null;
     });
   }
@@ -3817,6 +3835,11 @@
         if (naoEncontrados.length) msg += " · " + naoEncontrados.length + " sem cadastro: " + naoEncontrados.slice(0,3).join(", ") + (naoEncontrados.length > 3 ? "…" : "");
         if (erros.length)         msg += " · " + erros.length + " erros: " + erros.slice(0,2).join(" | ");
         setImpStatus(msg, naoEncontrados.length || erros.length ? "alerta" : "ok");
+        // Invalida caches dependentes — afeta Folha, Custo Indireto, Custo por Área, Bônus, Apropriação
+        folhaCustoCarregado = false;
+        funcionariosCarregado = false;   // CC pode ter mudado nas atribuições
+        bonCarregado = false;            // Pessoal afeta Profissional do Bônus
+        aprCarregado = false;            // Custo por OS usa folha indireto
         impParsed = null;
       }
       processarUm();

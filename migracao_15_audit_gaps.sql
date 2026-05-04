@@ -1,0 +1,6 @@
+-- Migração 15 — Fechamento de gaps de auditoria pós-Entrega 11
+-- Adiciona triggers de auditoria e touch atualizado_em em 3 tabelas:
+--   orcamentos (tipo_manual)
+--   centros_custo (dre, tipo_custo)
+--   plano_contas (tipo_custo + atualizado_em adicionado nesta migração)
+-- Conteúdo aplicado via Supabase MCP em 2026-05-04.
