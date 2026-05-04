@@ -166,6 +166,7 @@
               <button class="sb-sub" data-page="faturamento" type="button">Orçamentos</button>
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
               <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
+              <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
               <button class="sb-sub" data-page="despesas" type="button">Despesas</button>
               <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
@@ -193,8 +194,6 @@
               <button class="sb-sub" data-page="fluxo_visao" type="button">Visão 12 meses</button>
               <button class="sb-sub" data-page="fluxo_contas" type="button">Contas Bancárias</button>
               <button class="sb-sub" data-page="fluxo_saldos" type="button">Saldos Mensais</button>
-              <button class="sb-sub" data-page="fluxo_receb_prev" type="button">Recebimentos Previstos</button>
-              <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
             </div>
           </div>
 
@@ -473,7 +472,11 @@
 
         <!-- Recebimentos — 4c -->
         <section class="page" data-page="recebimentos" hidden>
-          <div class="page-header"><h1 class="page-title">Contas a Receber</h1><p class="page-sub">Recebidos, a receber e vencidos — busca, mês e tipo</p></div>
+          <div class="page-header">
+            <h1 class="page-title">Contas a Receber</h1>
+            <p class="page-sub">Recebidos, a receber e vencidos — busca, mês e tipo</p>
+            <div style="margin-top:8px"><button class="btn-limpar" type="button" data-goto="fluxo_receb_prev">📅 Ver parcelas previstas</button></div>
+          </div>
           <div class="grid-metrics">
             <div class="metric-card"><div class="metric-label">Qtd</div><div class="metric-value" id="rec-m-qtd">—</div><div class="metric-sub">no filtro atual</div></div>
             <div class="metric-card"><div class="metric-label">Valor recebido</div><div class="metric-value" id="rec-m-valor">—</div><div class="metric-sub">soma do filtro</div></div>
@@ -1448,8 +1451,9 @@
         <!-- Página: Fluxo de Caixa > Recebimentos Previstos -->
         <section class="page" data-page="fluxo_receb_prev" hidden>
           <div class="page-header">
-            <h1 class="page-title">Recebimentos Previstos</h1>
-            <p class="page-sub">Parcelas previstas por orçamento — base para Contas a Receber e entradas projetadas</p>
+            <button class="btn-limpar btn-voltar" type="button" data-goto="recebimentos">← Contas a Receber</button>
+            <h1 class="page-title">Parcelas Previstas (Recebimentos)</h1>
+            <p class="page-sub">Cronograma de parcelas por orçamento — alimenta as entradas projetadas do Fluxo de Caixa</p>
           </div>
           <div class="grid-metrics">
             <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="rp-m-pen">—</div><div class="metric-sub">não recebidas</div></div>
