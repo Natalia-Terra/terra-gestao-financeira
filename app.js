@@ -384,6 +384,7 @@
   var orcamentosCarregando = false;
   var orcamentosLista = [];        // linhas da tabela orcamentos
   var tipoPorOrcamento = {};       // { "24-001": "Mobília Fixa", ... }
+  var tipoManualPorOrcamento = {}; // sobrepõe a derivação automática quando preenchido
 
   var fatBusca     = document.getElementById("fat-busca");
   var fatStatus    = document.getElementById("fat-status");
@@ -554,7 +555,7 @@
     fatTbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio">Carregando orçamentos e movimentos…</td></tr>';
 
     var qOrc = client.from("orcamentos")
-      .select("data, orcamento, nome, parceiro, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento")
+      .select("data, orcamento, nome, parceiro, venda, recebimento, a_receber, nota_fiscal, a_faturar, status_recebimento, status_faturamento, tipo_manual")
       .order("data", { ascending: false });
 
     // Puxa movimentos completos — serve 4a (derivação de Tipo) e 4c/4d
@@ -573,6 +574,10 @@
 
       orcamentosLista = rOrc.data || [];
       movimentosCompletos = (rMov && rMov.data) || [];
+      tipoManualPorOrcamento = {};
+      orcamentosLista.forEach(function (r) {
+        if (r.tipo_manual) tipoManualPorOrcamento[r.orcamento] = r.tipo_manual;
+      });
       tipoPorOrcamento = derivarTipoPorOrcamento(movimentosCompletos);
       clientePorOrcamento = {};
       orcamentosLista.forEach(function (r) { clientePorOrcamento[r.orcamento] = r.nome || null; });
@@ -605,6 +610,8 @@
 
     var mapa = {};
     Object.keys(somaPorOrcTipo).forEach(function (orc) {
+      // Decisão manual sobrepõe derivação automática
+      if (tipoManualPorOrcamento[orc]) { mapa[orc] = tipoManualPorOrcamento[orc]; return; }
       var tipos = somaPorOrcTipo[orc];
       var melhor = null, melhorValor = -Infinity;
       Object.keys(tipos).forEach(function (t) {
@@ -1535,6 +1542,7 @@
       });
 
       var comRuido = [];
+      var resolvidos = [];
       var totalAnalisados = 0;
       Object.keys(porOrc).forEach(function (orc) {
         totalAnalisados++;
@@ -1543,28 +1551,99 @@
         if (ativos.length > 1) {
           var total = 0;
           ativos.forEach(function (t) { total += tipos[t]; });
-          comRuido.push({
+          var registro = {
             orcamento: orc,
             cliente: clientePorOrcamento[orc] || "—",
             tipos: ativos.map(function (t) { return t + " (" + fmtBRL(tipos[t]) + ")"; }).join(", "),
-            total: total
-          });
+            total: total,
+            tipoManual: tipoManualPorOrcamento[orc] || null
+          };
+          if (registro.tipoManual) resolvidos.push(registro);
+          else comRuido.push(registro);
         }
       });
       comRuido.sort(function (a, b) { return b.total - a.total; });
+      resolvidos.sort(function (a, b) { return b.total - a.total; });
 
       valText(document.getElementById("diag-m-qtd"), fmtInt(comRuido.length));
       valText(document.getElementById("diag-m-tot"), fmtInt(totalAnalisados));
 
-      var tbody = document.getElementById("diag-tbody");
-      preencherTbody(tbody, comRuido.map(function (r) {
+      var linhasPendentes = comRuido.map(function (r) {
         return '<tr>' +
           '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
           '<td>' + escHtml(r.cliente) + '</td>' +
           '<td>' + escHtml(r.tipos) + '</td>' +
           '<td class="num">' + fmtBRL(r.total) + '</td>' +
+          '<td><button type="button" class="btn-acao btn-resolver-ruido" data-orc="' + escHtml(r.orcamento) + '">Resolver</button></td>' +
         '</tr>';
-      }), 4, "Nenhum orçamento com ruído de Tipo. 👍");
+      });
+
+      var linhasResolvidos = resolvidos.map(function (r) {
+        return '<tr class="linha-resolvido">' +
+          '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+          '<td>' + escHtml(r.cliente) + '</td>' +
+          '<td><span class="badge-tipo">' + escHtml(r.tipoManual) + '</span> <span class="muted">(decisão manual)</span></td>' +
+          '<td class="num">' + fmtBRL(r.total) + '</td>' +
+          '<td><button type="button" class="btn-acao btn-resolver-ruido" data-orc="' + escHtml(r.orcamento) + '">Alterar</button></td>' +
+        '</tr>';
+      });
+
+      var tbody = document.getElementById("diag-tbody");
+      if (linhasPendentes.length === 0 && linhasResolvidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhum orçamento com ruído de Tipo. 👍</td></tr>';
+      } else {
+        var html = "";
+        if (linhasPendentes.length) html += linhasPendentes.join("");
+        if (linhasResolvidos.length) {
+          html += '<tr class="separador-grupo"><td colspan="5">— Resolvidos manualmente (' + linhasResolvidos.length + ') —</td></tr>';
+          html += linhasResolvidos.join("");
+        }
+        tbody.innerHTML = html;
+      }
+
+      // Liga listeners dos botões Resolver
+      tbody.querySelectorAll(".btn-resolver-ruido").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          abrirModalResolverRuido(btn.getAttribute("data-orc"));
+        });
+      });
+    });
+  }
+
+  function abrirModalResolverRuido(orcamento) {
+    var registro = orcamentosLista.filter(function (r) { return r.orcamento === orcamento; })[0];
+    var atual = registro && registro.tipo_manual ? registro.tipo_manual : "";
+    var cliente = (registro && registro.nome) || clientePorOrcamento[orcamento] || "—";
+
+    abrirModal({
+      titulo: "Resolver ruído de Tipo — " + orcamento,
+      fields: [
+        {
+          name: "tipo_manual",
+          label: "Decisão para o orçamento (" + cliente + ")",
+          type: "select",
+          required: true,
+          valor: atual,
+          options: [
+            { value: "",               label: "— derivar automaticamente pelos movimentos —" },
+            { value: "Mobília Fixa",   label: "Mobília Fixa (tratar tudo como Fixa)" },
+            { value: "Mobília Solta",  label: "Mobília Solta (tratar tudo como Solta)" },
+            { value: "Misto",          label: "Misto (manter ambos como decisão consciente)" }
+          ]
+        }
+      ],
+      onSubmit: function (values, done) {
+        var valor = values.tipo_manual || null; // null = limpar
+        client.from("orcamentos").update({ tipo_manual: valor }).eq("orcamento", orcamento).then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          if (registro) registro.tipo_manual = valor;
+          if (valor) tipoManualPorOrcamento[orcamento] = valor;
+          else delete tipoManualPorOrcamento[orcamento];
+          tipoPorOrcamento = derivarTipoPorOrcamento(movimentosCompletos);
+          done(null);
+          renderDiagnostico();
+        });
+      }
     });
   }
 
