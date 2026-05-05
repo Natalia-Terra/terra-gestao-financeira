@@ -1,0 +1,5 @@
+-- Migração 17 — Perfis dinâmicos + soft delete (Pacote A da Entrega 12)
+-- Ver detalhes: tabela perfis_tipos, coluna perfis.ativo,
+-- funções auth_pode_modificar/auth_pode_admin (SECURITY DEFINER),
+-- refatoração de 41 RLS policies pra usar essas funções.
+-- Aplicada via Supabase MCP em 2026-05-04.

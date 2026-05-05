@@ -326,6 +326,7 @@
     if (pageId === "cfg_parametros") carregarParametros(window._terraUser);
     if (pageId === "cfg_diag")       renderDiagnostico();
     if (pageId === "cfg_usuarios")   carregarUsuariosSeNecessario();
+    if (pageId === "cfg_perfis_tipos") carregarPerfisTiposSeNecessario();
     if (pageId === "dre")            carregarDreSeNecessario();
     if (pageId === "rh_funcionarios") carregarFuncionariosSeNecessario();
     if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
@@ -2282,38 +2283,76 @@
   var usuariosLista = [];
   var usuariosCarregado = false;
 
+  var perfisTiposLista = [];
+  var perfisTiposCarregado = false;
+  var emailsByUserId = {};   // id → email (vem de auth.admin.listUsers via Edge ou RPC)
+
   function carregarUsuariosSeNecessario() {
     usuariosCarregado = false;
-    client.from("perfis").select("id, nome, perfil, senha_temporaria, criado_em, ultimo_acesso")
-      .order("nome", { ascending: true })
-      .then(function (r) {
-        if (r.error) {
-          document.getElementById("us-tbody").innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
-          return;
-        }
-        usuariosLista = r.data || [];
-        usuariosCarregado = true;
-        renderUsuarios();
-      });
+    var qPerfis = client.from("perfis")
+      .select("id, nome, perfil, senha_temporaria, criado_em, ultimo_acesso, ativo")
+      .order("nome", { ascending: true });
+    var qTipos  = client.from("perfis_tipos").select("*").order("ordem");
+    Promise.all([qPerfis, qTipos]).then(function (rs) {
+      var rP = rs[0], rT = rs[1];
+      if (rP.error) {
+        document.getElementById("us-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + rP.error.message + '</td></tr>';
+        return;
+      }
+      usuariosLista = rP.data || [];
+      perfisTiposLista = (rT && rT.data) || [];
+      perfisTiposCarregado = true;
+      usuariosCarregado = true;
+      renderUsuarios();
+    });
+
+    // listeners idempotentes
+    var busca = document.getElementById("us-busca");
+    if (busca && !busca.dataset.bound) { busca.dataset.bound = "1"; busca.addEventListener("input", renderUsuarios); }
+    var st = document.getElementById("us-status");
+    if (st && !st.dataset.bound) { st.dataset.bound = "1"; st.addEventListener("change", renderUsuarios); }
+    var btnNovo = document.getElementById("us-btn-novo");
+    if (btnNovo && !btnNovo.dataset.bound) {
+      btnNovo.dataset.bound = "1";
+      btnNovo.addEventListener("click", function () { abrirModalNovoUsuario(); });
+    }
   }
 
   function renderUsuarios() {
     var tbody = document.getElementById("us-tbody");
-    var busca = (document.getElementById("us-busca").value || "").trim().toLowerCase();
+    if (!tbody) return;
+    var busca = ((document.getElementById("us-busca")||{}).value || "").trim().toLowerCase();
+    var status = ((document.getElementById("us-status")||{}).value || "").trim();
     var filtrados = usuariosLista.filter(function (u) {
-      return matchBusca(busca, [u.id, u.nome]);
+      if (status === "ativo" && u.ativo === false) return false;
+      if (status === "inativo" && u.ativo !== false) return false;
+      return matchBusca(busca, [u.id, u.nome, emailsByUserId[u.id]]);
     });
     valText(document.getElementById("us-lbl"), filtrados.length + " de " + usuariosLista.length);
 
     preencherTbody(tbody, filtrados.map(function (u) {
+      var st = u.ativo === false
+        ? '<span class="tag tag-warn">Inativo</span>'
+        : '<span class="tag tag-ok">Ativo</span>';
+      var senhaTempBadge = u.senha_temporaria ? '<span class="tag tag-warn">sim</span>' : '<span class="muted">—</span>';
+      var ultimo = u.ultimo_acesso ? fmtData(u.ultimo_acesso) : '<span class="muted">nunca</span>';
+      var emailTxt = emailsByUserId[u.id] || '<span class="muted">—</span>';
+      var btnAtivar = u.ativo === false
+        ? '<button type="button" class="btn-acao" data-us-reativar="' + escHtml(u.id) + '" title="Reativar usuário">Reativar</button>'
+        : '<button type="button" class="btn-limpar" data-us-desativar="' + escHtml(u.id) + '" title="Desativar usuário">Desativar</button>';
       return '<tr>' +
-        '<td class="mono" title="' + escHtml(u.id) + '">' + escHtml(String(u.id).slice(0,8)) + '…</td>' +
-        '<td>' + escHtml(u.nome) + '</td>' +
+        '<td><strong>' + escHtml(u.nome) + '</strong></td>' +
+        '<td>' + emailTxt + '</td>' +
         '<td>' + escHtml(u.perfil) + '</td>' +
-        '<td>' + (u.senha_temporaria ? '<span class="badge-tipo outras">sim</span>' : '—') + '</td>' +
-        '<td><button class="btn-limpar" data-us-edit="' + escHtml(u.id) + '">Editar</button></td>' +
+        '<td>' + st + '</td>' +
+        '<td>' + senhaTempBadge + '</td>' +
+        '<td>' + ultimo + '</td>' +
+        '<td>' +
+          '<button class="btn-limpar" data-us-edit="' + escHtml(u.id) + '" style="margin-right:4px">Editar</button>' +
+          btnAtivar +
+        '</td>' +
       '</tr>';
-    }), 5, "Nenhum usuário.");
+    }), 7, "Nenhum usuário.");
 
     tbody.querySelectorAll("[data-us-edit]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -2322,14 +2361,104 @@
         if (u) abrirModalUsuario(u);
       });
     });
+    tbody.querySelectorAll("[data-us-desativar]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-us-desativar");
+        var u = usuariosLista.find(function (x) { return x.id === id; });
+        if (!u) return;
+        if (!confirm("Desativar usuário '" + u.nome + "'?\n\nEle não conseguirá mais fazer login. Pode ser reativado depois.")) return;
+        chamarGerenciarUsuarios({ acao: "desativar", user_id: id }, "Usuário desativado.");
+      });
+    });
+    tbody.querySelectorAll("[data-us-reativar]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-us-reativar");
+        chamarGerenciarUsuarios({ acao: "reativar", user_id: id }, "Usuário reativado.");
+      });
+    });
+  }
+
+  // Helper genérico pra chamar a Edge Function gerenciar-usuarios
+  function chamarGerenciarUsuarios(payload, mensagemSucesso) {
+    client.auth.getSession().then(function (s) {
+      var token = s && s.data && s.data.session && s.data.session.access_token;
+      if (!token) { alert("Sessão expirada. Faça login de novo."); return; }
+      var url = (typeof TERRA_CONFIG !== "undefined" && TERRA_CONFIG.SUPABASE_URL ? TERRA_CONFIG.SUPABASE_URL : "")
+                + "/functions/v1/gerenciar-usuarios";
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+        .then(function (resp) {
+          if (resp.status >= 200 && resp.status < 300) {
+            alert(mensagemSucesso + (resp.body && resp.body.aviso ? "\n\n" + resp.body.aviso : ""));
+            carregarUsuariosSeNecessario();
+          } else {
+            alert("Falha: " + ((resp.body && resp.body.error) || "erro desconhecido"));
+          }
+        })
+        .catch(function (e) { alert("Erro de rede: " + e.message); });
+    });
+  }
+
+  function opcoesPerfis() {
+    var ativos = (perfisTiposLista || []).filter(function (t) { return t.ativo; });
+    if (!ativos.length) {
+      // Fallback: 3 fixos
+      return ["admin","operador","consulta"];
+    }
+    return ativos.map(function (t) { return { value: t.nome, label: t.nome + (t.descricao ? " — " + t.descricao : "") }; });
+  }
+
+  function abrirModalNovoUsuario() {
+    abrirModal({
+      titulo: "Novo usuário",
+      fields: [
+        { name: "email",  label: "Email",   type: "email", required: true },
+        { name: "nome",   label: "Nome completo", type: "text", required: true },
+        { name: "perfil", label: "Perfil", type: "select", valor: "operador",
+          options: opcoesPerfis(), required: true }
+      ],
+      onSubmit: function (v, done) {
+        // Bypass de done — vamos chamar Edge Function e tratar
+        client.auth.getSession().then(function (s) {
+          var token = s && s.data && s.data.session && s.data.session.access_token;
+          if (!token) { done("Sessão expirada"); return; }
+          var url = (typeof TERRA_CONFIG !== "undefined" && TERRA_CONFIG.SUPABASE_URL ? TERRA_CONFIG.SUPABASE_URL : "")
+                    + "/functions/v1/gerenciar-usuarios";
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + token,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ acao: "criar", email: v.email, nome: v.nome, perfil: v.perfil })
+          }).then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+            .then(function (resp) {
+              if (resp.status >= 200 && resp.status < 300) {
+                alert("Usuário criado!\n\n" + (resp.body.mensagem || "Email de redefinição enviado."));
+                carregarUsuariosSeNecessario();
+                done(null);
+              } else {
+                done((resp.body && resp.body.error) || "Erro desconhecido");
+              }
+            })
+            .catch(function (e) { done("Rede: " + e.message); });
+        });
+      }
+    });
   }
 
   function abrirModalUsuario(u) {
     abrirModal({
-      titulo: "Editar usuário",
+      titulo: "Editar usuário — " + u.nome,
       fields: [
-        { name: "nome",            label: "Nome",                        type: "text",    valor: u.nome,    required: true },
-        { name: "perfil",          label: "Perfil",                      type: "select",  valor: u.perfil,  options: ["admin","operador","consulta"], required: true },
+        { name: "nome",            label: "Nome",                        type: "text",   valor: u.nome,   required: true },
+        { name: "perfil",          label: "Perfil",                      type: "select", valor: u.perfil, options: opcoesPerfis(), required: true },
         { name: "senha_temporaria",label: "Forçar troca no próximo login",type: "select", valor: u.senha_temporaria ? "true" : "false", options: [{value:"false",label:"Não"},{value:"true",label:"Sim"}] }
       ],
       onSubmit: function (v, done) {
@@ -2339,8 +2468,98 @@
           senha_temporaria: v.senha_temporaria === "true"
         }).eq("id", u.id).then(function (r) {
           if (r.error) { done(r.error.message); return; }
-          usuariosLista = usuariosLista.map(function (x) { return x.id === u.id ? Object.assign({}, x, { nome: v.nome, perfil: v.perfil, senha_temporaria: v.senha_temporaria === "true" }) : x; });
-          renderUsuarios();
+          carregarUsuariosSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // TIPOS DE PERFIL (Pacote C — admin-only)
+  // =========================================================================
+
+  function carregarPerfisTiposSeNecessario() {
+    client.from("perfis_tipos").select("*").order("ordem").then(function (r) {
+      if (r.error) {
+        document.getElementById("pt-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      perfisTiposLista = r.data || [];
+      perfisTiposCarregado = true;
+      renderPerfisTipos();
+    });
+    var btn = document.getElementById("pt-btn-novo");
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function () { abrirModalPerfilTipo(null); });
+    }
+  }
+
+  function renderPerfisTipos() {
+    var tbody = document.getElementById("pt-tbody");
+    if (!tbody) return;
+    valText(document.getElementById("pt-lbl"), perfisTiposLista.length + " tipos");
+    if (!perfisTiposLista.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhum tipo. Clique em + Novo tipo.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = perfisTiposLista.map(function (t) {
+      var bAtivo = t.ativo ? '<span class="tag tag-ok">sim</span>' : '<span class="tag tag-warn">não</span>';
+      var bAdm = t.pode_admin ? '<span class="tag tag-ok">sim</span>' : '<span class="muted">não</span>';
+      var bMod = t.pode_modificar ? '<span class="tag tag-ok">sim</span>' : '<span class="muted">não</span>';
+      return '<tr>' +
+        '<td class="num">' + fmtInt(t.ordem) + '</td>' +
+        '<td><strong>' + escHtml(t.nome) + '</strong></td>' +
+        '<td>' + escHtml(t.descricao || "—") + '</td>' +
+        '<td>' + bAdm + '</td>' +
+        '<td>' + bMod + '</td>' +
+        '<td>' + bAtivo + '</td>' +
+        '<td><button class="btn-limpar" data-pt-edit="' + t.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-pt-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-pt-edit"));
+        var t = perfisTiposLista.find(function (x) { return x.id === id; });
+        if (t) abrirModalPerfilTipo(t);
+      });
+    });
+  }
+
+  function abrirModalPerfilTipo(t) {
+    var ehNovo = !t;
+    abrirModal({
+      titulo: ehNovo ? "Novo tipo de perfil" : "Editar tipo — " + t.nome,
+      fields: [
+        { name: "nome",        label: "Nome (sem espaços, ex: gerente)", type: "text",   valor: t && t.nome, required: true },
+        { name: "descricao",   label: "Descrição",                       type: "textarea", valor: t && t.descricao },
+        { name: "pode_admin",  label: "Pode admin? (Configuração + gerenciar usuários)", type: "select",
+          valor: t && t.pode_admin ? "true" : "false",
+          options: [{ value: "true", label: "Sim" }, { value: "false", label: "Não" }] },
+        { name: "pode_modificar", label: "Pode modificar dados?", type: "select",
+          valor: t && t.pode_modificar ? "true" : "false",
+          options: [{ value: "true", label: "Sim" }, { value: "false", label: "Não" }] },
+        { name: "ordem", label: "Ordem (menor = aparece primeiro)", type: "number", valor: t && t.ordem !== undefined ? t.ordem : 100 },
+        { name: "ativo", label: "Ativo?", type: "select",
+          valor: t ? (t.ativo ? "true" : "false") : "true",
+          options: [{ value: "true", label: "Sim" }, { value: "false", label: "Não" }] }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          nome: v.nome,
+          descricao: v.descricao,
+          pode_admin: v.pode_admin === "true",
+          pode_modificar: v.pode_modificar === "true",
+          ordem: Number(v.ordem) || 100,
+          ativo: v.ativo === "true"
+        };
+        var q = ehNovo
+          ? client.from("perfis_tipos").insert(payload)
+          : client.from("perfis_tipos").update(payload).eq("id", t.id);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          carregarPerfisTiposSeNecessario();
           done(null);
         });
       }

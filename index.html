@@ -995,7 +995,11 @@
             </button>
             <button class="config-card" type="button" data-subpage="cfg_usuarios">
               <div class="config-card-title">Usuários</div>
-              <div class="config-card-desc">Editar nome, perfil e flag de senha temporária (criação e exclusão no painel do Supabase)</div>
+              <div class="config-card-desc">Cadastro, edição, ativação/desativação de usuários (admin)</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_perfis_tipos">
+              <div class="config-card-title">Tipos de Perfil</div>
+              <div class="config-card-desc">Gerenciar tipos de perfil e permissões (admin)</div>
             </button>
           </div>
         </section>
@@ -1078,17 +1082,44 @@
           <div class="page-header">
             <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
             <h1 class="page-title">Usuários</h1>
-            <p class="page-sub">Editar nome e perfil de quem já tem login. Criar novos: Supabase → Authentication → Add user, depois INSERT em perfis</p>
+            <p class="page-sub">Cadastro, edição, ativação/desativação de usuários do sistema</p>
           </div>
           <div class="card fat-card">
             <div class="toolbar">
               <input class="input-search" type="text" id="us-busca" placeholder="Buscar por nome ou UUID…" />
+              <select id="us-status">
+                <option value="">Todos</option>
+                <option value="ativo">Ativos</option>
+                <option value="inativo">Inativos</option>
+              </select>
+              <button class="btn-ouro" id="us-btn-novo" type="button">+ Novo usuário</button>
               <span class="toolbar-label" id="us-lbl"></span>
             </div>
             <div class="table-wrap">
               <table class="tabela">
-                <thead><tr><th>UUID</th><th>Nome</th><th>Perfil</th><th>Senha temp?</th><th></th></tr></thead>
-                <tbody id="us-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+                <thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Senha temp?</th><th>Último acesso</th><th>Ações</th></tr></thead>
+                <tbody id="us-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Configuração > Tipos de Perfil (admin-only) -->
+        <section class="page" data-page="cfg_perfis_tipos" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Tipos de Perfil</h1>
+            <p class="page-sub">Cadastro de tipos de perfil com permissões. Usado nas RLS de todas as tabelas.</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <button class="btn-ouro" id="pt-btn-novo" type="button">+ Novo tipo</button>
+              <span class="toolbar-label" id="pt-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Ordem</th><th>Nome</th><th>Descrição</th><th>Pode admin?</th><th>Pode modificar?</th><th>Ativo?</th><th>Ações</th></tr></thead>
+                <tbody id="pt-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
