@@ -346,12 +346,12 @@
     if (pageId === "apr_excluidas")   carregarOsExcluidasSeNecessario();
     if (pageId === "cfg_centros")     carregarCentrosSeNecessario();
     if (pageId === "cfg_rubricas")    carregarRubricasSeNecessario();
-    if (pageId === "caixa_saldo")        carregarCaixaSaldoSeNecessario();
     if (pageId === "caixa_compromissos") carregarCompromissosSeNecessario();
     if (pageId === "fluxo_contas")       carregarContasBancariasSeNecessario();
     if (pageId === "fluxo_saldos")       carregarSaldosContasSeNecessario();
-    if (pageId === "fluxo_receb_prev")   carregarRecebimentosPrevistosSeNecessario();
     if (pageId === "fluxo_visao")        carregarFluxoVisaoSeNecessario();
+    if (pageId === "entradas_outras")    carregarEntradasOutrasSeNecessario();
+    if (pageId === "saidas_outras")      carregarSaidasOutrasSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -1931,6 +1931,73 @@
       },
       obrigatorias: ["vencimento","descricao","valor","tipo"],
       dicas: "Colunas: vencimento (data), descricao, valor, tipo (folha|fornecedor|imposto|aluguel|outro), pago_em (opcional — só preencher quando pago)."
+    },
+    contas_bancarias: {
+      nomeLegivel: "Contas Bancárias",
+      alvo: "contas_bancarias",
+      colunas: {
+        "nome":        "nome",
+        "apelido":     "nome",
+        "banco":       "banco",
+        "tipo":        "tipo",
+        "agencia":     "agencia",
+        "agência":     "agencia",
+        "conta":       "conta",
+        "ordem":       "ordem",
+        "ativa":       "ativa",
+        "ativo":       "ativa",
+        "observacao":  "observacao",
+        "observação":  "observacao"
+      },
+      obrigatorias: ["nome","banco","tipo"],
+      dicas: "Colunas: nome (apelido), banco (Itaú|BB|CEF|XP|...), tipo (conta_corrente|poupanca|aplicacao|outro), agencia, conta, ordem (numérico), ativa (Sim/Não/true/false), observacao."
+    },
+    saldos_contas: {
+      nomeLegivel: "Saldos Mensais por Conta",
+      alvo: "saldos_contas",
+      colunas: {
+        "conta":                    "conta_codigo",   // resolvido no parser → conta_id (busca por nome)
+        "conta nome":               "conta_codigo",
+        "nome conta":               "conta_codigo",
+        "mes":                      "mes_ref",
+        "mes_ref":                  "mes_ref",
+        "mês":                      "mes_ref",
+        "mês ref":                  "mes_ref",
+        "saldo inicial":            "saldo_inicial",
+        "saldo_inicial":            "saldo_inicial",
+        "saldo final":              "saldo_final_realizado",
+        "saldo final realizado":    "saldo_final_realizado",
+        "saldo_final_realizado":    "saldo_final_realizado",
+        "saldo final projetado":    "saldo_final_projetado",
+        "saldo_final_projetado":    "saldo_final_projetado",
+        "projetado":                "saldo_final_projetado",
+        "observacao":               "observacao",
+        "observação":               "observacao"
+      },
+      obrigatorias: ["conta_codigo","mes_ref"],
+      onConflict: "conta_id,mes_ref",
+      dicas: "Colunas: conta (nome cadastrado em Fluxo de Caixa > Contas Bancárias), mes_ref (YYYY-MM), saldo_inicial, saldo_final_realizado, saldo_final_projetado, observacao. UPSERT por (conta, mes)."
+    },
+    recebimentos_previstos: {
+      nomeLegivel: "Recebimentos Previstos",
+      alvo: "recebimentos_previstos",
+      colunas: {
+        "orcamento":     "orcamento",
+        "orçamento":     "orcamento",
+        "parcela":       "parcela",
+        "data":          "data_prevista",
+        "data prevista": "data_prevista",
+        "data_prevista": "data_prevista",
+        "vencimento":    "data_prevista",
+        "valor":         "valor",
+        "recebido em":   "recebido_em",
+        "recebido_em":   "recebido_em",
+        "data recebimento": "recebido_em",
+        "observacao":    "observacao",
+        "observação":    "observacao"
+      },
+      obrigatorias: ["orcamento","data_prevista","valor"],
+      dicas: "Colunas: orcamento (código), parcela (numérico, default 1), data_prevista, valor, recebido_em (opcional — só preencher quando já recebido), observacao."
     }
   };
 
@@ -2066,6 +2133,16 @@
             if (col === "mes_ref") {
               var mr = parseMesRef(v);
               out[col] = mr ? (mr + "-01") : null;
+              return;
+            }
+            if (col === "ativa" || col === "ativo") {
+              var sb = String(v).trim().toLowerCase();
+              out[col] = (sb === "sim" || sb === "true" || sb === "1" || sb === "s" || sb === "yes");
+              return;
+            }
+            if (col === "saldo_inicial" || col === "saldo_final_realizado" || col === "saldo_final_projetado" || col === "ordem" || col === "parcela") {
+              var n = Number(String(v).replace(/\./g, "").replace(",", "."));
+              out[col] = isNaN(n) ? null : n;
               return;
             }
             out[col] = String(v);
@@ -3619,6 +3696,46 @@
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
 
+    // Resolução de conta_codigo → conta_id (saldos_contas: conta bancária)
+    var temColunaContaBanc = (impParsed.linhas || []).some(function (l) { return "conta_codigo" in l; });
+    if (temColunaContaBanc) {
+      // Carrega lista de contas bancárias
+      var resolverContas = function () {
+        return client.from("contas_bancarias").select("id, nome").then(function (rs) {
+          if (rs.error) return false;
+          var mapa = {};
+          (rs.data || []).forEach(function (c) {
+            mapa[String(c.nome || "").trim().toLowerCase()] = c.id;
+          });
+          var naoMapeados = 0;
+          impParsed.linhas.forEach(function (l) {
+            var k = String(l.conta_codigo || "").trim().toLowerCase();
+            delete l.conta_codigo;
+            if (!k) { l.conta_id = null; return; }
+            var id = mapa[k] || null;
+            if (id) l.conta_id = id;
+            else { l.conta_id = null; naoMapeados++; }
+          });
+          if (naoMapeados > 0) {
+            if (!confirm(naoMapeados + " linha(s) não casaram com nenhuma conta bancária cadastrada. Cadastre primeiro em Fluxo de Caixa > Contas Bancárias. Continuar mesmo assim (linhas ficarão com conta_id NULL)?")) {
+              impBtnConf.disabled = false;
+              setImpStatus("Importação cancelada. Cadastre as contas primeiro.", "alerta");
+              return false;
+            }
+          }
+          return true;
+        });
+      };
+      resolverContas().then(function (ok) {
+        if (ok === false) return;
+        // Continua resolvendo plano_contas se também houver (raro mas possível)
+        proceedAposFK();
+      });
+      return;
+    }
+    proceedAposFK();
+    function proceedAposFK() {
+
     // Resolução de plano_contas_codigo → plano_contas_id (se as linhas tiverem)
     var temColunaConta = (impParsed.linhas || []).some(function (l) { return "plano_contas_codigo" in l; });
     if (temColunaConta) {
@@ -3663,6 +3780,7 @@
       }
     }
     confirmarImportContinuar(tpl);
+    } // fecha proceedAposFK
   }
 
   function confirmarImportContinuar(tpl) {
@@ -4169,11 +4287,13 @@
         if (naoEncontrados.length) msg += " · " + naoEncontrados.length + " sem cadastro: " + naoEncontrados.slice(0,3).join(", ") + (naoEncontrados.length > 3 ? "…" : "");
         if (erros.length)         msg += " · " + erros.length + " erros: " + erros.slice(0,2).join(" | ");
         setImpStatus(msg, naoEncontrados.length || erros.length ? "alerta" : "ok");
-        // Invalida caches dependentes — afeta Folha, Custo Indireto, Custo por Área, Bônus, Apropriação
+        // Invalida caches dependentes — afeta Folha, Custo Indireto, Custo por Área, Bônus, Apropriação, Visão 12m
         folhaCustoCarregado = false;
-        funcionariosCarregado = false;   // CC pode ter mudado nas atribuições
-        bonCarregado = false;            // Pessoal afeta Profissional do Bônus
-        aprCarregado = false;            // Custo por OS usa folha indireto
+        folhaVisaoCarregado = false;
+        funcionariosCarregado = false;
+        bonCarregado = false;
+        aprCarregado = false;
+        fluxoVisaoCarregado = false;
         impParsed = null;
       }
       processarUm();
@@ -5933,6 +6053,36 @@
 
   var fluxoVisaoCarregado = false;
 
+  // Caches auxiliares pra Visão 12m
+  var folhaVisaoLista = [];
+  var folhaVisaoCarregado = false;
+  var entradasOutrasLista = [];
+  var entradasOutrasCarregado = false;
+  var saidasOutrasLista = [];
+  var saidasOutrasCarregado = false;
+
+  function carregarFolhaVisao() {
+    folhaVisaoCarregado = false;
+    return client.from("folha_pagamento").select("funcionario_id, mes_ref, liquido, salario_bruto").then(function (r) {
+      folhaVisaoLista = (r && r.data) || [];
+      folhaVisaoCarregado = true;
+    });
+  }
+  function carregarEntradasOutras() {
+    entradasOutrasCarregado = false;
+    return client.from("entradas_outras").select("*").order("data_prevista").then(function (r) {
+      entradasOutrasLista = (r && r.data) || [];
+      entradasOutrasCarregado = true;
+    });
+  }
+  function carregarSaidasOutras() {
+    saidasOutrasCarregado = false;
+    return client.from("saidas_outras").select("*").order("data_prevista").then(function (r) {
+      saidasOutrasLista = (r && r.data) || [];
+      saidasOutrasCarregado = true;
+    });
+  }
+
   function carregarFluxoVisaoSeNecessario() {
     // Garante que todas as fontes estejam carregadas
     if (!contasBancariasCarregado)   carregarContasBancariasSeNecessario();
@@ -5940,6 +6090,9 @@
     if (!recebimentosPrevCarregado)  carregarRecebimentosPrevistosSeNecessario();
     if (!compromissosCarregado)      carregarCompromissosSeNecessario();
     if (!orcamentosCarregados)       carregarOrcamentosSeNecessario();
+    if (!folhaVisaoCarregado)        carregarFolhaVisao();
+    if (!entradasOutrasCarregado)    carregarEntradasOutras();
+    if (!saidasOutrasCarregado)      carregarSaidasOutras();
 
     var iniInput = document.getElementById("flv-mes-ini");
     if (iniInput && !iniInput.value) {
@@ -5948,7 +6101,9 @@
     }
 
     var iv = setInterval(function () {
-      if (contasBancariasCarregado && saldosContasCarregado && recebimentosPrevCarregado && compromissosCarregado && orcamentosCarregados) {
+      if (contasBancariasCarregado && saldosContasCarregado && recebimentosPrevCarregado &&
+          compromissosCarregado && orcamentosCarregados &&
+          folhaVisaoCarregado && entradasOutrasCarregado && saidasOutrasCarregado) {
         clearInterval(iv);
         renderFluxoVisao();
       }
@@ -5976,7 +6131,6 @@
       iniVal = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0");
     }
     var ano = Number(iniVal.slice(0,4)), mes = Number(iniVal.slice(5,7));
-    // Gera 12 meses a partir do mês inicial
     var meses = [];
     for (var i = 0; i < 12; i++) {
       var a = ano, m = mes + i;
@@ -5985,39 +6139,65 @@
     }
     valText(document.getElementById("flv-lbl"), meses[0].label + " a " + meses[11].label);
 
-    // ----- Calcula valores por mês -----
-    var hojeIso = new Date().toISOString().slice(0,10);
+    // ----- Calcula valores por mês (todos os componentes) -----
     var dadosMes = meses.map(function (m) {
       var inicioMes = m.iso;
-      var fimMes = (function () {
-        var d = new Date(m.ano, m.mes, 0);
-        return d.toISOString().slice(0,10);
-      })();
-      // Saldo final realizado e projetado: soma de saldos_contas no mês
+      var fimMes = (function () { var d = new Date(m.ano, m.mes, 0); return d.toISOString().slice(0,10); })();
+      var mesYM = inicioMes.slice(0, 7);
+
+      // Saldo final realizado e projetado
       var saldosMes = saldosContasLista.filter(function (s) { return String(s.mes_ref).slice(0,10) === inicioMes; });
       var saldoFinalReal = saldosMes.reduce(function (acc, s) { return acc + Number(s.saldo_final_realizado || 0); }, 0);
       var saldoFinalProj = saldosMes.reduce(function (acc, s) { return acc + Number(s.saldo_final_projetado || s.saldo_final_realizado || 0); }, 0);
       var temReal = saldosMes.some(function (s) { return s.saldo_final_realizado != null; });
       var temProj = saldosMes.some(function (s) { return s.saldo_final_projetado != null || s.saldo_final_realizado != null; });
 
-      // Entradas: recebimentos previstos no mês (projetado = todos; realizado = só com recebido_em no mês)
-      var recProj = recebimentosPrevLista.filter(function (r) { return r.data_prevista >= inicioMes && r.data_prevista <= fimMes; })
+      // Entradas — Recebimentos previstos
+      var recProj = (recebimentosPrevLista || []).filter(function (r) { return r.data_prevista >= inicioMes && r.data_prevista <= fimMes; })
         .reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
-      var recReal = recebimentosPrevLista.filter(function (r) { return r.recebido_em && r.recebido_em >= inicioMes && r.recebido_em <= fimMes; })
+      var recReal = (recebimentosPrevLista || []).filter(function (r) { return r.recebido_em && r.recebido_em >= inicioMes && r.recebido_em <= fimMes; })
         .reduce(function (acc, r) { return acc + Number(r.valor || 0); }, 0);
 
-      // Saídas: compromissos (projetado = todos com vencimento no mês; realizado = pago_em no mês)
-      var sProj = (compromissosLista || []).filter(function (c) { return c.vencimento >= inicioMes && c.vencimento <= fimMes; })
+      // Entradas — Outras (avulsas)
+      var entOutProj = (entradasOutrasLista || []).filter(function (e) { return e.data_prevista >= inicioMes && e.data_prevista <= fimMes; })
+        .reduce(function (acc, e) { return acc + Number(e.valor || 0); }, 0);
+      var entOutReal = (entradasOutrasLista || []).filter(function (e) { return e.recebido_em && e.recebido_em >= inicioMes && e.recebido_em <= fimMes; })
+        .reduce(function (acc, e) { return acc + Number(e.valor || 0); }, 0);
+
+      // Saídas — Folha (projetado = soma do mes_ref; realizado = mesma fonte por enquanto)
+      var folhaTotal = (folhaVisaoLista || []).filter(function (f) { return String(f.mes_ref).slice(0,7) === mesYM; })
+        .reduce(function (acc, f) { return acc + Number(f.liquido || f.salario_bruto || 0); }, 0);
+
+      // Saídas — Compromissos (a pagar)
+      var compProj = (compromissosLista || []).filter(function (c) { return c.vencimento >= inicioMes && c.vencimento <= fimMes; })
         .reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
-      var sReal = (compromissosLista || []).filter(function (c) { return c.pago_em && c.pago_em >= inicioMes && c.pago_em <= fimMes; })
+      var compReal = (compromissosLista || []).filter(function (c) { return c.pago_em && c.pago_em >= inicioMes && c.pago_em <= fimMes; })
         .reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
+
+      // Saídas — Outras (avulsas)
+      var saiOutProj = (saidasOutrasLista || []).filter(function (s) { return s.data_prevista >= inicioMes && s.data_prevista <= fimMes; })
+        .reduce(function (acc, s) { return acc + Number(s.valor || 0); }, 0);
+      var saiOutReal = (saidasOutrasLista || []).filter(function (s) { return s.pago_em && s.pago_em >= inicioMes && s.pago_em <= fimMes; })
+        .reduce(function (acc, s) { return acc + Number(s.valor || 0); }, 0);
+
+      var entProj = recProj + entOutProj;
+      var entReal = recReal + entOutReal;
+      var saiProj = folhaTotal + compProj + saiOutProj;
+      var saiReal = folhaTotal + compReal + saiOutReal;  // Folha por enquanto vai sempre nas duas (projetado = realizado)
 
       return {
-        mes: m,
+        mes: m, mesYM: mesYM, inicioMes: inicioMes, fimMes: fimMes,
         saldoFinalReal: temReal ? saldoFinalReal : null,
         saldoFinalProj: temProj ? saldoFinalProj : null,
-        entProj: recProj, entReal: recReal,
-        saiProj: sProj, saiReal: sReal
+        // Detalhes pra drill-down
+        recProj: recProj, recReal: recReal,
+        entOutProj: entOutProj, entOutReal: entOutReal,
+        folhaTotal: folhaTotal,
+        compProj: compProj, compReal: compReal,
+        saiOutProj: saiOutProj, saiOutReal: saiOutReal,
+        // Totais
+        entProj: entProj, entReal: entReal,
+        saiProj: saiProj, saiReal: saiReal
       };
     });
 
@@ -6027,7 +6207,7 @@
       d.saldoInicialProj = i === 0 ? null : (dadosMes[i-1].saldoFinalProj != null ? dadosMes[i-1].saldoFinalProj : null);
     });
 
-    // ----- Monta cabeçalho -----
+    // Cabeçalho
     var thead = document.getElementById("flv-thead");
     var html = '<tr><th class="flv-rotulo">&nbsp;</th>';
     meses.forEach(function (m) {
@@ -6044,26 +6224,125 @@
     }
     thead.innerHTML = html;
 
-    // ----- Monta corpo -----
-    function celValor(p, r) {
+    // Helpers de célula clicável
+    function celValor(p, r, tipoDrill, mesYM) {
       function fmt(v) { return v == null ? '<span class="muted">—</span>' : fmtBRL(v); }
       function classeNeg(v) { return (v != null && v < 0) ? "neg" : ""; }
-      if (modo === "comparar") return '<td class="num ' + classeNeg(p) + '">' + fmt(p) + '</td><td class="num ' + classeNeg(r) + '">' + fmt(r) + '</td>';
-      if (modo === "projetado") return '<td class="num ' + classeNeg(p) + '">' + fmt(p) + '</td>';
-      return '<td class="num ' + classeNeg(r) + '">' + fmt(r) + '</td>';
+      var clsClick = tipoDrill ? " linha-clicavel" : "";
+      var dataAttr = tipoDrill ? ' data-flv-tipo="' + tipoDrill + '" data-flv-mes="' + mesYM + '"' : "";
+      if (modo === "comparar") return '<td class="num ' + classeNeg(p) + clsClick + '"' + dataAttr + '>' + fmt(p) + '</td><td class="num ' + classeNeg(r) + clsClick + '"' + dataAttr + '>' + fmt(r) + '</td>';
+      if (modo === "projetado") return '<td class="num ' + classeNeg(p) + clsClick + '"' + dataAttr + '>' + fmt(p) + '</td>';
+      return '<td class="num ' + classeNeg(r) + clsClick + '"' + dataAttr + '>' + fmt(r) + '</td>';
     }
 
     var rows = [];
     rows.push('<tr class="flv-grupo"><td class="flv-rotulo">SALDO INICIAL</td>' + dadosMes.map(function (d) { return celValor(d.saldoInicialProj, d.saldoInicialReal); }).join("") + '</tr>');
     rows.push('<tr class="flv-grupo flv-entrada"><td class="flv-rotulo">+ ENTRADAS</td>' + dadosMes.map(function (d) { return celValor(d.entProj, d.entReal); }).join("") + '</tr>');
-    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Recebimentos</td>' + dadosMes.map(function (d) { return celValor(d.entProj, d.entReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Recebimentos previstos</td>' + dadosMes.map(function (d) { return celValor(d.recProj, d.recReal, "recebimentos", d.mesYM); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Outras entradas</td>' + dadosMes.map(function (d) { return celValor(d.entOutProj, d.entOutReal, "entradas_outras", d.mesYM); }).join("") + '</tr>');
     rows.push('<tr class="flv-grupo flv-saida"><td class="flv-rotulo">− SAÍDAS</td>' + dadosMes.map(function (d) { return celValor(-d.saiProj, -d.saiReal); }).join("") + '</tr>');
-    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Compromissos</td>' + dadosMes.map(function (d) { return celValor(-d.saiProj, -d.saiReal); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Folha de pagamento</td>' + dadosMes.map(function (d) { return celValor(-d.folhaTotal, -d.folhaTotal, "folha", d.mesYM); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Contas a pagar</td>' + dadosMes.map(function (d) { return celValor(-d.compProj, -d.compReal, "compromissos", d.mesYM); }).join("") + '</tr>');
+    rows.push('<tr class="flv-detalhe"><td class="flv-rotulo">&nbsp;&nbsp;Outras saídas</td>' + dadosMes.map(function (d) { return celValor(-d.saiOutProj, -d.saiOutReal, "saidas_outras", d.mesYM); }).join("") + '</tr>');
     rows.push('<tr class="flv-grupo flv-final"><td class="flv-rotulo">SALDO FINAL</td>' + dadosMes.map(function (d) { return celValor(d.saldoFinalProj, d.saldoFinalReal); }).join("") + '</tr>');
 
     document.getElementById("flv-tbody").innerHTML = rows.join("");
 
     fluxoVisaoCarregado = true;
+  }
+
+  // Drill-down ao clicar numa célula da Visão 12m
+  function abrirDrillFluxoCaixa(tipo, mesYM) {
+    var ini = mesYM + "-01";
+    var dt = new Date(Number(mesYM.slice(0,4)), Number(mesYM.slice(5,7)), 0);
+    var fim = mesYM + "-" + String(dt.getDate()).padStart(2,"0");
+    var titulo, linhasHtml = "", total = 0;
+
+    if (tipo === "recebimentos") {
+      titulo = "Recebimentos previstos — " + mesRef(mesYM);
+      var lista = (recebimentosPrevLista || []).filter(function (r) { return r.data_prevista >= ini && r.data_prevista <= fim; });
+      total = lista.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+      lista.sort(function (a, b) { return String(a.data_prevista).localeCompare(String(b.data_prevista)); });
+      linhasHtml = lista.map(function (r) {
+        var st = r.recebido_em ? '<span class="tag tag-ok">recebido</span>' : (r.data_prevista < new Date().toISOString().slice(0,10) ? '<span class="tag tag-danger">vencido</span>' : '<span class="tag tag-warn">pendente</span>');
+        var cliente = clientePorOrcamento[r.orcamento] || "—";
+        return '<tr>' +
+          '<td>' + fmtData(r.data_prevista) + '</td>' +
+          '<td class="mono">' + escHtml(r.orcamento) + '</td>' +
+          '<td>' + escHtml(cliente) + '</td>' +
+          '<td class="num">' + fmtInt(r.parcela) + '</td>' +
+          '<td class="num">' + fmtBRL(r.valor) + '</td>' +
+          '<td>' + st + '</td>' +
+        '</tr>';
+      }).join("");
+      linhasHtml = '<table class="tabela"><thead><tr><th>Data prevista</th><th>Orçamento</th><th>Cliente</th><th class="num">Parcela</th><th class="num">Valor</th><th>Status</th></tr></thead><tbody>' + linhasHtml + '</tbody></table>';
+    }
+    else if (tipo === "entradas_outras") {
+      titulo = "Outras entradas — " + mesRef(mesYM);
+      var lista2 = (entradasOutrasLista || []).filter(function (e) { return e.data_prevista >= ini && e.data_prevista <= fim; });
+      total = lista2.reduce(function (s, e) { return s + Number(e.valor || 0); }, 0);
+      linhasHtml = '<table class="tabela"><thead><tr><th>Data prevista</th><th>Descrição</th><th>Recebido em</th><th class="num">Valor</th></tr></thead><tbody>' +
+        lista2.map(function (e) {
+          return '<tr>' +
+            '<td>' + fmtData(e.data_prevista) + '</td>' +
+            '<td>' + escHtml(e.descricao) + '</td>' +
+            '<td>' + (e.recebido_em ? fmtData(e.recebido_em) : '<span class="muted">—</span>') + '</td>' +
+            '<td class="num">' + fmtBRL(e.valor) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody></table>';
+    }
+    else if (tipo === "folha") {
+      titulo = "Folha de pagamento — " + mesRef(mesYM);
+      var lista3 = (folhaVisaoLista || []).filter(function (f) { return String(f.mes_ref).slice(0,7) === mesYM; });
+      total = lista3.reduce(function (s, f) { return s + Number(f.liquido || f.salario_bruto || 0); }, 0);
+      var nomeF = {};
+      (funcionariosLista || []).forEach(function (fn) { nomeF[fn.id] = fn.nome; });
+      linhasHtml = '<table class="tabela"><thead><tr><th>Funcionário</th><th class="num">Bruto</th><th class="num">Líquido</th></tr></thead><tbody>' +
+        lista3.map(function (f) {
+          return '<tr>' +
+            '<td>' + escHtml(nomeF[f.funcionario_id] || ("ID " + f.funcionario_id)) + '</td>' +
+            '<td class="num">' + fmtBRL(f.salario_bruto || 0) + '</td>' +
+            '<td class="num">' + fmtBRL(f.liquido || f.salario_bruto || 0) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody></table>';
+    }
+    else if (tipo === "compromissos") {
+      titulo = "Contas a pagar — " + mesRef(mesYM);
+      var lista4 = (compromissosLista || []).filter(function (c) { return c.vencimento >= ini && c.vencimento <= fim; });
+      total = lista4.reduce(function (s, c) { return s + Number(c.valor || 0); }, 0);
+      linhasHtml = '<table class="tabela"><thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Pago em</th><th class="num">Valor</th></tr></thead><tbody>' +
+        lista4.map(function (c) {
+          return '<tr>' +
+            '<td>' + fmtData(c.vencimento) + '</td>' +
+            '<td>' + escHtml(c.descricao) + '</td>' +
+            '<td><span class="badge-tipo">' + escHtml(c.tipo) + '</span></td>' +
+            '<td>' + (c.pago_em ? fmtData(c.pago_em) : '<span class="muted">—</span>') + '</td>' +
+            '<td class="num">' + fmtBRL(c.valor) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody></table>';
+    }
+    else if (tipo === "saidas_outras") {
+      titulo = "Outras saídas — " + mesRef(mesYM);
+      var lista5 = (saidasOutrasLista || []).filter(function (s) { return s.data_prevista >= ini && s.data_prevista <= fim; });
+      total = lista5.reduce(function (s, sa) { return s + Number(sa.valor || 0); }, 0);
+      linhasHtml = '<table class="tabela"><thead><tr><th>Data prevista</th><th>Descrição</th><th>Pago em</th><th class="num">Valor</th></tr></thead><tbody>' +
+        lista5.map(function (s) {
+          return '<tr>' +
+            '<td>' + fmtData(s.data_prevista) + '</td>' +
+            '<td>' + escHtml(s.descricao) + '</td>' +
+            '<td>' + (s.pago_em ? fmtData(s.pago_em) : '<span class="muted">—</span>') + '</td>' +
+            '<td class="num">' + fmtBRL(s.valor) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody></table>';
+    }
+
+    var cards =
+      '<div class="grid-metrics" style="margin-bottom:14px">' +
+        '<div class="metric-card"><div class="metric-label">Mês</div><div class="metric-value" style="font-size:18px">' + mesRef(mesYM) + '</div></div>' +
+        '<div class="metric-card"><div class="metric-label">Total</div><div class="metric-value">' + fmtBRL(total) + '</div></div>' +
+      '</div>';
+
+    abrirModalDetalhe(titulo, cards + (linhasHtml || '<p class="muted">Sem dados.</p>'));
   }
 
 
@@ -6725,6 +7004,240 @@
 
 
   // =========================================================================
+  // ENTRADAS AVULSAS — UI completa (Pacote 3)
+  // =========================================================================
+
+  function carregarEntradasOutrasSeNecessario() {
+    if (!entradasOutrasCarregado) {
+      carregarEntradasOutras().then(function () { renderEntradasOutras(); popularContasEO_SO(); });
+    } else {
+      renderEntradasOutras();
+      popularContasEO_SO();
+    }
+    if (!contasBancariasCarregado) carregarContasBancariasSeNecessario();
+
+    var btn = document.getElementById("eo-btn-novo");
+    if (btn && !btn.dataset.bound) { btn.dataset.bound = "1"; btn.addEventListener("click", function () { abrirModalEntradaOutra(null); }); }
+    ["eo-busca","eo-status"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) { el.dataset.bound = "1"; el.addEventListener("input", renderEntradasOutras); el.addEventListener("change", renderEntradasOutras); }
+    });
+    var btnLimpar = document.getElementById("eo-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var b = document.getElementById("eo-busca"); if (b) b.value = "";
+        var s = document.getElementById("eo-status"); if (s) s.value = "";
+        renderEntradasOutras();
+      });
+    }
+  }
+
+  function popularContasEO_SO() {
+    // Helper dummy — o select de conta é populado dentro do modal via opcoesContasBancarias()
+  }
+  function opcoesContasBancarias() {
+    var lista = (contasBancariasLista || []).filter(function (c) { return c.ativa; });
+    var opts = [{ value: "", label: "(sem conta vinculada)" }];
+    lista.forEach(function (c) { opts.push({ value: c.id, label: c.nome + " — " + c.banco }); });
+    return opts;
+  }
+
+  function renderEntradasOutras() {
+    var tbody = document.getElementById("eo-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("eo-busca")||{}).value || "").trim().toLowerCase();
+    var status = ((document.getElementById("eo-status")||{}).value || "").trim();
+    var contasMap = {};
+    (contasBancariasLista || []).forEach(function (c) { contasMap[c.id] = c; });
+    var filtrados = (entradasOutrasLista || []).filter(function (e) {
+      if (busca && !matchBusca(busca, [e.descricao, e.observacao])) return false;
+      if (status === "pendente" && e.recebido_em) return false;
+      if (status === "recebido" && !e.recebido_em) return false;
+      return true;
+    });
+    var totalPrev = filtrados.reduce(function (s, e) { return s + Number(e.valor || 0); }, 0);
+    var pendentes = filtrados.filter(function (e) { return !e.recebido_em; }).length;
+    var recebidos = filtrados.filter(function (e) { return !!e.recebido_em; }).length;
+    valText(document.getElementById("eo-m-pen"), fmtInt(pendentes));
+    valText(document.getElementById("eo-m-tot"), fmtBRL(totalPrev));
+    valText(document.getElementById("eo-m-rec"), fmtInt(recebidos));
+    valText(document.getElementById("eo-lbl"), filtrados.length + " de " + (entradasOutrasLista || []).length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhuma entrada avulsa. Clique em + Nova entrada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (e) {
+      var st = e.recebido_em ? '<span class="tag tag-ok">Recebido</span>' : '<span class="tag tag-warn">Pendente</span>';
+      var conta = contasMap[e.conta_id];
+      return '<tr>' +
+        '<td>' + fmtData(e.data_prevista) + '</td>' +
+        '<td>' + escHtml(e.descricao) + '</td>' +
+        '<td>' + (conta ? escHtml(conta.nome) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="num">' + fmtBRL(e.valor) + '</td>' +
+        '<td>' + (e.recebido_em ? fmtData(e.recebido_em) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + st + '</td>' +
+        '<td><button class="btn-acao" data-eo-edit="' + e.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-eo-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-eo-edit"));
+        var e = entradasOutrasLista.find(function (x) { return x.id === id; });
+        if (e) abrirModalEntradaOutra(e);
+      });
+    });
+  }
+
+  function abrirModalEntradaOutra(e) {
+    var ehNovo = !e;
+    abrirModal({
+      titulo: ehNovo ? "Nova entrada avulsa" : "Editar entrada — " + (e.descricao || ""),
+      fields: [
+        { name: "data_prevista", label: "Data prevista",  type: "date",     valor: e && e.data_prevista, required: true },
+        { name: "descricao",     label: "Descrição",      type: "text",     valor: e && e.descricao,     required: true },
+        { name: "valor",         label: "Valor",          type: "number",   valor: e && e.valor,         required: true },
+        { name: "conta_id",      label: "Conta bancária", type: "select",   valor: e && e.conta_id, options: opcoesContasBancarias() },
+        { name: "recebido_em",   label: "Recebido em (deixe vazio se pendente)", type: "date", valor: e && e.recebido_em },
+        { name: "observacao",    label: "Observação",     type: "textarea", valor: e && e.observacao }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          data_prevista: v.data_prevista,
+          descricao: v.descricao,
+          valor: Number(v.valor),
+          conta_id: v.conta_id ? Number(v.conta_id) : null,
+          recebido_em: v.recebido_em || null,
+          observacao: v.observacao
+        };
+        var q = ehNovo
+          ? client.from("entradas_outras").insert(payload)
+          : client.from("entradas_outras").update(payload).eq("id", e.id);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          entradasOutrasCarregado = false;
+          fluxoVisaoCarregado = false;
+          carregarEntradasOutrasSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // =========================================================================
+  // SAÍDAS AVULSAS — UI completa (Pacote 3)
+  // =========================================================================
+
+  function carregarSaidasOutrasSeNecessario() {
+    if (!saidasOutrasCarregado) {
+      carregarSaidasOutras().then(function () { renderSaidasOutras(); });
+    } else {
+      renderSaidasOutras();
+    }
+    if (!contasBancariasCarregado) carregarContasBancariasSeNecessario();
+
+    var btn = document.getElementById("so-btn-novo");
+    if (btn && !btn.dataset.bound) { btn.dataset.bound = "1"; btn.addEventListener("click", function () { abrirModalSaidaOutra(null); }); }
+    ["so-busca","so-status"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) { el.dataset.bound = "1"; el.addEventListener("input", renderSaidasOutras); el.addEventListener("change", renderSaidasOutras); }
+    });
+    var btnLimpar = document.getElementById("so-btn-limpar");
+    if (btnLimpar && !btnLimpar.dataset.bound) {
+      btnLimpar.dataset.bound = "1";
+      btnLimpar.addEventListener("click", function () {
+        var b = document.getElementById("so-busca"); if (b) b.value = "";
+        var s = document.getElementById("so-status"); if (s) s.value = "";
+        renderSaidasOutras();
+      });
+    }
+  }
+
+  function renderSaidasOutras() {
+    var tbody = document.getElementById("so-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("so-busca")||{}).value || "").trim().toLowerCase();
+    var status = ((document.getElementById("so-status")||{}).value || "").trim();
+    var contasMap = {};
+    (contasBancariasLista || []).forEach(function (c) { contasMap[c.id] = c; });
+    var filtrados = (saidasOutrasLista || []).filter(function (s) {
+      if (busca && !matchBusca(busca, [s.descricao, s.observacao])) return false;
+      if (status === "pendente" && s.pago_em) return false;
+      if (status === "pago" && !s.pago_em) return false;
+      return true;
+    });
+    var totalPrev = filtrados.reduce(function (a, s) { return a + Number(s.valor || 0); }, 0);
+    var pendentes = filtrados.filter(function (s) { return !s.pago_em; }).length;
+    var pagos = filtrados.filter(function (s) { return !!s.pago_em; }).length;
+    valText(document.getElementById("so-m-pen"), fmtInt(pendentes));
+    valText(document.getElementById("so-m-tot"), fmtBRL(totalPrev));
+    valText(document.getElementById("so-m-pag"), fmtInt(pagos));
+    valText(document.getElementById("so-lbl"), filtrados.length + " de " + (saidasOutrasLista || []).length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhuma saída avulsa. Clique em + Nova saída.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (s) {
+      var st = s.pago_em ? '<span class="tag tag-ok">Pago</span>' : '<span class="tag tag-warn">Pendente</span>';
+      var conta = contasMap[s.conta_id];
+      return '<tr>' +
+        '<td>' + fmtData(s.data_prevista) + '</td>' +
+        '<td>' + escHtml(s.descricao) + '</td>' +
+        '<td>' + (conta ? escHtml(conta.nome) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="num">' + fmtBRL(s.valor) + '</td>' +
+        '<td>' + (s.pago_em ? fmtData(s.pago_em) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + st + '</td>' +
+        '<td><button class="btn-acao" data-so-edit="' + s.id + '">Editar</button></td>' +
+      '</tr>';
+    }).join("");
+    tbody.querySelectorAll("[data-so-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-so-edit"));
+        var s = saidasOutrasLista.find(function (x) { return x.id === id; });
+        if (s) abrirModalSaidaOutra(s);
+      });
+    });
+  }
+
+  function abrirModalSaidaOutra(s) {
+    var ehNovo = !s;
+    abrirModal({
+      titulo: ehNovo ? "Nova saída avulsa" : "Editar saída — " + (s.descricao || ""),
+      fields: [
+        { name: "data_prevista", label: "Data prevista",  type: "date",     valor: s && s.data_prevista, required: true },
+        { name: "descricao",     label: "Descrição",      type: "text",     valor: s && s.descricao,     required: true },
+        { name: "valor",         label: "Valor",          type: "number",   valor: s && s.valor,         required: true },
+        { name: "conta_id",      label: "Conta bancária", type: "select",   valor: s && s.conta_id, options: opcoesContasBancarias() },
+        { name: "pago_em",       label: "Pago em (deixe vazio se pendente)", type: "date", valor: s && s.pago_em },
+        { name: "observacao",    label: "Observação",     type: "textarea", valor: s && s.observacao }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          data_prevista: v.data_prevista,
+          descricao: v.descricao,
+          valor: Number(v.valor),
+          conta_id: v.conta_id ? Number(v.conta_id) : null,
+          pago_em: v.pago_em || null,
+          observacao: v.observacao
+        };
+        var q = ehNovo
+          ? client.from("saidas_outras").insert(payload)
+          : client.from("saidas_outras").update(payload).eq("id", s.id);
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          saidasOutrasCarregado = false;
+          fluxoVisaoCarregado = false;
+          carregarSaidasOutrasSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+
+  // =========================================================================
   // BOOT FINAL — delegação global de cliques em botões estáticos.
   // Garante que .config-card[data-subpage], [data-goto] e [data-limpar]
   // SEMPRE funcionem, mesmo se ativarPaginaOrcamentos() falhar por qualquer
@@ -6777,6 +7290,16 @@
     if (trDesp) {
       var key = trDesp.getAttribute("data-desp-key");
       if (key && typeof abrirDetalheDespesa === "function") { abrirDetalheDespesa(key); return; }
+    }
+    // Drill-down nas células da Visão 12 meses
+    var celFlv = t.closest("td.linha-clicavel[data-flv-tipo]");
+    if (celFlv) {
+      var tipoFlv = celFlv.getAttribute("data-flv-tipo");
+      var mesFlv = celFlv.getAttribute("data-flv-mes");
+      if (tipoFlv && mesFlv && typeof abrirDrillFluxoCaixa === "function") {
+        abrirDrillFluxoCaixa(tipoFlv, mesFlv);
+        return;
+      }
     }
   });
 

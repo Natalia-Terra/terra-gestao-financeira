@@ -213,6 +213,8 @@
               <button class="sb-sub" data-page="fluxo_visao" type="button">Fluxo de Caixa</button>
               <button class="sb-sub" data-page="fluxo_contas" type="button">Contas Bancárias</button>
               <button class="sb-sub" data-page="fluxo_saldos" type="button">Saldos Mensais</button>
+              <button class="sb-sub" data-page="entradas_outras" type="button">Entradas Avulsas</button>
+              <button class="sb-sub" data-page="saidas_outras" type="button">Saídas Avulsas</button>
               <button class="sb-sub" data-page="dre" type="button">DRE</button>
               <button class="sb-sub" data-page="movimentos" type="button">Lançamentos</button>
             </div>
@@ -767,6 +769,9 @@
                   <option value="despesas_folha_mensal">Despesas Folha Mensal (com cruzamento de CC)</option>
                   <option value="caixa_saldo_mensal">Saldo de Caixa Mensal</option>
                   <option value="compromissos_financeiros">Compromissos Financeiros</option>
+                  <option value="contas_bancarias">Contas Bancárias (cadastro)</option>
+                  <option value="saldos_contas">Saldos Mensais por Conta</option>
+                  <option value="recebimentos_previstos">Recebimentos Previstos (parcelas)</option>
                 </select>
               </label>
               <input type="file" id="imp-arquivo" accept=".xlsx,.xls" />
@@ -1506,67 +1511,6 @@
         </section>
 
         <!-- Página: Fluxo de Caixa > Recebimentos Previstos -->
-        <section class="page" data-page="fluxo_receb_prev" hidden>
-          <div class="page-header">
-            <button class="btn-limpar btn-voltar" type="button" data-goto="recebimentos">← Contas a Receber</button>
-            <h1 class="page-title">Parcelas Previstas (Recebimentos)</h1>
-            <p class="page-sub">Cronograma de parcelas por orçamento — alimenta as entradas projetadas do Fluxo de Caixa</p>
-          </div>
-          <div class="grid-metrics">
-            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="rp-m-pen">—</div><div class="metric-sub">não recebidas</div></div>
-            <div class="metric-card"><div class="metric-label">Total a receber (próx 12m)</div><div class="metric-value" id="rp-m-tot12">—</div><div class="metric-sub">soma das parcelas pendentes</div></div>
-            <div class="metric-card"><div class="metric-label">Vencidas</div><div class="metric-value" id="rp-m-venc">—</div><div class="metric-sub">prazo passou e não recebeu</div></div>
-          </div>
-          <div class="toolbar" style="margin-bottom:14px">
-            <input class="input-search" type="text" id="rp-busca" placeholder="Buscar orçamento ou cliente…" />
-            <select id="rp-status">
-              <option value="">Todos</option>
-              <option value="pendente">Pendentes</option>
-              <option value="recebido">Recebidos</option>
-              <option value="vencido">Vencidos</option>
-            </select>
-            <button class="btn-ouro" id="rp-btn-novo" type="button">+ Nova parcela</button>
-            <button class="btn-limpar" id="rp-btn-limpar" type="button">Limpar</button>
-            <span class="toolbar-label" id="rp-lbl"></span>
-          </div>
-          <div class="card fat-card">
-            <div class="table-wrap">
-              <table class="tabela">
-                <thead><tr><th>Data prevista</th><th>Orçamento</th><th>Cliente</th><th class="num">Parcela</th><th class="num">Valor</th><th>Recebido em</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="rp-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- Página: Caixa > Saldo Mensal -->
-        <section class="page" data-page="caixa_saldo" hidden>
-          <div class="page-header">
-            <h1 class="page-title">Saldo de Caixa Mensal</h1>
-            <p class="page-sub">Saldo final por mês — insumo para Caixa Positivo e ICC do Programa de Bônus</p>
-          </div>
-
-          <div class="grid-metrics">
-            <div class="metric-card"><div class="metric-label">Meses cadastrados</div><div class="metric-value" id="cxs-m-qtd">—</div><div class="metric-sub">no histórico</div></div>
-            <div class="metric-card"><div class="metric-label">Último saldo</div><div class="metric-value" id="cxs-m-ult">—</div><div class="metric-sub" id="cxs-m-ult-mes">—</div></div>
-            <div class="metric-card"><div class="metric-label">Meses positivos (12 últimos)</div><div class="metric-value" id="cxs-m-pos">—</div><div class="metric-sub">de até 12</div></div>
-          </div>
-
-          <div class="card fat-card">
-            <div class="toolbar">
-              <input class="input-search" type="text" id="cxs-busca" placeholder="Buscar por mês (YYYY-MM)…" />
-              <button class="btn-limpar" id="cxs-btn-limpar" type="button">Limpar</button>
-              <span class="toolbar-label" id="cxs-lbl"></span>
-            </div>
-            <div class="table-wrap">
-              <table class="tabela">
-                <thead><tr><th>Mês</th><th class="num">Saldo final</th><th>Observação</th><th>Atualizado</th></tr></thead>
-                <tbody id="cxs-tbody"><tr><td colspan="4" class="tbl-vazio">Carregando…</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
         <!-- Página: Caixa > Compromissos Financeiros -->
         <section class="page" data-page="caixa_compromissos" hidden>
           <div class="page-header">
@@ -1770,6 +1714,70 @@
               <table class="tabela">
                 <thead><tr><th>Centro de Custo</th><th>Tipo</th><th class="num">Headcount</th><th class="num">Folha (ano)</th><th class="num">% do total</th></tr></thead>
                 <tbody id="carea-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Contabilidade Gerencial > Entradas Avulsas -->
+        <section class="page" data-page="entradas_outras" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Entradas Avulsas</h1>
+            <p class="page-sub">Receitas não vinculadas a orçamento — outras entradas previstas e realizadas</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="eo-m-pen">—</div><div class="metric-sub">não recebidas</div></div>
+            <div class="metric-card"><div class="metric-label">Total previsto</div><div class="metric-value" id="eo-m-tot">—</div><div class="metric-sub">soma de tudo</div></div>
+            <div class="metric-card"><div class="metric-label">Recebidas</div><div class="metric-value" id="eo-m-rec">—</div><div class="metric-sub">com data de recebimento</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="eo-busca" placeholder="Buscar descrição…" />
+            <select id="eo-status">
+              <option value="">Todos</option>
+              <option value="pendente">Pendentes</option>
+              <option value="recebido">Recebidos</option>
+            </select>
+            <button class="btn-ouro" id="eo-btn-novo" type="button">+ Nova entrada</button>
+            <button class="btn-limpar" id="eo-btn-limpar" type="button">✕ Limpar</button>
+            <span class="toolbar-label" id="eo-lbl"></span>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data prevista</th><th>Descrição</th><th>Conta</th><th class="num">Valor</th><th>Recebido em</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="eo-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Contabilidade Gerencial > Saídas Avulsas -->
+        <section class="page" data-page="saidas_outras" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Saídas Avulsas</h1>
+            <p class="page-sub">Pagamentos não vinculados a Contas a Pagar ou Folha — outras saídas previstas e realizadas</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="so-m-pen">—</div><div class="metric-sub">não pagas</div></div>
+            <div class="metric-card"><div class="metric-label">Total previsto</div><div class="metric-value" id="so-m-tot">—</div><div class="metric-sub">soma de tudo</div></div>
+            <div class="metric-card"><div class="metric-label">Pagas</div><div class="metric-value" id="so-m-pag">—</div><div class="metric-sub">com data de pagamento</div></div>
+          </div>
+          <div class="toolbar" style="margin-bottom:14px">
+            <input class="input-search" type="text" id="so-busca" placeholder="Buscar descrição…" />
+            <select id="so-status">
+              <option value="">Todos</option>
+              <option value="pendente">Pendentes</option>
+              <option value="pago">Pagas</option>
+            </select>
+            <button class="btn-ouro" id="so-btn-novo" type="button">+ Nova saída</button>
+            <button class="btn-limpar" id="so-btn-limpar" type="button">✕ Limpar</button>
+            <span class="toolbar-label" id="so-lbl"></span>
+          </div>
+          <div class="card fat-card">
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data prevista</th><th>Descrição</th><th>Conta</th><th class="num">Valor</th><th>Pago em</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="so-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
