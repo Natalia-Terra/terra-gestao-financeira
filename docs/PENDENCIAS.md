@@ -1,76 +1,67 @@
 # Pendências — Terra Conttemporânea
 
-**Atualizado:** 2026-05-04 pós Entrega 13
+**Atualizado:** 2026-05-07 pós M18 aplicada
+
+## Pendências de DEV abertas (priorizadas)
+
+### Crítica — surgiu no escopo da sessão e ficou pra próxima
+- **Perfil "Master"** (você + Natália) com flags exclusivos pra limpar base e fazer carga inicial. Hoje não existe — qualquer admin pode tudo. Precisa: migração (2 flags em perfis_tipos + tipo "master" + funções helper) + frontend (tela "Reset" só pra master + restrições nos botões Importar pra carga inicial)
+- **M18 Onda 3.3 — Refac Gestão de Faturamento** como Dashboard rico cruzando 5 fontes (orcamentos + notas_fiscais + nf_os + estoque_detalhes + ordens_servico). Mostra por orçamento: Tipo Faturamento, Adto, Recebimento, NF Emitida, Venda S/NF, A Faturar, Saldo Adto, Custo total + drill-downs por coluna
+- **Refac das telas Notas Fiscais / Contas a Receber / Contas a Pagar** para ler das tabelas novas (notas_fiscais rica via nf_os, movimentos_caixa). Hoje continuam lendo das fontes antigas (movimentos com natureza filtrada / compromissos_financeiros)
+
+### M19 — Bônus Individual (não iniciado)
+- Parser de PDF de Folha de Ponto **consolidado** (decisão Juliana 2026-05-07: 1 PDF único com todos funcionários) → tabela `frequencia_mensal`
+- Definir fontes de `medidas_disciplinares` e `avaliacao_desempenho`
+- Implementar cálculo profissional do bônus (hoje só usa metas)
+- Possivelmente revisar Programa de Bonificação 30/30/40 conforme `bonificacao_estrutura_proposta.md`
+
+### Qualidade (advisor warnings do Supabase)
+- 5 funções com `search_path mutable` (fn_auditar, fn_touch_atualizado_em, get_perfil, set_atualizado_em, fn_snapshot_saldo_reconhecer já corrigida na M18b)
+- 3 funções `SECURITY DEFINER` callable por anon role (auth_pode_admin, auth_pode_modificar, fn_auditar)
+- `auth_leaked_password_protection` desabilitado (config Supabase Auth)
+
+### Não-urgentes (longa data)
+- SMTP próprio no Supabase (hoje SMTP padrão tem limite ~30/dia)
+- Logo da Terra — ajuste fino visual pendente
+- Estender `coletarConflitosCfop()` para outras fontes além de notas_fiscais
+- 4 telas de RH (Benefícios, Folha, Impostos): CRUD básico já existe; importação automática pode ser melhorada
+- Atualizar Visão 12m com Folha "projetada" futura (hoje só lê folha já lançada)
 
 ## Pendências de DADOS (dependem de Juliana)
 
-- 8 funcionários INATIVO sem `data_demissao` — ajustar caso a caso pela tela de Funcionários
-- 264 orçamentos com `parceiro` NULL — falta importar planilha de parceiros
-- 12 orçamentos com ruído Fixa+Solta — botão Resolver na tela Diagnóstico já existe
-- Reimportar movimentos com coluna `conta` (pra ativar Custo Direto > Lançamento Direto e drill-down em Despesas)
-- Frequência mensal, medidas disciplinares, avaliações de desempenho — destravam cálculo profissional do Bônus
-- Metas das áreas no organograma para 2026-1 — cadastrar via RH > Bônus — Configuração
-- Cadastrar contas bancárias (Itaú, BB, CEF, XP, +) via Fluxo de Caixa > Contas Bancárias
+- **264 orçamentos com `parceiro` NULL** — agora resolvível com o template "Orçamentos" refatorado (aceita planilha "Orçamento Aprovado por Parceiro" do Aerolito com coluna PARCEIROS)
+- **8 funcionários INATIVO sem `data_demissao`** — ajustar caso a caso pela tela de Funcionários
+- **12 orçamentos com ruído Fixa+Solta** — botão Resolver na tela Diagnóstico
+- **Frequência mensal, medidas disciplinares, avaliações de desempenho** — destravam cálculo profissional do Bônus (M19)
+- **Metas das áreas no organograma para 2026-1** — cadastrar via RH > Bônus — Configuração
+- Cadastrar contas bancárias (se ainda não fez) via Fluxo de Caixa > Contas Bancárias
 - Cadastrar saldos mensais por conta via Fluxo de Caixa > Saldos Mensais
-- Cadastrar recebimentos previstos (parcelas) via tela própria ou import
-- Cadastrar folha de pagamento mensal (manual ou via despesas_folha_mensal)
-- Importar planilha 'Despesas Folha' completa pra refinar DRE/tipo_custo dos 15 CCs
-
-## Pendências de DEV (não-urgentes)
-
-- SMTP próprio no Supabase (hoje SMTP padrão tem limite ~30/dia, pode cair em spam)
-- Logo da Terra — ajuste fino pendente (Juliana ainda não satisfeita visualmente)
-- Estender `coletarConflitosCfop()` para outras fontes além de notas_fiscais — escopo a confirmar
-- 4 telas de RH (Benefícios, Folha, Impostos): CRUD básico via modal já existe; importação automática de folha pode ser melhorada
-- Atualizar Visão 12m com Folha "projetada" futura (hoje só lê folha já lançada)
+- Importar histórico do arquivo Excel "30032026_Gestão Faturamento e Receita.xlsx" via novos templates históricos
 
 ## Já resolvido (histórico)
 
-### Entregas 1-10 (resumo)
-Setup inicial → orçamentos → vendas → consolidado → DRE → CFOP → Plano de Contas → CFOP toggle → RH funcionários (320 importados) → Programa de Bônus (3 esferas) → Bônus configurável → Auditoria automática → Caixa + Compromissos → Fluxo de Caixa real (5 tabelas novas).
+### Entregas 1-13 (resumo até 2026-05-04)
+Setup → orçamentos → vendas → consolidado → DRE → CFOP → Plano de Contas → CFOP toggle → RH funcionários → Programa de Bônus → Auditoria → Caixa + Compromissos → Fluxo de Caixa → Reestruturação Custos + Modais (M14) → Audit gaps (M15) → movimentos.plano_contas_id (M16) → Usuários CRUD + Perfis dinâmicos (M17) → Revisão UX/UI completa.
 
-### Entrega 11 — Reestruturação Custos + Modais (Migração 14)
-- Pacote 1: tipo_custo (direto/indireto/despesa) em CC e plano_contas + tabela rateio_areas
-- Pacote 2: sidebar virou Receita / Financeiro / Comercial / Custeio / Contabilidade Gerencial
-- Pacote 3: tela CC ganhou DRE e tipo_custo editáveis
-- Pacote 4: 'Receita por Faturamento' (NF emitida × Apropriação)
-- Pacote 5: 4 telas funcionais Custeio
-- Pacote 6: drill-down em 5 telas
+### M18 — Plena Gestão de Faturamento (2026-05-07) ✅
 
-### Auditoria pós-Entrega 11 (5 blocos)
-- Bloco A: Migração 15 fechou audit + touch em orcamentos, centros_custo, plano_contas
-- Bloco B: pré-povoamento dos 15 CCs e 182 contas íntegro
-- Bloco C: 0 broken links no menu
-- Bloco D: cascatas de invalidação adicionadas
-- Bloco E: memória atualizada
+**Backend (Supabase):**
+- M18 SQL: 6 tabelas novas + 3 colunas em orcamentos + view + função snapshot + 12 RLS policies + 6 triggers de auditoria + 3 de touch + UPDATE em massa pra default 100_NF em 264 orçamentos antigos
+- M18b SQL: SECURITY INVOKER na view + search_path fixo na função
 
-### Migração 16 — `movimentos.plano_contas_id`
-Parser de import aceita coluna `conta`/`cod_conta`/`plano_contas`; Custo Direto > Lançamento Direto agora filtra real por DRE; Despesas com toggle de fonte rc/mov + drill-down
-
-### Entrega 12 — Usuários CRUD + Perfis dinâmicos (Migração 17)
-- Tabela `perfis_tipos` + coluna `perfis.ativo` + funções helper `auth_pode_modificar/auth_pode_admin`
-- 41 RLS policies refatoradas
-- Edge Function `gerenciar-usuarios` (criar/desativar/reativar)
-- UI completa em Configuração > Usuários e Tipos de Perfil
-- 3 tipos pré-povoados (admin, operador, consulta)
-
-### Pós-Entrega 12 — features que faltavam
-- 3 templates de import novos (contas_bancarias, saldos_contas, recebimentos_previstos)
-- Visão 12m expandida (Recebimentos + Outras entradas | Folha + Contas a pagar + Outras saídas)
-- Folha de pagamento integrada na Visão 12m
-- Drill-down em todas as células de detalhe da Visão 12m
-- UI completa de Entradas Avulsas e Saídas Avulsas
-- 2 sections órfãs no HTML removidas
-
-### Entrega 13 — Revisão UX/UI completa (4 blocos)
-- Bloco A: WCAG AA contrast, bordas mais visíveis, sistema de spacing, focus visível, body 14→15px, btn-ouro com hover/active refinados
-- Bloco B: Login refeito split-screen
-- Bloco C: metric-card com faixa ouro lateral, sidebar com hierarquia tipográfica, hover de linha com bg4 + barra ouro, tags pill
-- Bloco D: topbar 100→104px, logo 44→52px
+**Frontend (8 commits direto no GitHub via API REST com PAT temporário, ZERO toque no PC da Juliana):**
+- 2A `3320ff459b`: refac saída_estoque (4 destinos) + 2 templates de histórico + refac orcamentos
+- 2A.fix `b2c36de4c5`: rename "bíblia" → "arquivo"
+- 2B `a94e9b62c2`: template Dashboard de Orçamentos (3 destinos)
+- 2C-1 `9099f102f2`: prompt de tipo_faturamento na importação de orçamentos
+- 2C-2 `aed904cd28`: refac NFs com modal de revisão de vínculo NF↔OS
+- 2C-3 `49289d7536`: template "A Pagar x A Receber" com classificação automática
+- 3.1 `d0440c5f77`: telas novas Saldo a Reconhecer + Dashboard de Orçamentos + função abrirDetalheItensMP
+- 3.2 `d3b6c75f3e`: tela Lançamentos de Caixa com bulk action + drill-down Custo por OS
 
 ## Snapshot técnico
 
-- Último commit GitHub: `0f177c1` (revisão UX/UI completa)
-- Banco Supabase: 13 migrações registradas, 43 tabelas em public, 41 policies modify usando `auth_pode_modificar()`
+- Último commit GitHub (frontend): `d3b6c75f3e` (Onda 3.2)
+- Banco Supabase: 15 migrações, 49 tabelas, 53 policies modify
 - Edge Function `gerenciar-usuarios` ACTIVE
-- 2 perfis ativos: Juliana (admin) e Natália (operador)
+- 2 perfis ativos: Juliana (admin) e Natália (operador) — pendente promoção pra "master" em sessão futura
