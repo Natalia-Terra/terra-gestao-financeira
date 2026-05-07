@@ -352,6 +352,9 @@
     if (pageId === "fluxo_visao")        carregarFluxoVisaoSeNecessario();
     if (pageId === "entradas_outras")    carregarEntradasOutrasSeNecessario();
     if (pageId === "saidas_outras")      carregarSaidasOutrasSeNecessario();
+    // M18 Onda 3.1 — telas novas
+    if (pageId === "saldo_reconhecer")            carregarSaldoReconhecerSeNecessario();
+    if (pageId === "dashboard_orcamentos_view")   carregarDashboardOrcamentosTeleSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -8191,5 +8194,235 @@
       }
     }
   });
+
+  // ===========================================================================
+  // M18 Onda 3.1 — 2 telas novas + 1 drill-down
+  // ===========================================================================
+
+  // --- Tela: Saldo a Reconhecer (Receita > Por Faturamento) ---
+  var saldoReconhecerLista = [];
+  var saldoReconhecerCarregado = false;
+  var saldoReconhecerCarregando = false;
+
+  function carregarSaldoReconhecerSeNecessario() {
+    if (saldoReconhecerCarregado) { renderSaldoReconhecer(); return; }
+    if (saldoReconhecerCarregando) return;
+    saldoReconhecerCarregando = true;
+    setStatus("sr-status", "Consultando vw_saldo_reconhecer…", "carregando");
+    client.from("vw_saldo_reconhecer").select("*").order("competencia", { ascending: false }).then(function (r) {
+      saldoReconhecerCarregando = false;
+      if (r.error) {
+        setStatus("sr-status", "Erro: " + r.error.message, "erro");
+        return;
+      }
+      saldoReconhecerLista = r.data || [];
+      saldoReconhecerCarregado = true;
+      setStatus("sr-status", null);
+      renderSaldoReconhecer();
+    });
+
+    var sel = document.getElementById("sr-status-filtro");
+    if (sel && !sel.dataset.bound) { sel.dataset.bound = "1"; sel.addEventListener("change", renderSaldoReconhecer); }
+    var bus = document.getElementById("sr-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderSaldoReconhecer); }
+  }
+
+  function renderSaldoReconhecer() {
+    var tbody = document.getElementById("sr-tbody");
+    var lbl = document.getElementById("sr-lbl");
+    if (!tbody) return;
+    var filtro = (document.getElementById("sr-status-filtro") || {}).value || "abertos";
+    var busca = ((document.getElementById("sr-busca") || {}).value || "").trim().toLowerCase();
+
+    var filtrados = saldoReconhecerLista.filter(function (r) {
+      if (busca && String(r.orcamento || "").toLowerCase().indexOf(busca) === -1) return false;
+      var aRec = Number(r.valor_a_reconhecer || 0);
+      if (filtro === "abertos" && Math.abs(aRec) < 0.01) return false;
+      if (filtro === "liquidados" && Math.abs(aRec) >= 0.01) return false;
+      return true;
+    });
+
+    var totVenda = 0, totAdto = 0, totNF = 0, totAREC = 0;
+    filtrados.forEach(function (r) {
+      totVenda += Number(r.valor_orcamento || 0);
+      totAdto  += Number(r.adiantamento || 0);
+      totNF    += Number(r.nf_emitidas || 0);
+      totAREC  += Number(r.valor_a_reconhecer || 0);
+    });
+
+    var mTV = document.getElementById("sr-m-venda");   if (mTV) mTV.textContent = fmtBRL(totVenda);
+    var mAd = document.getElementById("sr-m-adto");    if (mAd) mAd.textContent = fmtBRL(totAdto);
+    var mNF = document.getElementById("sr-m-nf");      if (mNF) mNF.textContent = fmtBRL(totNF);
+    var mAR = document.getElementById("sr-m-arec");    if (mAR) mAR.textContent = fmtBRL(totAREC);
+    if (lbl) lbl.textContent = filtrados.length + " de " + saldoReconhecerLista.length;
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhuma linha bate com os filtros.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(function (r) {
+      var aRec = Number(r.valor_a_reconhecer || 0);
+      var statusClass = Math.abs(aRec) < 0.01 ? "" : (aRec > 0 ? "" : "");
+      var statusTxt = Math.abs(aRec) < 0.01 ? '<span class="tag ok">Liquidado</span>' : '<span class="tag warn">Em aberto</span>';
+      return (
+        '<tr>' +
+          '<td class="mono">' + escHtml(r.orcamento || "—") + '</td>' +
+          '<td>' + (r.competencia ? fmtData(r.competencia).slice(3) : "—") + '</td>' +
+          '<td class="num">' + fmtBRL(r.valor_orcamento) + '</td>' +
+          '<td class="num">' + fmtBRL(r.adiantamento) + '</td>' +
+          '<td class="num">' + fmtBRL(r.nf_emitidas) + '</td>' +
+          '<td class="num">' + fmtBRL(aRec) + ' ' + statusTxt + '</td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  // --- Tela: Dashboard de Orçamentos (Comercial) ---
+  var dashOrcItensLista = [];
+  var dashOrcCarregado = false;
+  var dashOrcCarregando = false;
+
+  function carregarDashboardOrcamentosTeleSeNecessario() {
+    if (dashOrcCarregado) { renderDashboardOrcamentosTela(); return; }
+    if (dashOrcCarregando) return;
+    dashOrcCarregando = true;
+    setStatus("doc-status", "Consultando orcamento_items…", "carregando");
+    client.from("orcamento_items").select("*").order("orcamento", { ascending: false }).then(function (r) {
+      dashOrcCarregando = false;
+      if (r.error) { setStatus("doc-status", "Erro: " + r.error.message, "erro"); return; }
+      dashOrcItensLista = r.data || [];
+      dashOrcCarregado = true;
+      setStatus("doc-status", null);
+      renderDashboardOrcamentosTela();
+    });
+
+    var bus = document.getElementById("doc-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderDashboardOrcamentosTela); }
+  }
+
+  function renderDashboardOrcamentosTela() {
+    var tbody = document.getElementById("doc-tbody");
+    var lbl = document.getElementById("doc-lbl");
+    if (!tbody) return;
+    var busca = ((document.getElementById("doc-busca") || {}).value || "").trim().toLowerCase();
+
+    // Agrupar por orçamento
+    var porOrc = {};
+    dashOrcItensLista.forEach(function (it) {
+      var k = String(it.orcamento || "");
+      if (!porOrc[k]) porOrc[k] = { orcamento: k, n_itens: 0, vl_total: 0, vl_a_faturar: 0, lucro_previsto: 0, lucro_realizado: 0, primeiro: it };
+      porOrc[k].n_itens += 1;
+      porOrc[k].vl_total += Number(it.vl_total || 0);
+      porOrc[k].vl_a_faturar += Number(it.vl_a_faturar || 0);
+      porOrc[k].lucro_previsto += Number(it.lucro_previsto || 0);
+      porOrc[k].lucro_realizado += Number(it.lucro_realizado || 0);
+    });
+    var orcs = Object.keys(porOrc).map(function (k) { return porOrc[k]; });
+    if (busca) orcs = orcs.filter(function (o) { return o.orcamento.toLowerCase().indexOf(busca) !== -1; });
+
+    if (lbl) lbl.textContent = orcs.length + " orçamento(s) · " + dashOrcItensLista.length + " item(s)";
+
+    if (!orcs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhum orçamento encontrado. Use "Importar > Dashboard de Orçamentos" pra popular.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = orcs.map(function (o) {
+      return (
+        '<tr class="linha-clicavel" data-doc-orc="' + escHtml(o.orcamento) + '" title="Ver itens desse orçamento">' +
+          '<td class="mono">' + escHtml(o.orcamento) + '</td>' +
+          '<td class="num">' + o.n_itens + '</td>' +
+          '<td class="num">' + fmtBRL(o.vl_total) + '</td>' +
+          '<td class="num">' + fmtBRL(o.vl_a_faturar) + '</td>' +
+          '<td class="num">' + fmtBRL(o.lucro_previsto) + '</td>' +
+          '<td class="num">' + fmtBRL(o.lucro_realizado) + '</td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    // Listener
+    document.querySelectorAll('#doc-tbody tr[data-doc-orc]').forEach(function (tr) {
+      if (tr.dataset.bound) return;
+      tr.dataset.bound = "1";
+      tr.addEventListener("click", function () { abrirDetalheDashboardOrc(tr.getAttribute("data-doc-orc")); });
+    });
+  }
+
+  function abrirDetalheDashboardOrc(orcamento) {
+    var itens = dashOrcItensLista.filter(function (it) { return String(it.orcamento) === String(orcamento); });
+    if (!itens.length) { abrirModalDetalhe("Orçamento " + orcamento, "<p class=\"muted\">Sem itens.</p>"); return; }
+    var html = '<p class="muted-tag">' + itens.length + ' item(s) deste orçamento.</p>';
+    html += '<div class="table-wrap"><table class="tabela"><thead><tr>'
+         + '<th>Item</th><th>Família</th><th>Grupo</th>'
+         + '<th class="num">Qtd vendida</th><th class="num">Qtd faturada</th>'
+         + '<th class="num">Vl unit.</th><th class="num">Vl total</th>'
+         + '<th>NFs</th><th class="num">Lucro prev.</th><th class="num">Lucro real.</th>'
+         + '</tr></thead><tbody>';
+    html += itens.map(function (i) {
+      return '<tr>'
+           + '<td>' + escHtml(i.item || "—") + '</td>'
+           + '<td>' + escHtml(i.familia || "—") + '</td>'
+           + '<td>' + escHtml(i.grupo || "—") + '</td>'
+           + '<td class="num">' + (i.qtd_vendida || 0) + '</td>'
+           + '<td class="num">' + (i.qtd_faturada || 0) + '</td>'
+           + '<td class="num">' + fmtBRL(i.vl_unitario) + '</td>'
+           + '<td class="num">' + fmtBRL(i.vl_total) + '</td>'
+           + '<td class="mono" style="font-size:11px">' + escHtml(i.notas_fiscais || "—") + '</td>'
+           + '<td class="num">' + fmtBRL(i.lucro_previsto) + '</td>'
+           + '<td class="num">' + fmtBRL(i.lucro_realizado) + '</td>'
+           + '</tr>';
+    }).join("");
+    html += '</tbody></table></div>';
+    abrirModalDetalhe("Itens do orçamento " + orcamento, html);
+  }
+
+  // --- Drill-down: Custo por OS → estoque_detalhes ---
+  function abrirDetalheItensMP(os) {
+    setStatus(null, "Buscando itens de matéria-prima da OS " + os + "…");
+    client.from("estoque_detalhes").select("*").eq("os", String(os)).order("data_saida").then(function (r) {
+      if (r.error) { abrirModalDetalhe("Itens MP — OS " + os, '<p class="muted">Erro: ' + escHtml(r.error.message) + '</p>'); return; }
+      var itens = r.data || [];
+      if (!itens.length) {
+        abrirModalDetalhe("Itens MP — OS " + os, '<p class="muted">Nenhum item de matéria-prima registrado para esta OS. (Use "Importar > Saída de Estoque" pra alimentar.)</p>');
+        return;
+      }
+      var totalCusto = 0;
+      itens.forEach(function (i) { totalCusto += Number(i.custo_total || 0); });
+      var html = '<p class="muted-tag">' + itens.length + ' item(s), custo total R$ ' + fmtBRLNum(totalCusto) + '</p>';
+      html += '<div class="table-wrap"><table class="tabela"><thead><tr>'
+           + '<th>Data saída</th><th>Cód. material</th><th>Descrição</th>'
+           + '<th class="num">Qtd</th><th class="num">Custo unit.</th><th class="num">Custo total</th>'
+           + '<th>Funcionário</th>'
+           + '</tr></thead><tbody>';
+      html += itens.map(function (i) {
+        return '<tr>'
+             + '<td>' + (i.data_saida ? fmtData(i.data_saida) : "—") + '</td>'
+             + '<td class="mono">' + escHtml(i.codigo_material || "—") + '</td>'
+             + '<td>' + escHtml(i.descricao_material || "—") + '</td>'
+             + '<td class="num">' + (i.quantidade || 0) + '</td>'
+             + '<td class="num">' + fmtBRL(i.custo_unitario) + '</td>'
+             + '<td class="num">' + fmtBRL(i.custo_total) + '</td>'
+             + '<td>' + escHtml(i.funcionario || "—") + '</td>'
+             + '</tr>';
+      }).join("");
+      html += '</tbody></table></div>';
+      abrirModalDetalhe("Itens MP — OS " + os, html);
+    });
+  }
+
+  // Helper: setStatus genérico (usa elemento por id)
+  function setStatus(elId, msg, classe) {
+    if (!elId) return;
+    var el = document.getElementById(elId);
+    if (!el) return;
+    if (msg === null || msg === undefined) { el.hidden = true; el.textContent = ""; el.className = "status"; return; }
+    el.textContent = msg;
+    el.className = "status" + (classe ? " " + classe : "");
+    el.hidden = false;
+  }
+  // Helper numérico (sem R$, só número formatado)
+  function fmtBRLNum(v) {
+    var n = Number(v || 0);
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 
 })();

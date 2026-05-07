@@ -173,6 +173,7 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="apr_dashboard" type="button">Por Apropriação</button>
               <button class="sb-sub" data-page="apr_faturamento" type="button">Por Faturamento</button>
+              <button class="sb-sub" data-page="saldo_reconhecer" type="button">Saldo a Reconhecer</button>
             </div>
           </div>
 
@@ -195,6 +196,7 @@
               <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
               <button class="sb-sub" data-page="faturamento" type="button">Gestão de Faturamento</button>
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
+              <button class="sb-sub" data-page="dashboard_orcamentos_view" type="button">Dashboard de Orçamentos</button>
             </div>
           </div>
 
@@ -1624,6 +1626,89 @@
             </div>
           </div>
         </section>
+
+        <!-- M18 Onda 3.1 — Saldo a Reconhecer (Receita) -->
+        <section class="page" data-page="saldo_reconhecer" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Saldo a Reconhecer</h1>
+            <p class="page-sub">Por orçamento e competência: venda - adiantamentos - NFs emitidas. Calculado em tempo real (vw_saldo_reconhecer).</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total venda</div><div class="metric-value" id="sr-m-venda">—</div></div>
+            <div class="metric-card"><div class="metric-label">Total adiantamento</div><div class="metric-value" id="sr-m-adto">—</div></div>
+            <div class="metric-card"><div class="metric-label">Total NFs emitidas</div><div class="metric-value" id="sr-m-nf">—</div></div>
+            <div class="metric-card"><div class="metric-label">A reconhecer</div><div class="metric-value" id="sr-m-arec">—</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <label class="toolbar-inline">Filtro:
+                <select id="sr-status-filtro">
+                  <option value="abertos" selected>Em aberto (a reconhecer ≠ 0)</option>
+                  <option value="">Todos</option>
+                  <option value="liquidados">Liquidados (a reconhecer = 0)</option>
+                </select>
+              </label>
+              <input type="search" id="sr-busca" class="input-search" placeholder="Buscar orçamento…" />
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="sr-lbl">—</span>
+            </div>
+
+            <div id="sr-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Orçamento</th>
+                    <th>Competência</th>
+                    <th class="num">Venda</th>
+                    <th class="num">Adiantamento</th>
+                    <th class="num">NFs emitidas</th>
+                    <th class="num">A reconhecer</th>
+                  </tr>
+                </thead>
+                <tbody id="sr-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- M18 Onda 3.1 — Dashboard de Orçamentos (Comercial) -->
+        <section class="page" data-page="dashboard_orcamentos_view" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Dashboard de Orçamentos</h1>
+            <p class="page-sub">Itens detalhados por orçamento (qtd vendida/faturada/a faturar, valor, lucro previsto vs realizado). Clique numa linha para ver os itens.</p>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="search" id="doc-busca" class="input-search" placeholder="Buscar orçamento…" />
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="doc-lbl">—</span>
+            </div>
+
+            <div id="doc-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Orçamento</th>
+                    <th class="num">Itens</th>
+                    <th class="num">Vl total</th>
+                    <th class="num">Vl a faturar</th>
+                    <th class="num">Lucro previsto</th>
+                    <th class="num">Lucro realizado</th>
+                  </tr>
+                </thead>
+                <tbody id="doc-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
 
         <!-- Custeio > Custo Direto > Via OS -->
         <section class="page" data-page="cust_direto_via_os" hidden>
