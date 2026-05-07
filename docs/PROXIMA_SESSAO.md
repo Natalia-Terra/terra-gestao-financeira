@@ -1,71 +1,72 @@
 # Próxima Sessão
 
-**Atualizado em 2026-05-07 noite — pós M24 (Política de Histórico).**
+**Atualizado em:** 2026-05-07 (noite, encerramento da sessão de auth)
+**Source-of-truth principal:** `docs/HANDOFF_2026-05-07.md` (este arquivo é só o resumo das ações imediatas).
 
-## Estado consolidado
+## ⚡ 3 ações imediatas pra começar
 
-✅ M18 — Plena Gestão de Faturamento
-✅ M19 Master + Reset
-✅ M19 Fase 1 — Medidas Disciplinares
-✅ M19 Fase 2 — Avaliação de Desempenho
-✅ M19 Fase 4 — Cálculo do Bônus completo (4 RPCs)
-✅ M24 — Política de Histórico (estrutura aplicada)
+### 1. Confirmar estado da base
+A base foi zerada via SQL no fim da sessão de 07/05. Pergunte à Juliana se ela já começou a importar dados entre as sessões. Se sim, atualize `ESTADO_ATUAL.md`.
 
-## Bloqueios externos (depende de Juliana)
+### 2. ATACAR o BUG CRÍTICO #1 — Reset Completo travado
+**Prioridade absoluta.** Sintoma reproduzido em 2 navegadores e 2 usuários — input "Digite RESET" e botão "Executar Reset Completo" não respondem.
 
-1. **PDF Folha de Ponto consolidado** — destrava M19 Fase 3 + parser. Decisões já registradas:
-   - Periodicidade: livre, sob demanda
-   - Match por CPF
-   - Funcionários sem ponto: importa o resto + LISTA DE EXCEÇÃO obrigatória
-   - Política de histórico: SEMPRE append + competência (sem sobrescrever)
+**Investigação inicial:**
+- Pedir pra Juliana abrir DevTools (F12) > Elements > Ctrl+F `class="modal-overlay"` e listar TODOS os elementos com essa classe + estado (hidden? display?)
+- Hipótese: modal-overlay órfão sem `hidden`, criado por `mostrarMensagem()` (app.js linha ~822) ou `abrirModalDetalhe()` (linha 7805) e não removido por algum erro JS
 
-2. **Cadastrar metas iniciais** — em bonif_metas_empresa (faturamento, margem, caixa) e bonif_metas_area
-3. **Importar dados reais** — 4 imports da M18
+**Solução defensiva sugerida (~30 min + push):**
+```javascript
+// No boot do app, após auth bem-sucedida:
+function limparOverlaysOrfaos() {
+  document.querySelectorAll('.modal-overlay:not([hidden])').forEach(function (m) {
+    if (!m.dataset.terraVivo) m.parentNode && m.parentNode.removeChild(m);
+  });
+}
+// Chamar no boot e a cada navegação entre páginas
+```
 
-## Frentes técnicas pra próximas sessões
+E nas funções `mostrarMensagem`, `abrirModalDetalhe`, `abrirModal` etc, adicionar `div.dataset.terraVivo = "1"` ao criar e `delete div.dataset.terraVivo` ao fechar (ou incluir no fechar() o `removeAttribute`).
 
-### M25 — Refac dos imports existentes pra Política de Histórico
+### 3. Retomar setup do Resend
+Juliana pediu ajuda mas não passou em qual etapa parou. Comece perguntando:
+- Já criou conta em resend.com?
+- Adicionou domínio (qual? polimatagrc.com.br?) e os registros DNS?
+- Gerou API Key?
 
-Atualmente 10 tabelas têm colunas `vigente`/`import_id` (M24) MAS os imports continuam usando UPSERT. Refatorar pra:
-- Cada import → entrada em `imports_historico`
-- Novos registros: vigente=true + import_id
-- Registros do mesmo período: vigente=false
-- Funções de cálculo: filtrar vigente=true
+Passo a passo completo em `docs/CONFIGURACAO_AUTH.md`.
 
-Imports a refatorar:
-- Saída de Estoque, Dashboard de Orçamentos, A Pagar x A Receber
-- Caixa Saldo Mensal, Saldos Contas, Compromissos, Recebimentos Previstos
-- Histórico Mov Financeiro, Histórico Saldo a Reconhecer
+## 📋 Frentes técnicas em aberto
 
-### M26 — Tela "Histórico de Imports"
+### CRÍTICO
+- Bug #1 — Reset Completo (acima)
 
-Lista entries de `imports_historico` com filtros (tipo, competência, período).
-Drill-down: ver registros vigentes vs não-vigentes daquele import.
-Permite "reverter" um import (marca os registros dele como vigente=false e re-marca o anterior como vigente=true).
+### IMPORTANTE
+- **M19 Fase 3** — Parser PDF Folha de Ponto. Input recebido (`Fechamentos Ponto 04.2026.pdf`). Decisões já confirmadas. Falta confirmar match por CPF e implementar.
+- Edge Function `gerenciar-usuarios` retornar emails (coluna "Email" da tela vazia hoje).
 
-### M19 Fase 3 — Parser PDF Folha de Ponto
+### NICE-TO-HAVE
+- M26 — Política Histórico nas 8 tabelas restantes
+- Logo Terra nos emails (hoje só texto)
+- Botão "Resetar senha" direto na tela Usuários
 
-Quando Juliana mandar amostra real:
-1. Cria entrada em `imports_historico`
-2. Parser separa por seção (Nome+CPF)
-3. Extrai totais agregados
-4. Lista de exceção: funcionários ATIVOS que NÃO apareceram no PDF
-5. Insere em `frequencia_mensal` com vigente=true + import_id
-6. Marca registros anteriores do mesmo (funcionario, mes_ref) como vigente=false
+## 📋 Bloqueios externos (depende de Juliana)
 
-### Outras frentes (sem urgência)
+- **Configurar SMTP no Resend** (Seção 7 do handoff)
+- **Colar templates de email** caprichados no Supabase (Auth > Email Templates)
+- **Cadastrar metas iniciais** quando começar carga: bonif_metas_empresa, bonif_metas_area
+- **Importar dados reais** (6 arquivos obrigatórios + 6 opcionais — lista em `BASES_NECESSARIAS.md`)
 
-- Tela "Bônus Individual" consolidada (lista todos com cálculo)
-- Tela de Configuração de Metas (Meta TC e Meta Área)
-- Refac "Gestão de Faturamento" → Dashboard rico
-- SMTP próprio, logo Terra
+## 📋 Como o handoff acontece
 
-## Estatísticas finais 2026-05-07
+A Juliana encerrou esta sessão pedindo formalização. Os documentos canônicos da sessão de 07/05 são:
 
-- 11 migrações SQL (M18, M18b, M19, M19b, M19c, M20, M21, M22, M22b, M23, M24)
-- 22+ commits frontend
-- ~5.500 linhas novas em app.js
-- 0 ERROR no advisor; 5 WARN arquiteturais aceitos
-- 0 toques no PC da Juliana
-- M19 quase fechado (Fase 3 aguarda PDF)
-- Política arquitetural "nunca sobrescrever" estabelecida e infraestrutura pronta
+| Arquivo | Onde |
+|---|---|
+| **HANDOFF_2026-05-07.md** | `docs/HANDOFF_2026-05-07.md` no GitHub (texto) |
+| **HANDOFF_2026-05-07.docx** | Pasta Terra Conttemporânea (Word caprichado, 9 seções) |
+| **ESTADO_ATUAL.md** | `docs/ESTADO_ATUAL.md` (foto técnica do sistema) |
+| **PENDENCIAS.md** | `docs/PENDENCIAS.md` (lista priorizada) |
+| **PROXIMA_SESSAO.md** | este arquivo (resumo executivo) |
+
+Ler nesta ordem na próxima sessão: `PROXIMA_SESSAO.md` → `HANDOFF_2026-05-07.md` → `ESTADO_ATUAL.md` (se precisar de detalhe técnico).
