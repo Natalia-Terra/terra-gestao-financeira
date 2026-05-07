@@ -9755,4 +9755,191 @@
     });
   }
 
+  // ===========================================================================
+  // M22+M23 — Cálculo REAL do Bônus Individual via RPC
+  // Adiciona um botão "Calcular Bônus Real" na tela existente bonus_indiv_detalhe
+  // que chama fn_calcular_bonus_total e mostra o resultado em modal.
+  // ===========================================================================
+
+  function abrirCalculoBonusReal(funcionarioId, nomeFuncionario) {
+    if (!funcionarioId) { alert("Selecione um funcionário."); return; }
+    // Determinar período (semestre atual por default)
+    var hoje = new Date();
+    var ano = hoje.getFullYear();
+    var mes = hoje.getMonth() + 1;
+    var inicio = mes <= 6 ? ano + "-01-01" : ano + "-07-01";
+    var fim = mes <= 6 ? ano + "-06-30" : ano + "-12-31";
+
+    abrirModalDetalhe("Bônus Individual — Cálculo Real (carregando…)",
+      '<p class="muted">Calculando via fn_calcular_bonus_total…</p>');
+
+    client.rpc("fn_calcular_bonus_total", {
+      p_funcionario_id: funcionarioId,
+      p_inicio: inicio,
+      p_fim: fim,
+      p_pct_ll: 0.10
+    }).then(function (r) {
+      if (r.error) {
+        abrirModalDetalhe("Bônus — Erro", '<p class="muted">' + escHtml(r.error.message) + '</p>');
+        return;
+      }
+      var d = r.data;
+      var html = '<div class="finding info" style="margin:0 0 12px;"><strong>' + escHtml(d.funcionario_nome || nomeFuncionario || "—") + '</strong> · período ' + d.periodo_inicio + ' a ' + d.periodo_fim + '</div>';
+
+      // Cards das 3 esferas
+      html += '<div class="grid-metrics" style="margin-bottom:12px;">';
+      html += '<div class="metric-card"><div class="metric-label">Profissional</div><div class="metric-value">' + d.esferas.profissional.esfera_profissional_pct + '%</div><div class="metric-sub">de ' + d.esferas.profissional.esfera_profissional_max_pct + '%</div></div>';
+      html += '<div class="metric-card"><div class="metric-label">Área</div><div class="metric-value">' + d.esferas.area.esfera_area_pct + '%</div><div class="metric-sub">de ' + d.esferas.area.esfera_area_max_pct + '%</div></div>';
+      html += '<div class="metric-card"><div class="metric-label">Empresa</div><div class="metric-value">' + d.esferas.empresa.esfera_empresa_pct + '%</div><div class="metric-sub">de ' + d.esferas.empresa.esfera_empresa_max_pct + '%</div></div>';
+      html += '<div class="metric-card" style="border-left-color: var(--ouro);"><div class="metric-label">TOTAL</div><div class="metric-value">' + d.pct_total + '%</div><div class="metric-sub">de 100%</div></div>';
+      html += '</div>';
+
+      // Card de valor estimado
+      html += '<div class="card" style="background:var(--bg3); padding:12px; margin-bottom:12px;">';
+      html += '<strong>💰 Bônus estimado:</strong> ' + fmtBRL(d.valor_estimado);
+      html += '<div class="muted" style="font-size:12px; margin-top:4px;">Pool ajustado R$ ' + fmtBRLNum(d.pool.pool_ajustado) + ' (multiplicador ' + d.pool.multiplicador + 'x da margem ' + d.pool.margem_pct + '%) ÷ ' + d.pool.qtd_elegiveis + ' elegíveis = R$ ' + fmtBRLNum(d.pool.valor_por_pessoa_100pct) + '/pessoa @ 100%, × ' + d.pct_total + '% atingido</div>';
+      html += '</div>';
+
+      // Detalhe Profissional
+      var prof = d.esferas.profissional.detalhe;
+      html += '<details open><summary><strong>Esfera Profissional (40%)</strong></summary>';
+      html += '<table class="tabela"><thead><tr><th>Componente</th><th class="num">Atingido</th><th class="num">Máximo</th><th>Detalhe</th></tr></thead><tbody>';
+      html += '<tr><td>1. Conduta</td><td class="num">' + prof.conduta.pct + '%</td><td class="num">' + prof.conduta.pct_max + '%</td><td>' + prof.conduta.qtd_medidas + ' medida(s) disciplinar(es) no período</td></tr>';
+      html += '<tr><td>2. Avaliação de Performance</td><td class="num">' + prof.avaliacao.pct + '%</td><td class="num">' + prof.avaliacao.pct_max + '%</td><td>' + (prof.avaliacao.nota !== null ? "Nota " + prof.avaliacao.nota : '<span class="muted">sem avaliação no período</span>') + '</td></tr>';
+      var freqMsg = prof.faltas_justificadas.frequencia_disponivel ? "" : ' <span class="muted">(aguardando dados de frequência)</span>';
+      html += '<tr><td>3. Faltas Justificadas</td><td class="num">' + prof.faltas_justificadas.pct + '%</td><td class="num">' + prof.faltas_justificadas.pct_max + '%</td><td>' + prof.faltas_justificadas.qtd + ' falta(s)' + freqMsg + '</td></tr>';
+      html += '<tr><td>4. Atrasos</td><td class="num">' + prof.atrasos.pct + '%</td><td class="num">' + prof.atrasos.pct_max + '%</td><td>' + prof.atrasos.qtd + ' atraso(s)' + freqMsg + '</td></tr>';
+      html += '<tr><td>Penalidade — Faltas Injustificadas</td><td class="num text-danger">' + prof.faltas_injustificadas.penalidade_pct + '%</td><td class="num">−12,5%</td><td>' + prof.faltas_injustificadas.qtd + ' falta(s) injustificada(s)' + freqMsg + '</td></tr>';
+      html += '</tbody></table></details>';
+
+      // Detalhe Área
+      var area = d.esferas.area.detalhe;
+      html += '<details style="margin-top:12px;"><summary><strong>Esfera Área (30%)</strong></summary>';
+      if (area.sem_dados) {
+        html += '<p class="muted" style="margin:8px 0;">Nenhuma meta de área cadastrada para o organograma do funcionário neste período.</p>';
+      } else {
+        html += '<p>' + area.qtd_metas + ' meta(s) cadastrada(s). ' + area.meses_atingidos + ' meses atingidos de ' + (area.qtd_metas * area.meses_periodo) + ' possíveis (' + area.pct_atingido_metas + '%).</p>';
+      }
+      html += '</details>';
+
+      // Detalhe Empresa
+      var emp = d.esferas.empresa.detalhe;
+      html += '<details style="margin-top:12px;"><summary><strong>Esfera Empresa (30%)</strong></summary>';
+      html += '<table class="tabela"><thead><tr><th>Indicador</th><th class="num">Atingido</th><th class="num">Máximo</th><th>Detalhe</th></tr></thead><tbody>';
+      html += '<tr><td>Faturamento Bruto</td><td class="num">' + emp.faturamento.pct + '%</td><td class="num">' + emp.faturamento.pct_max + '%</td><td>' + (emp.faturamento.meta ? "Meta " + fmtBRL(emp.faturamento.meta) + ", realizado " + fmtBRL(emp.faturamento.realizado) + " (" + (emp.faturamento.pct_meta || 0) + "%)" : '<span class="muted">meta não cadastrada</span>') + '</td></tr>';
+      html += '<tr><td>Margem Líquida</td><td class="num">' + emp.margem_liquida.pct + '%</td><td class="num">' + emp.margem_liquida.pct_max + '%</td><td>' + emp.margem_liquida.meses_atingidos + ' mês(es) atingidos da meta de ' + emp.margem_liquida.meta_pct + '% margem</td></tr>';
+      html += '<tr><td>Caixa Positivo</td><td class="num">' + emp.caixa_positivo.pct + '%</td><td class="num">' + emp.caixa_positivo.pct_max + '%</td><td>' + emp.caixa_positivo.meses_positivos + ' mês(es) positivos de ' + emp.caixa_positivo.meses_periodo + '</td></tr>';
+      html += '<tr><td>ICC (cobertura 6m)</td><td class="num">' + emp.icc.pct + '%</td><td class="num">' + emp.icc.pct_max + '%</td><td>Saldo cobre compromissos próximos 6m?</td></tr>';
+      html += '</tbody></table></details>';
+
+      // Substitui o conteúdo do modal
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov) {
+        var titulo = ov.querySelector("h2");
+        if (titulo) titulo.textContent = "Bônus Individual — " + (d.funcionario_nome || "");
+        var body = ov.querySelector(".modal-detalhe-body");
+        if (body) body.innerHTML = html;
+      }
+    });
+  }
+
+  // Helper formato BRL como número (sem prefixo)
+  if (typeof fmtBRLNum !== "function") {
+    window.fmtBRLNum = function (v) {
+      var n = Number(v || 0);
+      return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+  }
+
+  // ===========================================================================
+  // Drill-down em Funcionários — abrir histórico de Medidas + Avaliações
+  // ===========================================================================
+  function abrirHistoricoRH(funcionarioId, nomeFuncionario) {
+    if (!funcionarioId) return;
+    abrirModalDetalhe("Histórico de RH — " + (nomeFuncionario || ""), '<p class="muted">Carregando…</p>');
+
+    Promise.all([
+      client.from("medidas_disciplinares").select("*").eq("funcionario_id", funcionarioId).order("data", { ascending: false }),
+      client.from("avaliacao_desempenho").select("*").eq("funcionario_id", funcionarioId).order("data_avaliacao", { ascending: false, nullsLast: true })
+    ]).then(function (rs) {
+      var medidas = (rs[0].data || []).filter(function (m) { return m.status_medida !== "cancelada"; });
+      var avals = (rs[1].data || []).filter(function (a) { return a.status_avaliacao !== "arquivada"; });
+
+      var html = '<div class="grid-metrics" style="margin-bottom:12px;">';
+      html += '<div class="metric-card"><div class="metric-label">Medidas Disciplinares</div><div class="metric-value">' + medidas.length + '</div></div>';
+      html += '<div class="metric-card"><div class="metric-label">Avaliações</div><div class="metric-value">' + avals.length + '</div></div>';
+      var ultimaNota = avals.length ? (avals[0].nota || _calcMedia5(avals[0])) : null;
+      html += '<div class="metric-card"><div class="metric-label">Última nota</div><div class="metric-value">' + (ultimaNota ? Number(ultimaNota).toFixed(2) : "—") + '</div></div>';
+      html += '</div>';
+
+      // Medidas
+      html += '<details open><summary><strong>Medidas Disciplinares (' + medidas.length + ')</strong></summary>';
+      if (!medidas.length) {
+        html += '<p class="muted" style="margin:8px 0;">Nenhuma medida disciplinar registrada.</p>';
+      } else {
+        html += '<table class="tabela"><thead><tr><th>Data</th><th>Gravidade</th><th>Tipo</th><th>Descrição</th><th>Status</th></tr></thead><tbody>';
+        medidas.forEach(function (m) {
+          html += '<tr>' +
+            '<td>' + (m.data ? fmtData(m.data) : "—") + '</td>' +
+            '<td><span class="tag ' + (m.gravidade_infracao === "Muito Grave" || m.gravidade_infracao === "Grave" ? "danger" : (m.gravidade_infracao === "Moderada" ? "warn" : "")) + '">' + escHtml(m.gravidade_infracao || "—") + '</span></td>' +
+            '<td>' + escHtml(m.tipo_medida || "—") + '</td>' +
+            '<td>' + escHtml((m.descricao_infracao || "").slice(0, 60)) + '</td>' +
+            '<td><span class="tag">' + escHtml(m.status_medida) + '</span></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</details>';
+
+      // Avaliações
+      html += '<details style="margin-top:12px;"><summary><strong>Avaliações de Desempenho (' + avals.length + ')</strong></summary>';
+      if (!avals.length) {
+        html += '<p class="muted" style="margin:8px 0;">Nenhuma avaliação cadastrada.</p>';
+      } else {
+        html += '<table class="tabela"><thead><tr><th>Data</th><th>Avaliador</th><th class="num">Nota geral</th><th>Status</th></tr></thead><tbody>';
+        avals.forEach(function (a) {
+          var media = a.nota || _calcMedia5(a);
+          html += '<tr>' +
+            '<td>' + (a.data_avaliacao ? fmtData(a.data_avaliacao) : "—") + '</td>' +
+            '<td>' + escHtml(a.avaliador_nome || "—") + '</td>' +
+            '<td class="num">' + (media ? Number(media).toFixed(2) : "—") + '</td>' +
+            '<td><span class="tag">' + escHtml(a.status_avaliacao || "—") + '</span></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</details>';
+
+      // Botão calcular bônus
+      html += '<div style="margin-top:16px; text-align:right;">';
+      html += '<button type="button" class="btn-ouro" id="btn-rh-calcular-bonus">Calcular Bônus do semestre →</button>';
+      html += '</div>';
+
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov) {
+        var body = ov.querySelector(".modal-detalhe-body");
+        if (body) body.innerHTML = html;
+      }
+      var btn = document.getElementById("btn-rh-calcular-bonus");
+      if (btn) btn.addEventListener("click", function () {
+        abrirCalculoBonusReal(funcionarioId, nomeFuncionario);
+      });
+    });
+  }
+
+  // Habilita drill-down nas linhas de #rhf-tbody (tela Funcionários)
+  document.addEventListener("DOMContentLoaded", function () {
+    var tb = document.getElementById("rhf-tbody");
+    if (tb && !tb.dataset.rhBound) {
+      tb.dataset.rhBound = "1";
+      tb.addEventListener("click", function (ev) {
+        var tr = ev.target && ev.target.closest && ev.target.closest("tr[data-rhf-id]");
+        if (!tr) return;
+        var fid = Number(tr.getAttribute("data-rhf-id"));
+        var nome = tr.cells && tr.cells[0] ? tr.cells[0].textContent.trim() : "";
+        abrirHistoricoRH(fid, nome);
+      });
+    }
+  });
+
 })();
