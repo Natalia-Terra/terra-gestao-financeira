@@ -995,6 +995,10 @@
               <div class="config-card-title">Limpar Dados</div>
               <div class="config-card-desc">Apagar tabelas da Terra com confirmação</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_reset" style="border-color: var(--danger);">
+              <span class="config-card-title" style="color: var(--danger);">⚠ Reset Completo</span>
+              <span class="config-card-desc">Esvazia toda a base de negócio. Apenas perfil master.</span>
+            </button>
             <button class="config-card" type="button" data-subpage="cfg_centros">
               <div class="config-card-title">Centros de Custo</div>
               <div class="config-card-desc">Cadastro de CCs para alocação de funcionários e folha</div>
@@ -1275,6 +1279,17 @@
             <div id="lim-status" class="status" hidden role="status" aria-live="polite"></div>
           </div>
         </section>
+
+        <!-- M19 — Reset (Configuração) — só pra perfil master -->
+        <section class="page" data-page="cfg_reset" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Reset Completo da Base</h1>
+            <p class="page-sub">Apaga todos os dados de negócio (orçamentos, NFs, movimentos, estoque, folha, bônus, contas, etc.) — preserva estrutura (plano de contas, perfis, CCs, funcionários). Apenas perfil "master" pode usar.</p>
+          </div>
+          <div id="reset-content"></div>
+        </section>
+
 
 
         <!-- Página: RH > Bônus — Configuração (Entrega 7) -->

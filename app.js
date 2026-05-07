@@ -242,6 +242,8 @@
 
     if (primeiraVez) {
       carregarDashboard(user);
+      // M19 — carrega permissões master e aplica restrições na UI
+      if (typeof carregarPermissoesMaster === "function") carregarPermissoesMaster();
       // Só redireciona pra dashboard no primeiro carregamento
       showPage("dashboard");
     }
@@ -357,6 +359,8 @@
     if (pageId === "dashboard_orcamentos_view")   carregarDashboardOrcamentosTeleSeNecessario();
     // M18 Onda 3.2 — Lançamentos de Caixa
     if (pageId === "movimentos_caixa")            carregarMovimentosCaixaSeNecessario();
+    // M19 — Reset (master only)
+    if (pageId === "cfg_reset")                   carregarResetSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -8611,5 +8615,137 @@
       });
     }
   });
+
+  // ===========================================================================
+  // M19 — Perfil Master + tela Reset
+  // ===========================================================================
+
+  // Cache das permissões do user logado
+  var _permissoesMaster = null;
+
+  function carregarPermissoesMaster() {
+    return Promise.all([
+      client.rpc("auth_pode_limpar_base"),
+      client.rpc("auth_pode_carga_inicial")
+    ]).then(function (rs) {
+      _permissoesMaster = {
+        pode_limpar_base: !!(rs[0].data),
+        pode_carga_inicial: !!(rs[1].data)
+      };
+      aplicarPermissoesMaster();
+      return _permissoesMaster;
+    }).catch(function () {
+      // Se falhar (ex: funções não existem), assume que não tem permissão
+      _permissoesMaster = { pode_limpar_base: false, pode_carga_inicial: false };
+      aplicarPermissoesMaster();
+      return _permissoesMaster;
+    });
+  }
+
+  function aplicarPermissoesMaster() {
+    if (!_permissoesMaster) return;
+    // Esconder item sidebar "Importar" se não tem pode_carga_inicial
+    var btnImp = document.querySelector('[data-page="importacoes"]');
+    if (btnImp) btnImp.style.display = _permissoesMaster.pode_carga_inicial ? "" : "none";
+    // Esconder item sidebar "Reset" (e card em Configuração) se não tem pode_limpar_base
+    var btnReset = document.querySelector('[data-page="cfg_reset"]');
+    if (btnReset) btnReset.style.display = _permissoesMaster.pode_limpar_base ? "" : "none";
+    var cardReset = document.querySelector('.config-card[data-subpage="cfg_reset"]');
+    if (cardReset) cardReset.style.display = _permissoesMaster.pode_limpar_base ? "" : "none";
+  }
+
+  // --- Tela: Reset (Configuração > Reset) — só pra master ---
+  function carregarResetSeNecessario() {
+    if (!_permissoesMaster) {
+      carregarPermissoesMaster().then(function () {
+        if (_permissoesMaster.pode_limpar_base) renderReset();
+        else renderResetSemPermissao();
+      });
+      return;
+    }
+    if (_permissoesMaster.pode_limpar_base) renderReset();
+    else renderResetSemPermissao();
+  }
+
+  function renderResetSemPermissao() {
+    var c = document.getElementById("reset-content");
+    if (!c) return;
+    c.innerHTML = '<div class="danger-box"><p><strong>Sem permissão.</strong> Apenas perfis "master" podem fazer reset da base. Pergunte pra Juliana se for o caso.</p></div>';
+  }
+
+  function renderReset() {
+    var c = document.getElementById("reset-content");
+    if (!c) return;
+    c.innerHTML =
+      '<div class="danger-box">' +
+        '<p><strong>⚠️ AÇÃO IRREVERSÍVEL.</strong> O Reset Completo apaga <strong>todos os dados de negócio</strong> da base:</p>' +
+        '<ul>' +
+          '<li>Orçamentos, Movimentos, Movimentos de Caixa, Notas Fiscais, NF↔OS, Saldo a Reconhecer</li>' +
+          '<li>Estoque (detalhes + resumo + evolução), Receitas e Custos, Custo Direto Competência</li>' +
+          '<li>Folha de Pagamento (e rubricas), Benefícios, Impostos RH</li>' +
+          '<li>Contas Bancárias, Saldos Mensais, Recebimentos Previstos, Entradas/Saídas Avulsas, Compromissos</li>' +
+          '<li>Programa de Bônus (períodos, metas empresa/área/profissional)</li>' +
+          '<li>Auditoria e log de Importações</li>' +
+        '</ul>' +
+        '<p><strong>O que NÃO é apagado:</strong> Plano de Contas, CFOP, Perfis, Tipos de Perfil, Centros de Custo, Funcionários, Organograma, Rubricas, Classif. Faturamento, Listas (naturezas/tipos).</p>' +
+      '</div>' +
+      '<div class="card fat-card" style="margin-top:16px;">' +
+        '<h3 style="color: var(--danger); margin-bottom: 8px;">Confirmação dupla obrigatória</h3>' +
+        '<p>Pra confirmar o reset, digite <code style="background:var(--danger-bg); color: var(--danger); padding: 2px 8px; border-radius: 4px; font-weight: bold;">RESET</code> no campo abaixo (em maiúsculas, sem espaços):</p>' +
+        '<input type="text" id="reset-input-confirma" class="input-search" placeholder="Digite RESET" style="max-width: 240px; margin-bottom: 12px;" />' +
+        '<div>' +
+          '<button id="reset-btn-executar" type="button" class="btn-perigo" disabled>Executar Reset Completo</button> ' +
+          '<button id="reset-btn-cancelar" type="button" class="btn-limpar">Cancelar</button>' +
+        '</div>' +
+        '<div id="reset-status" class="status" hidden role="status" aria-live="polite" style="margin-top: 12px;"></div>' +
+      '</div>';
+
+    var inp = document.getElementById("reset-input-confirma");
+    var btnExec = document.getElementById("reset-btn-executar");
+    var btnCanc = document.getElementById("reset-btn-cancelar");
+    if (inp) {
+      inp.value = "";
+      inp.addEventListener("input", function () {
+        btnExec.disabled = inp.value.trim() !== "RESET";
+      });
+    }
+    if (btnExec) btnExec.addEventListener("click", executarReset);
+    if (btnCanc) btnCanc.addEventListener("click", function () {
+      if (inp) inp.value = "";
+      btnExec.disabled = true;
+      var st = document.getElementById("reset-status");
+      if (st) { st.hidden = true; st.textContent = ""; }
+    });
+  }
+
+  function executarReset() {
+    if (!confirm("ÚLTIMA CONFIRMAÇÃO: vai apagar TODOS os dados de negócio da base. Esta ação é IRREVERSÍVEL. Continuar?")) return;
+    var st = document.getElementById("reset-status");
+    var btn = document.getElementById("reset-btn-executar");
+    if (btn) btn.disabled = true;
+    if (st) { st.hidden = false; st.className = "status carregando"; st.textContent = "Executando reset… aguarde."; }
+    client.rpc("fn_reset_base_completo").then(function (r) {
+      if (r.error) {
+        if (st) { st.className = "status erro"; st.textContent = "Erro: " + r.error.message; }
+        if (btn) btn.disabled = false;
+        return;
+      }
+      if (st) {
+        st.className = "status ok";
+        st.textContent = "✓ Reset concluído com sucesso. Recarregue a página (F5) pra ver o sistema vazio.";
+      }
+      // Invalidar caches locais
+      try {
+        orcamentosCarregados = false; orcamentosLista = [];
+        movimentosCompletos = []; movCaixaCarregado = false;
+        notasCarregado = false; aprCarregado = false;
+        rcCarregado = false; bonCarregado = false;
+        saldoReconhecerCarregado = false; dashOrcCarregado = false;
+      } catch (e) {}
+      // Limpa input
+      var inp = document.getElementById("reset-input-confirma");
+      if (inp) inp.value = "";
+    });
+  }
 
 })();
