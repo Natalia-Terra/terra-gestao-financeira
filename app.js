@@ -10234,4 +10234,169 @@
     };
   }
 
+  // ===========================================================================
+  // M26 — Política de histórico aplicada nos imports restantes
+  // ===========================================================================
+
+  // Atualiza TABELAS_COM_HISTORICO pra incluir as 10 novas (M26)
+  if (typeof TABELAS_COM_HISTORICO !== "undefined") {
+    [
+      'movimentos','notas_fiscais','nf_os','saldo_reconhecer',
+      'compromissos_financeiros','recebimentos_previstos',
+      'entradas_outras','saidas_outras',
+      'folha_pagamento','folha_pagamento_rubricas'
+    ].forEach(function (t) {
+      if (TABELAS_COM_HISTORICO.indexOf(t) === -1) TABELAS_COM_HISTORICO.push(t);
+    });
+  }
+
+  // Refac do confirmar de NFs com vínculo (gravarNFsEnfsOs) pra usar política
+  // Substitui a função existente
+  function gravarNFsEnfsOs(nfs, vinculos, cb) {
+    var numerosNF = Array.from(new Set(nfs.map(function (n) { return n.numero_nf; }).filter(Boolean)));
+    aplicarPoliticaHistorico({
+      tipo: "notas_fiscais",
+      arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+      marcarAnteriores: [
+        { tabela: "notas_fiscais", filtros: { numero_nf: numerosNF } },
+        { tabela: "nf_os", filtros: { numero_nf: numerosNF } }
+      ],
+      inserts: [
+        { tabela: "notas_fiscais", linhas: nfs },
+        { tabela: "nf_os", linhas: vinculos }
+      ]
+    }, function (res) {
+      if (res.erro) { cb(res.erro, true); return; }
+      if (res.erros && res.erros.length) {
+        cb("NFs/vínculos com avisos: " + res.erros.length + " erros · Inseridos " + res.totalInseridos + ". Import #" + res.importId, true);
+      } else {
+        cb(nfs.length + " NFs e " + vinculos.length + " vínculo(s) NF↔OS gravados. Import #" + res.importId + ".", false);
+      }
+    });
+  }
+
+  // Override de confirmarImportContinuar pra também aplicar política quando o tipo
+  // é "historico_mov_financeiro" ou "historico_saldo_reconhecer" (que vão pra
+  // movimentos / saldo_reconhecer respectivamente — sem onConflict).
+  if (typeof confirmarImportContinuar === "function") {
+    var _confirmarOriginal_M26 = confirmarImportContinuar;
+    confirmarImportContinuar = function (tpl) {
+      var tipoSelect = impTipo && impTipo.value;
+
+      // Histórico Mov Financeiro
+      if (tipoSelect === "historico_mov_financeiro" && tpl && tpl.alvo === "movimentos") {
+        if (!confirm("Importar " + impParsed.linhas.length + " lançamentos pra movimentos? Versões anteriores marcadas vigente=false.")) return;
+        impBtnConf.disabled = true;
+        impBtnPrev.disabled = true;
+        setImpStatus("Aplicando política de histórico…", "carregando");
+
+        // Coletar (orcamento, competencia) únicos
+        var orcs = Array.from(new Set(impParsed.linhas.map(function (l) { return l.orcamento; }).filter(Boolean)));
+        var comps = Array.from(new Set(impParsed.linhas.map(function (l) { return l.competencia; }).filter(Boolean)));
+
+        aplicarPoliticaHistorico({
+          tipo: "historico_mov_financeiro",
+          arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+          marcarAnteriores: [
+            { tabela: "movimentos", filtros: { orcamento: orcs } }
+          ],
+          inserts: [
+            { tabela: "movimentos", linhas: impParsed.linhas }
+          ]
+        }, function (res) {
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+          setImpStatus("Sucesso! " + res.totalInseridos + " lançamentos em movimentos. Import #" + res.importId, "ok");
+          try { orcamentosCarregados = false; } catch (e) {}
+        });
+        return;
+      }
+
+      // Histórico Saldo a Reconhecer
+      if (tipoSelect === "historico_saldo_reconhecer" && tpl && tpl.alvo === "saldo_reconhecer") {
+        if (!confirm("Importar " + impParsed.linhas.length + " linhas pra saldo_reconhecer? Versões anteriores marcadas vigente=false.")) return;
+        impBtnConf.disabled = true;
+        impBtnPrev.disabled = true;
+        setImpStatus("Aplicando política de histórico…", "carregando");
+
+        var orcsSR = Array.from(new Set(impParsed.linhas.map(function (l) { return l.orcamento; }).filter(Boolean)));
+
+        aplicarPoliticaHistorico({
+          tipo: "historico_saldo_reconhecer",
+          arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+          marcarAnteriores: [
+            { tabela: "saldo_reconhecer", filtros: { orcamento: orcsSR } }
+          ],
+          inserts: [
+            { tabela: "saldo_reconhecer", linhas: impParsed.linhas }
+          ]
+        }, function (res) {
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+          setImpStatus("Sucesso! " + res.totalInseridos + " linhas em saldo_reconhecer. Import #" + res.importId, "ok");
+        });
+        return;
+      }
+
+      // Recebimentos Previstos
+      if (tipoSelect === "recebimentos_previstos" && tpl && tpl.alvo === "recebimentos_previstos") {
+        if (!confirm("Importar " + impParsed.linhas.length + " linhas pra recebimentos_previstos? Versões anteriores marcadas vigente=false.")) return;
+        impBtnConf.disabled = true;
+        impBtnPrev.disabled = true;
+        setImpStatus("Aplicando política de histórico…", "carregando");
+
+        var orcsRP = Array.from(new Set(impParsed.linhas.map(function (l) { return l.orcamento; }).filter(Boolean)));
+
+        aplicarPoliticaHistorico({
+          tipo: "recebimentos_previstos",
+          arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+          marcarAnteriores: [
+            { tabela: "recebimentos_previstos", filtros: { orcamento: orcsRP } }
+          ],
+          inserts: [
+            { tabela: "recebimentos_previstos", linhas: impParsed.linhas }
+          ]
+        }, function (res) {
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+          setImpStatus("Sucesso! " + res.totalInseridos + " linhas. Import #" + res.importId, "ok");
+        });
+        return;
+      }
+
+      // Compromissos Financeiros
+      if (tipoSelect === "compromissos_financeiros" && tpl && tpl.alvo === "compromissos_financeiros") {
+        if (!confirm("Importar " + impParsed.linhas.length + " compromissos? Versões anteriores marcadas vigente=false (por descricao+vencimento).")) return;
+        impBtnConf.disabled = true;
+        impBtnPrev.disabled = true;
+        setImpStatus("Aplicando política de histórico…", "carregando");
+
+        var descsCF = Array.from(new Set(impParsed.linhas.map(function (l) { return l.descricao; }).filter(Boolean)));
+
+        aplicarPoliticaHistorico({
+          tipo: "compromissos_financeiros",
+          arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+          marcarAnteriores: [
+            { tabela: "compromissos_financeiros", filtros: { descricao: descsCF } }
+          ],
+          inserts: [
+            { tabela: "compromissos_financeiros", linhas: impParsed.linhas }
+          ]
+        }, function (res) {
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+          setImpStatus("Sucesso! " + res.totalInseridos + " compromissos. Import #" + res.importId, "ok");
+        });
+        return;
+      }
+
+      // Demais casos — chama original (que pode também aplicar política se onConflict + tabela em TABELAS_COM_HISTORICO)
+      return _confirmarOriginal_M26(tpl);
+    };
+  }
+
 })();
