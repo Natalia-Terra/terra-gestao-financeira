@@ -361,6 +361,8 @@
     if (pageId === "movimentos_caixa")            carregarMovimentosCaixaSeNecessario();
     // M19 — Reset (master only)
     if (pageId === "cfg_reset")                   carregarResetSeNecessario();
+    // M18 Onda 3.3 — Dashboard de Faturamento rico
+    if (pageId === "dashboard_faturamento")       carregarDashFatRico();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -8746,6 +8748,198 @@
       var inp = document.getElementById("reset-input-confirma");
       if (inp) inp.value = "";
     });
+  }
+
+  // ===========================================================================
+  // M18 Onda 3.3 — Dashboard rico de Gestão de Faturamento
+  // Cruza 5 fontes (orcamentos + movimentos_caixa + notas_fiscais + ordens_servico + estoque_detalhes)
+  // pra mostrar TUDO por orçamento numa tabela só.
+  // ===========================================================================
+
+  var dashFatRicoCarregado = false;
+  var dashFatRicoCarregando = false;
+  var dashFatRicoLinhas = [];   // linhas agregadas por orcamento
+
+  function carregarDashFatRico() {
+    if (dashFatRicoCarregado) { renderDashFatRico(); return; }
+    if (dashFatRicoCarregando) return;
+    dashFatRicoCarregando = true;
+    setStatus("dfr-status", "Cruzando 5 fontes (orçamentos, mov_caixa, NFs, OSs, estoque)…", "carregando");
+
+    // 5 queries em paralelo
+    var p1 = client.from("orcamentos").select("orcamento, data, nome, parceiro, venda, tipo_faturamento, pct_com_nf").order("data", { ascending: false }).limit(5000);
+    var p2 = client.from("movimentos_caixa").select("orcamento_vinculado, natureza, valor_total").not("orcamento_vinculado", "is", null);
+    var p3 = client.from("notas_fiscais").select("numero_orcamento, valor_nf, numero_nf");
+    var p4 = client.from("ordens_servico").select("os, orcamento");
+    var p5 = client.from("estoque_detalhes").select("os, custo_total").eq("dre", "CPV - Matéria Prima");
+
+    Promise.all([p1, p2, p3, p4, p5]).then(function (rs) {
+      dashFatRicoCarregando = false;
+      // Verificar erros (mas tolerar tabelas vazias)
+      for (var i = 0; i < rs.length; i++) {
+        if (rs[i].error) {
+          setStatus("dfr-status", "Erro ao consultar fonte " + (i+1) + ": " + rs[i].error.message, "erro");
+          return;
+        }
+      }
+      var orcs = rs[0].data || [];
+      var mc = rs[1].data || [];
+      var nfs = rs[2].data || [];
+      var oss = rs[3].data || [];
+      var est = rs[4].data || [];
+
+      // Agregadores por orçamento
+      var movPorOrc = {}; // { orc: { Adiantamento, Recebimento, "Resultado Financeiro", Outros } }
+      mc.forEach(function (m) {
+        var k = String(m.orcamento_vinculado || "");
+        if (!movPorOrc[k]) movPorOrc[k] = { Adiantamento: 0, Recebimento: 0, "Resultado Financeiro": 0, Outros: 0 };
+        var nat = m.natureza || "Outros";
+        if (nat in movPorOrc[k]) movPorOrc[k][nat] += Number(m.valor_total || 0);
+        else movPorOrc[k].Outros += Number(m.valor_total || 0);
+      });
+
+      var nfPorOrc = {}; // { orc: { total: X, qtd: Y } }
+      nfs.forEach(function (n) {
+        var k = String(n.numero_orcamento || "");
+        if (!nfPorOrc[k]) nfPorOrc[k] = { total: 0, qtd: 0 };
+        nfPorOrc[k].total += Number(n.valor_nf || 0);
+        nfPorOrc[k].qtd += 1;
+      });
+
+      // OSs por orçamento (pra cruzar com estoque)
+      var ossPorOrc = {}; // { orc: [os1, os2, ...] }
+      oss.forEach(function (o) {
+        var k = String(o.orcamento || "");
+        if (!ossPorOrc[k]) ossPorOrc[k] = [];
+        ossPorOrc[k].push(String(o.os));
+      });
+
+      // Custo MP por OS
+      var custoPorOS = {};
+      est.forEach(function (e) {
+        var k = String(e.os || "");
+        custoPorOS[k] = (custoPorOS[k] || 0) + Number(e.custo_total || 0);
+      });
+
+      // Construir linhas finais
+      dashFatRicoLinhas = orcs.map(function (o) {
+        var k = String(o.orcamento);
+        var mov = movPorOrc[k] || { Adiantamento: 0, Recebimento: 0, "Resultado Financeiro": 0, Outros: 0 };
+        var nf = nfPorOrc[k] || { total: 0, qtd: 0 };
+        var ossDoOrc = ossPorOrc[k] || [];
+        var custoTotal = ossDoOrc.reduce(function (acc, os) { return acc + (custoPorOS[os] || 0); }, 0);
+
+        var venda = Number(o.venda || 0);
+        var pct = (o.pct_com_nf !== null && o.pct_com_nf !== undefined) ? Number(o.pct_com_nf) : (o.tipo_faturamento === "0_NF" ? 0 : 100);
+        var vendaSemNF = venda * (1 - pct / 100);
+        var vendaComNF = venda - vendaSemNF;
+        var aFaturar = Math.max(0, vendaComNF - nf.total);
+        var aReceber = Math.max(0, venda - mov.Adiantamento - mov.Recebimento - mov["Resultado Financeiro"]);
+        var saldoAdto = Math.max(0, mov.Adiantamento - nf.total);
+        var statusRec = aReceber < 0.01 ? "Liquidado" : "Em aberto";
+        var statusFat = aFaturar < 0.01 ? "Liquidado" : "Em aberto";
+
+        return {
+          orcamento: o.orcamento,
+          data: o.data,
+          nome: o.nome,
+          parceiro: o.parceiro,
+          tipo_faturamento: o.tipo_faturamento,
+          pct_com_nf: pct,
+          venda: venda,
+          adto: mov.Adiantamento,
+          recebimento: mov.Recebimento,
+          resultado_fin: mov["Resultado Financeiro"],
+          a_receber: aReceber,
+          status_rec: statusRec,
+          nf_emitida: nf.total,
+          nf_qtd: nf.qtd,
+          venda_sem_nf: vendaSemNF,
+          a_faturar: aFaturar,
+          status_fat: statusFat,
+          saldo_adto: saldoAdto,
+          custo_total: custoTotal,
+          n_oss: ossDoOrc.length
+        };
+      });
+
+      dashFatRicoCarregado = true;
+      setStatus("dfr-status", null);
+      renderDashFatRico();
+    }).catch(function (e) {
+      dashFatRicoCarregando = false;
+      setStatus("dfr-status", "Erro: " + (e.message || e), "erro");
+    });
+
+    // Listeners
+    var bus = document.getElementById("dfr-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderDashFatRico); }
+    var st = document.getElementById("dfr-status-filtro");
+    if (st && !st.dataset.bound) { st.dataset.bound = "1"; st.addEventListener("change", renderDashFatRico); }
+  }
+
+  function renderDashFatRico() {
+    var tbody = document.getElementById("dfr-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("dfr-busca") || {}).value || "").trim().toLowerCase();
+    var fStatus = (document.getElementById("dfr-status-filtro") || {}).value || "";
+
+    var filtrados = dashFatRicoLinhas.filter(function (l) {
+      if (busca) {
+        var alvo = ((l.orcamento || "") + " " + (l.nome || "") + " " + (l.parceiro || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      if (fStatus === "rec_aberto" && l.status_rec !== "Em aberto") return false;
+      if (fStatus === "fat_aberto" && l.status_fat !== "Em aberto") return false;
+      if (fStatus === "ambos_liq" && (l.status_rec !== "Liquidado" || l.status_fat !== "Liquidado")) return false;
+      return true;
+    });
+
+    // Totais
+    var tot = { venda: 0, adto: 0, rec: 0, nf: 0, aReceber: 0, aFaturar: 0, custo: 0 };
+    filtrados.forEach(function (l) {
+      tot.venda += l.venda; tot.adto += l.adto; tot.rec += l.recebimento;
+      tot.nf += l.nf_emitida; tot.aReceber += l.a_receber; tot.aFaturar += l.a_faturar;
+      tot.custo += l.custo_total;
+    });
+    var setEl = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    setEl("dfr-m-venda", fmtBRL(tot.venda));
+    setEl("dfr-m-recebido", fmtBRL(tot.rec));
+    setEl("dfr-m-areceber", fmtBRL(tot.aReceber));
+    setEl("dfr-m-nf", fmtBRL(tot.nf));
+    setEl("dfr-m-afaturar", fmtBRL(tot.aFaturar));
+    setEl("dfr-m-custo", fmtBRL(tot.custo));
+    setEl("dfr-lbl", filtrados.length + " de " + dashFatRicoLinhas.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="14" class="tbl-vazio">Nenhum orçamento bate com os filtros.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(function (l) {
+      var tipoFat = l.tipo_faturamento === "PARCIAL" ? ("PARCIAL " + (l.pct_com_nf || 0) + "%") : (l.tipo_faturamento || "—");
+      var statusRecTag = l.status_rec === "Liquidado" ? '<span class="tag ok">L</span>' : '<span class="tag warn">A</span>';
+      var statusFatTag = l.status_fat === "Liquidado" ? '<span class="tag ok">L</span>' : '<span class="tag warn">A</span>';
+      var margemPct = l.venda > 0 ? ((l.venda - l.custo_total) / l.venda * 100).toFixed(1) + "%" : "—";
+      return (
+        '<tr>' +
+          '<td>' + (l.data ? fmtData(l.data) : "—") + '</td>' +
+          '<td class="mono">' + escHtml(l.orcamento) + '</td>' +
+          '<td>' + escHtml(l.nome || "—") + '</td>' +
+          '<td><span class="muted-tag">' + tipoFat + '</span></td>' +
+          '<td class="num">' + fmtBRL(l.venda) + '</td>' +
+          '<td class="num">' + fmtBRL(l.adto) + '</td>' +
+          '<td class="num">' + fmtBRL(l.recebimento) + '</td>' +
+          '<td class="num">' + fmtBRL(l.a_receber) + ' ' + statusRecTag + '</td>' +
+          '<td class="num">' + fmtBRL(l.nf_emitida) + (l.nf_qtd > 0 ? ' <span class="muted-tag">(' + l.nf_qtd + ')</span>' : '') + '</td>' +
+          '<td class="num">' + fmtBRL(l.venda_sem_nf) + '</td>' +
+          '<td class="num">' + fmtBRL(l.a_faturar) + ' ' + statusFatTag + '</td>' +
+          '<td class="num">' + fmtBRL(l.saldo_adto) + '</td>' +
+          '<td class="num">' + fmtBRL(l.custo_total) + (l.n_oss > 0 ? ' <span class="muted-tag">(' + l.n_oss + ' OS)</span>' : '') + '</td>' +
+          '<td class="num">' + margemPct + '</td>' +
+        '</tr>'
+      );
+    }).join("");
   }
 
 })();

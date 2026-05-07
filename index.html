@@ -196,6 +196,7 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="vendas" type="button">Vendas</button>
               <button class="sb-sub" data-page="faturamento" type="button">Gestão de Faturamento</button>
+              <button class="sb-sub" data-page="dashboard_faturamento" type="button">Dashboard de Faturamento (rico)</button>
               <button class="sb-sub" data-page="notas" type="button">Notas Fiscais</button>
               <button class="sb-sub" data-page="dashboard_orcamentos_view" type="button">Dashboard de Orçamentos</button>
             </div>
@@ -486,6 +487,64 @@
             </div>
           </div>
         </section>
+
+        <!-- M18 Onda 3.3 — Dashboard de Faturamento Rico -->
+        <section class="page" data-page="dashboard_faturamento" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Dashboard de Gestão de Faturamento</h1>
+            <p class="page-sub">Visão consolidada por orçamento cruzando 5 fontes (orçamentos, mov_caixa, NFs, OSs, estoque). Mostra venda, adiantamento, recebimento, NF emitida, a faturar, custo e margem.</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Venda total</div><div class="metric-value" id="dfr-m-venda">—</div></div>
+            <div class="metric-card"><div class="metric-label">Recebido</div><div class="metric-value" id="dfr-m-recebido">—</div></div>
+            <div class="metric-card"><div class="metric-label">A receber</div><div class="metric-value" id="dfr-m-areceber">—</div></div>
+            <div class="metric-card"><div class="metric-label">NF emitida</div><div class="metric-value" id="dfr-m-nf">—</div></div>
+            <div class="metric-card"><div class="metric-label">A faturar</div><div class="metric-value" id="dfr-m-afaturar">—</div></div>
+            <div class="metric-card"><div class="metric-label">Custo MP total</div><div class="metric-value" id="dfr-m-custo">—</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="search" id="dfr-busca" class="input-search" placeholder="Buscar orçamento, cliente, parceiro…" />
+              <select id="dfr-status-filtro">
+                <option value="">Todos</option>
+                <option value="rec_aberto">Recebimento em aberto</option>
+                <option value="fat_aberto">Faturamento em aberto</option>
+                <option value="ambos_liq">Ambos liquidados</option>
+              </select>
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="dfr-lbl">—</span>
+            </div>
+
+            <div id="dfr-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Orçamento</th>
+                    <th>Cliente</th>
+                    <th>Tipo Fat.</th>
+                    <th class="num">Venda</th>
+                    <th class="num">Adto</th>
+                    <th class="num">Recebimento</th>
+                    <th class="num">A Receber</th>
+                    <th class="num">NF Emitida</th>
+                    <th class="num">Venda S/NF</th>
+                    <th class="num">A Faturar</th>
+                    <th class="num">Saldo Adto</th>
+                    <th class="num">Custo MP</th>
+                    <th class="num">Margem %</th>
+                  </tr>
+                </thead>
+                <tbody id="dfr-tbody"><tr><td colspan="14" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- Notas Fiscais — 4c -->
         <section class="page" data-page="notas" hidden>
           <div class="page-header"><h1 class="page-title">Notas Fiscais</h1><p class="page-sub">NF emitidas — origem: movimentos com natureza "Nota Fiscal"</p></div>
