@@ -1791,7 +1791,7 @@
       nomeLegivel: "Orçamentos",
       alvo: "orcamentos",
       colunas: {
-        // Aceita 2 fontes: Controle Faturamento (bíblia) e "Orçamento Aprovado por Parceiro no Mês"
+        // Aceita 2 fontes: Controle Faturamento (arquivo) e "Orçamento Aprovado por Parceiro no Mês"
         "data":               "data",
         "dt_aprovacao":       "data",
         "dt aprovacao":       "data",
@@ -1834,7 +1834,7 @@
         "pct_com_nf":         "pct_com_nf"
       },
       obrigatorias: ["orcamento"],
-      dicas: "Colunas aceitas: orcamento (obrigatória), data/dt_aprovacao, nome/cliente, parceiros/parceiro, venda/preco_com_ipi_subst_trib, versao, tipo_faturamento (100_NF | 0_NF | PARCIAL), pct_com_nf. Aceita planilha 'Orçamento Aprovado por Parceiro no Mês' (Aerolito) e 'Controle Faturamento' (bíblia)."
+      dicas: "Colunas aceitas: orcamento (obrigatória), data/dt_aprovacao, nome/cliente, parceiros/parceiro, venda/preco_com_ipi_subst_trib, versao, tipo_faturamento (100_NF | 0_NF | PARCIAL), pct_com_nf. Aceita planilha 'Orçamento Aprovado por Parceiro no Mês' (Aerolito) e 'Controle Faturamento' (arquivo)."
     },
     movimentos: {
       nomeLegivel: "Movimentos",
@@ -2026,7 +2026,7 @@
       dicas: "Colunas: orcamento (código), parcela (numérico, default 1), data_prevista, valor, recebido_em (opcional — só preencher quando já recebido), observacao."
     },
     historico_mov_financeiro: {
-      nomeLegivel: "Histórico Mov Financeiro (bíblia Excel)",
+      nomeLegivel: "Histórico Mov Financeiro (arquivo Excel)",
       alvo: "movimentos",
       colunas: {
         "competencia":  "competencia",
@@ -2049,10 +2049,10 @@
         "comentários":  "comentarios"
       },
       obrigatorias: ["data","valor"],
-      dicas: "Aba 'Mov Financeiro' da bíblia. Cabeçalho na linha 3. Colunas: Competência, Data, Orçamento, Nome, Tipo, Natureza, Valor, Nota Fiscal, OS, Item, Custo, Comentários. Importa pra tabela 'movimentos'."
+      dicas: "Aba 'Mov Financeiro' do arquivo. Cabeçalho na linha 3. Colunas: Competência, Data, Orçamento, Nome, Tipo, Natureza, Valor, Nota Fiscal, OS, Item, Custo, Comentários. Importa pra tabela 'movimentos'."
     },
     historico_saldo_reconhecer: {
-      nomeLegivel: "Histórico Saldo a Reconhecer (bíblia Excel)",
+      nomeLegivel: "Histórico Saldo a Reconhecer (arquivo Excel)",
       alvo: "saldo_reconhecer",
       colunas: {
         "orcamento":           "orcamento",
@@ -2071,7 +2071,7 @@
         "a reconhecer":        "valor_a_reconhecer"
       },
       obrigatorias: ["orcamento","competencia"],
-      dicas: "Aba 'Saldo a Reconhecer' da bíblia. Cabeçalho na linha 2. Colunas: Orçamento, Comp., Data, Nota Fiscal, Valor, Adiantamento, NF Emitidas, Valor a Reconhecer. Importa pra tabela 'saldo_reconhecer'."
+      dicas: "Aba 'Saldo a Reconhecer' do arquivo. Cabeçalho na linha 2. Colunas: Orçamento, Comp., Data, Nota Fiscal, Valor, Adiantamento, NF Emitidas, Valor a Reconhecer. Importa pra tabela 'saldo_reconhecer'."
     }
   };
 
