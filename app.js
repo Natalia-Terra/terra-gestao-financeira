@@ -200,6 +200,79 @@
       });
   });
 
+  // -----------------------------------------------------------------------
+  // 4.b — Esqueci minha senha (modal sobreposto ao login)
+  // -----------------------------------------------------------------------
+  var linkEsqueci         = document.getElementById("link-esqueci");
+  var modalEsqueci        = document.getElementById("modal-esqueci");
+  var inputEsqueciEmail   = document.getElementById("esqueci-email");
+  var btnEsqueciEnviar    = document.getElementById("btn-esqueci-enviar");
+  var btnEsqueciCancelar  = document.getElementById("btn-esqueci-cancelar");
+  var statusEsqueci       = document.getElementById("esqueci-status");
+
+  function setStatusEsqueci(msg, tipo) {
+    statusEsqueci.hidden = false;
+    statusEsqueci.className = "status " + (tipo || "info");
+    statusEsqueci.textContent = msg;
+  }
+
+  function abrirEsqueci() {
+    statusEsqueci.hidden = true;
+    statusEsqueci.textContent = "";
+    btnEsqueciEnviar.disabled = false;
+    btnEsqueciEnviar.textContent = "Enviar email";
+    btnEsqueciEnviar.style.display = "";
+    inputEsqueciEmail.value = (inputEmail && inputEmail.value) ? inputEmail.value : "";
+    modalEsqueci.hidden = false;
+    setTimeout(function () { try { inputEsqueciEmail.focus(); } catch (e) {} }, 0);
+  }
+
+  function fecharEsqueci() {
+    modalEsqueci.hidden = true;
+  }
+
+  if (linkEsqueci) {
+    linkEsqueci.addEventListener("click", function (e) { e.preventDefault(); abrirEsqueci(); });
+  }
+  if (btnEsqueciCancelar) {
+    btnEsqueciCancelar.addEventListener("click", fecharEsqueci);
+  }
+  if (modalEsqueci) {
+    // Click fora do card fecha
+    modalEsqueci.addEventListener("click", function (e) {
+      if (e.target === modalEsqueci) fecharEsqueci();
+    });
+  }
+  if (btnEsqueciEnviar) {
+    btnEsqueciEnviar.addEventListener("click", function () {
+      var email = (inputEsqueciEmail.value || "").trim();
+      if (!email || email.indexOf("@") < 1) {
+        setStatusEsqueci("Digite um email válido.", "erro");
+        return;
+      }
+      btnEsqueciEnviar.disabled = true;
+      btnEsqueciEnviar.textContent = "Enviando…";
+      statusEsqueci.hidden = true;
+
+      client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/redefinir-senha.html"
+      }).then(function (resposta) {
+        if (resposta && resposta.error) {
+          setStatusEsqueci("Não foi possível enviar: " + resposta.error.message, "erro");
+          btnEsqueciEnviar.disabled = false;
+          btnEsqueciEnviar.textContent = "Enviar email";
+          return;
+        }
+        setStatusEsqueci("Email enviado! Confira sua caixa de entrada (e o SPAM). O link é válido por 1 hora.", "ok");
+        btnEsqueciEnviar.style.display = "none";
+      }).catch(function (err) {
+        setStatusEsqueci("Falha de rede: " + (err && err.message ? err.message : "erro desconhecido"), "erro");
+        btnEsqueciEnviar.disabled = false;
+        btnEsqueciEnviar.textContent = "Enviar email";
+      });
+    });
+  }
+
   btnSair.addEventListener("click", function () {
     btnSair.disabled = true;
     client.auth.signOut().then(function () { btnSair.disabled = false; });

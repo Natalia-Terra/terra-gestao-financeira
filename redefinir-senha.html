@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redefinir senha — Terra Conttemporânea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quattrocento:wght@400;700&family=Quattrocento+Sans:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --text1: #2A1A06;
+    --text2: #6B4C1E;
+    --text3: #8B6328;
+    --ouro: #B8860B;
+    --ouro-esc: #8B6914;
+    --bg1: #F5EFE6;
+    --bg2: #FDFAF6;
+    --bg3: #EDE4D8;
+    --bg4: #E4D9C8;
+    --success: #1A6B45;
+    --danger: #8B2020;
+    --shadow-md: 0 4px 16px rgba(58,42,20,0.1);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    background: var(--bg1);
+    color: var(--text1);
+    font-family: "Quattrocento Sans", Georgia, serif;
+    font-size: 15px;
+    line-height: 1.5;
+    display: flex; align-items: center; justify-content: center;
+  }
+  h1, h2 { font-family: "Quattrocento", Georgia, serif; color: var(--text2); margin: 0; font-weight: 400; }
+  .card {
+    background: var(--bg2);
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 460px;
+    margin: 24px;
+    overflow: hidden;
+  }
+  .card-header {
+    background: #3a2a14;
+    padding: 32px 36px 24px;
+    border-bottom: 4px solid var(--ouro);
+    text-align: center;
+  }
+  .card-header h1 {
+    color: var(--bg2);
+    font-size: 24px;
+    margin: 0;
+  }
+  .card-header .sub {
+    color: var(--bg4);
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+  .card-body {
+    padding: 36px 36px 24px;
+  }
+  .card-body h2 {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+  .card-body p {
+    margin: 0 0 16px;
+    color: var(--text1);
+    font-size: 14px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text2);
+    font-weight: 700;
+    margin: 16px 0 6px;
+  }
+  input[type="password"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--bg4);
+    border-radius: 6px;
+    background: var(--bg2);
+    color: var(--text1);
+    font-family: inherit;
+    font-size: 14px;
+    transition: border-color 120ms;
+  }
+  input[type="password"]:focus {
+    outline: none;
+    border-color: var(--ouro);
+    box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.15);
+  }
+  .btn {
+    display: block;
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px 20px;
+    background: var(--ouro);
+    color: white;
+    font-family: "Quattrocento", serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .btn:hover { background: var(--ouro-esc); }
+  .btn:disabled { background: var(--bg4); color: var(--text3); cursor: not-allowed; }
+  .msg {
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 16px 0 0;
+    font-size: 13px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.error { background: #fdf2f2; border-left: 4px solid var(--danger); color: var(--danger); }
+  .msg.ok { background: #d4eede; border-left: 4px solid var(--success); color: var(--success); }
+  .msg.info { background: #fdf6e8; border-left: 4px solid #7A4800; color: #7A4800; }
+  .req {
+    font-size: 12px;
+    color: var(--text3);
+    margin: 8px 0 0;
+  }
+  .req.ok { color: var(--success); }
+  .card-footer {
+    padding: 16px 36px 28px;
+    text-align: center;
+    border-top: 1px solid var(--bg3);
+  }
+  .card-footer p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text3);
+  }
+  .voltar-link {
+    color: var(--ouro);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .voltar-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <h1>Terra Conttemporânea</h1>
+    <div class="sub">Sistema de Gestão</div>
+  </div>
+
+  <div class="card-body">
+    <h2>Redefinir sua senha</h2>
+    <p id="instrucao">Digite sua nova senha abaixo. Após salvar, você será redirecionado(a) para o login.</p>
+
+    <div id="form-area">
+      <label for="senha">Nova senha</label>
+      <input type="password" id="senha" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+      <p class="req" id="req-senha">Mínimo 8 caracteres</p>
+
+      <label for="senha2">Confirmar nova senha</label>
+      <input type="password" id="senha2" autocomplete="new-password" placeholder="Digite novamente">
+      <p class="req" id="req-senha2">As senhas devem ser iguais</p>
+
+      <button class="btn" id="btn-salvar">Salvar nova senha</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card-footer">
+    <p><a href="/" class="voltar-link">← Voltar para o login</a></p>
+  </div>
+</div>
+
+<script>
+// ===== CONFIG =====
+// Estes valores vêm de window.SUPABASE_URL e window.SUPABASE_ANON_KEY,
+// definidos no index.html. Como esta página é standalone, usamos os mesmos valores.
+const SUPABASE_URL  = "https://zvvdpdldjmzuzieinxwa.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2dmRwZGxkam16dXppZWlueHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NzIxMDUsImV4cCI6MjA5MjQ0ODEwNX0.NWIdJGF7aHDGZ-QQhiu3l90n5hSHQpV4095FB4KTr3k";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+});
+
+const $msg     = document.getElementById("msg");
+const $form    = document.getElementById("form-area");
+const $senha   = document.getElementById("senha");
+const $senha2  = document.getElementById("senha2");
+const $btn     = document.getElementById("btn-salvar");
+const $reqSenha  = document.getElementById("req-senha");
+const $reqSenha2 = document.getElementById("req-senha2");
+const $instrucao = document.getElementById("instrucao");
+
+function showMsg(texto, tipo) {
+  $msg.className = "msg show " + tipo;
+  $msg.textContent = texto;
+}
+
+// Valida em tempo real
+function validar() {
+  const s1 = $senha.value;
+  const s2 = $senha2.value;
+  const okLen = s1.length >= 8;
+  const okMatch = s1 && s1 === s2;
+  $reqSenha.classList.toggle("ok", okLen);
+  $reqSenha2.classList.toggle("ok", okMatch);
+  $btn.disabled = !(okLen && okMatch);
+  return okLen && okMatch;
+}
+$senha.addEventListener("input", validar);
+$senha2.addEventListener("input", validar);
+$btn.disabled = true;
+
+// Verifica sessão ao carregar (Supabase processa o hash automaticamente)
+(async function inicializar() {
+  // Aguarda Supabase processar o token do hash da URL
+  await new Promise(r => setTimeout(r, 300));
+
+  const { data: { session }, error } = await sb.auth.getSession();
+  if (error || !session) {
+    $form.style.display = "none";
+    $instrucao.style.display = "none";
+    showMsg("Link inválido ou expirado. Volte para o login e clique em 'Esqueci minha senha' para receber um novo link.", "error");
+    return;
+  }
+
+  // Se tem sessão, mostrar email
+  $instrucao.innerHTML = "Você está redefinindo a senha de <strong>" + session.user.email + "</strong>. Digite sua nova senha abaixo.";
+})();
+
+// Salvar nova senha
+$btn.addEventListener("click", async function () {
+  if (!validar()) return;
+
+  $btn.disabled = true;
+  $btn.textContent = "Salvando...";
+
+  const { error } = await sb.auth.updateUser({ password: $senha.value });
+
+  if (error) {
+    showMsg("Não foi possível salvar: " + error.message, "error");
+    $btn.disabled = false;
+    $btn.textContent = "Salvar nova senha";
+    return;
+  }
+
+  $form.style.display = "none";
+  $instrucao.style.display = "none";
+  showMsg("Senha redefinida com sucesso! Redirecionando para o login...", "ok");
+  setTimeout(function () {
+    sb.auth.signOut().finally(function () { window.location.href = "/"; });
+  }, 2200);
+});
+</script>
+
+</body>
+</html>
