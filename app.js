@@ -1791,12 +1791,30 @@
       nomeLegivel: "Orçamentos",
       alvo: "orcamentos",
       colunas: {
+        // Aceita 2 fontes: Controle Faturamento (bíblia) e "Orçamento Aprovado por Parceiro no Mês"
         "data":               "data",
+        "dt_aprovacao":       "data",
+        "dt aprovacao":       "data",
+        "data aprovacao":     "data",
+        "data aprovação":     "data",
         "orcamento":          "orcamento",
+        "orçamento":          "orcamento",
+        "numero_do_orcamento":"orcamento",
+        "numero do orcamento":"orcamento",
+        "número do orçamento":"orcamento",
+        "n orcamento":        "orcamento",
+        "nº orçamento":       "orcamento",
         "nome":               "nome",
         "cliente":            "nome",
+        "parceiros":          "parceiro",
         "parceiro":           "parceiro",
+        "representante":      "parceiro",
         "venda":              "venda",
+        "preco_com_ipi_subst_trib": "venda",
+        "preço com ipi":      "venda",
+        "valor":              "venda",
+        "vl total":           "venda",
+        "valor total":        "venda",
         "adiantamento":       "adiantamento",
         "recebimento":        "recebimento",
         "resultado financeiro":"resultado_financeiro",
@@ -1805,10 +1823,18 @@
         "nota fiscal":        "nota_fiscal",
         "venda sem nf":       "venda_sem_nf",
         "a faturar":          "a_faturar",
-        "status faturamento": "status_faturamento"
+        "status faturamento": "status_faturamento",
+        // M18: campos novos
+        "versao":             "versao",
+        "versão":             "versao",
+        "tipo de faturamento":"tipo_faturamento",
+        "tipo_faturamento":   "tipo_faturamento",
+        "% com nf":           "pct_com_nf",
+        "pct com nf":         "pct_com_nf",
+        "pct_com_nf":         "pct_com_nf"
       },
       obrigatorias: ["orcamento"],
-      dicas: "Colunas esperadas: orcamento (obrigatória), data, nome/cliente, parceiro, venda, recebimento, nota_fiscal, a_receber, a_faturar, status_recebimento, status_faturamento."
+      dicas: "Colunas aceitas: orcamento (obrigatória), data/dt_aprovacao, nome/cliente, parceiros/parceiro, venda/preco_com_ipi_subst_trib, versao, tipo_faturamento (100_NF | 0_NF | PARCIAL), pct_com_nf. Aceita planilha 'Orçamento Aprovado por Parceiro no Mês' (Aerolito) e 'Controle Faturamento' (bíblia)."
     },
     movimentos: {
       nomeLegivel: "Movimentos",
@@ -1998,6 +2024,54 @@
       },
       obrigatorias: ["orcamento","data_prevista","valor"],
       dicas: "Colunas: orcamento (código), parcela (numérico, default 1), data_prevista, valor, recebido_em (opcional — só preencher quando já recebido), observacao."
+    },
+    historico_mov_financeiro: {
+      nomeLegivel: "Histórico Mov Financeiro (bíblia Excel)",
+      alvo: "movimentos",
+      colunas: {
+        "competencia":  "competencia",
+        "competência":  "competencia",
+        "comp.":        "competencia",
+        "id":           "id_legacy",
+        "data":         "data",
+        "orcamento":    "orcamento",
+        "orçamento":    "orcamento",
+        "nome":         "nome",
+        "cliente":      "nome",
+        "tipo":         "tipo",
+        "natureza":     "natureza",
+        "valor":        "valor",
+        "nota fiscal":  "nota_fiscal",
+        "os":           "os",
+        "item":         "item",
+        "custo":        "custo",
+        "comentarios":  "comentarios",
+        "comentários":  "comentarios"
+      },
+      obrigatorias: ["data","valor"],
+      dicas: "Aba 'Mov Financeiro' da bíblia. Cabeçalho na linha 3. Colunas: Competência, Data, Orçamento, Nome, Tipo, Natureza, Valor, Nota Fiscal, OS, Item, Custo, Comentários. Importa pra tabela 'movimentos'."
+    },
+    historico_saldo_reconhecer: {
+      nomeLegivel: "Histórico Saldo a Reconhecer (bíblia Excel)",
+      alvo: "saldo_reconhecer",
+      colunas: {
+        "orcamento":           "orcamento",
+        "orçamento":           "orcamento",
+        "comp.":               "competencia",
+        "comp":                "competencia",
+        "competencia":         "competencia",
+        "competência":         "competencia",
+        "data":                "data",
+        "nota fiscal":         "nota_fiscal",
+        "valor":               "valor",
+        "adiantamento":        "adiantamento",
+        "nf emitidas":         "nf_emitidas",
+        "nfs emitidas":        "nf_emitidas",
+        "valor a reconhecer":  "valor_a_reconhecer",
+        "a reconhecer":        "valor_a_reconhecer"
+      },
+      obrigatorias: ["orcamento","competencia"],
+      dicas: "Aba 'Saldo a Reconhecer' da bíblia. Cabeçalho na linha 2. Colunas: Orçamento, Comp., Data, Nota Fiscal, Valor, Adiantamento, NF Emitidas, Valor a Reconhecer. Importa pra tabela 'saldo_reconhecer'."
     }
   };
 
@@ -3636,6 +3710,9 @@
 
   // ----- Parser específico: Saída de Estoque (CPV-Matéria Prima) -----
   function previsualizarSaidaEstoque(arq) {
+    // M18: parser RICO. Filtra DRE em duas categorias e gera 4 destinos:
+    //   - CPV - Matéria Prima → estoque_detalhes (linha-a-linha) + estoque_resumo (agregado por OS) + os_evolucao_mensal (agregado por OS+mes)
+    //   - CPV - Direto        → custo_direto_competencia (sem OS)
     setImpStatus("Lendo Saída de Estoque…", "carregando");
     var reader = new FileReader();
     reader.onload = function (ev) {
@@ -3652,37 +3729,158 @@
           }
           return null;
         }
-        var colDRE = findCol(["dre"]);
-        var colOS  = findCol(["os"]);
-        var colCmp = findCol(["compet","competencia","competência"]);
-        var colCt  = findCol(["custo total","total custo","custo"]);
+        var colCodSaida   = findCol(["codigo saida","código saida","cod saida"]);
+        var colCodOS      = findCol(["codigo os","código os","cod os"]);
+        var colFunc       = findCol(["funcionario","funcionário"]);
+        var colCodMat     = findCol(["codigo material","código material","cod material"]);
+        var colDescMat    = findCol(["descricao material","descrição material","descricao do material","descrição do material"]);
+        var colQtd        = findCol(["quantidade","qtde","qtd"]);
+        var colCustoUnit  = findCol(["custo unitario","custo unitário"]);
+        var colCustoTot   = findCol(["custo total","total custo","custo"]);
+        var colCustoFiscal= findCol(["custo fiscal do material","custo fiscal"]);
+        var colNumPlano   = findCol(["n plano de contas","numero plano de contas","numero_plano_contas"]);
+        var colDescPlano  = findCol(["plano de contas","descritivo conta","descritivo plano contas"]);
+        var colDtSaida    = findCol(["data saida","data saída","data de saida"]);
+        var colDRE        = findCol(["dre"]);
+        var colCmp        = findCol(["compet","compet.","competencia","competência"]);
+        var colOS         = findCol(["os"]);
+        var colItem       = findCol(["item"]);
+
         var faltam = [];
-        if (!colDRE) faltam.push("DRE");
-        if (!colOS)  faltam.push("OS");
-        if (!colCmp) faltam.push("Compet.");
-        if (!colCt)  faltam.push("Custo Total");
+        if (!colDRE)      faltam.push("DRE");
+        if (!colCmp)      faltam.push("Compet.");
+        if (!colCustoTot) faltam.push("Custo Total");
+        if (!colCodOS && !colOS) faltam.push("Código OS / OS");
         if (faltam.length) { setImpStatus("Faltando colunas: " + faltam.join(", "), "erro"); return; }
-        var agg = {}, ignorados = 0;
+
+        function parseNum(v) {
+          if (v === null || v === undefined || v === "") return 0;
+          var n = Number(String(v).replace(/\./g,"").replace(",", "."));
+          return isNaN(n) ? 0 : n;
+        }
+        function parseDateBR(v) {
+          if (!v) return null;
+          if (v instanceof Date) return v.toISOString().slice(0,10);
+          var s = String(v).trim();
+          var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+          if (m) {
+            var y = m[3].length === 2 ? "20" + m[3] : m[3];
+            return y + "-" + ("0"+m[2]).slice(-2) + "-" + ("0"+m[1]).slice(-2);
+          }
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+          return null;
+        }
+
+        var detalhes = [];
+        var resumoByOS = {};
+        var evoluByOSMes = {};
+        var diretos = [];
+        var ignorados = 0;
+        var totalCPVMP = 0;
+        var totalCPVDireto = 0;
+
         raw.forEach(function (r) {
           var dre = String(r[colDRE] || "").trim().toLowerCase();
-          var ehMP = dre === "cpv - matéria prima" || dre === "cpv - materia prima" || dre === "cpv-matéria prima" || dre === "cpv-materia prima";
-          if (!ehMP) { ignorados++; return; }
-          var os = String(r[colOS] || "").trim().split("/")[0].trim();
-          if (!os) { ignorados++; return; }
+          var ehMP = ["cpv - matéria prima","cpv - materia prima","cpv-matéria prima","cpv-materia prima","cpv – matéria prima"].indexOf(dre) !== -1;
+          var ehDireto = ["cpv - direto","cpv-direto","cpv – direto","cpv direto"].indexOf(dre) !== -1;
+          if (!ehMP && !ehDireto) { ignorados++; return; }
+
           var mes = parseMesRef(r[colCmp]);
           if (!mes) { ignorados++; return; }
-          var v = Number(String(r[colCt] || "").replace(/\./g,"").replace(",", "."));
-          if (isNaN(v)) v = 0;
-          var k = os + "|" + mes;
-          agg[k] = (agg[k] || 0) + v;
+
+          var custoTotal = parseNum(r[colCustoTot]);
+          var dataSaida = parseDateBR(r[colDtSaida]);
+          var func = r[colFunc] ? String(r[colFunc]).trim() : null;
+          var codMat = r[colCodMat] ? String(r[colCodMat]).trim() : null;
+          var descMat = r[colDescMat] ? String(r[colDescMat]).trim() : null;
+          var qtd = parseNum(r[colQtd]);
+          var custoUnit = parseNum(r[colCustoUnit]);
+          var custoFiscal = parseNum(r[colCustoFiscal]);
+          var numPlano = r[colNumPlano] ? String(r[colNumPlano]).trim() : null;
+          var descPlano = r[colDescPlano] ? String(r[colDescPlano]).trim() : null;
+
+          if (ehMP) {
+            var codOSraw = colCodOS ? String(r[colCodOS] || "").trim() : "";
+            var osNum = colOS ? String(r[colOS] || "").trim() : "";
+            var os = (codOSraw.split("/")[0].trim()) || osNum;
+            if (!os) { ignorados++; return; }
+            var item = colItem ? String(r[colItem] || "").trim() : (codOSraw.split("/")[1] || "").trim();
+            totalCPVMP += custoTotal;
+
+            detalhes.push({
+              codigo_os: codOSraw || (os + (item ? "/" + item : "")),
+              os: os,
+              item: item || null,
+              funcionario: func,
+              codigo_material: codMat,
+              descricao_material: descMat,
+              quantidade: qtd,
+              custo_unitario: custoUnit,
+              custo_total: custoTotal,
+              custo_fiscal_do_material: custoFiscal,
+              n_plano_contas: numPlano,
+              plano_contas: descPlano,
+              data_saida: dataSaida,
+              dre: r[colDRE] || null,
+              compet: mes
+            });
+
+            if (!resumoByOS[os]) {
+              resumoByOS[os] = {
+                codigo_os: os, n_itens: 0, custo_total: 0,
+                primeira_saida: dataSaida, ultima_saida: dataSaida, _funcionarios: {}
+              };
+            }
+            var rs = resumoByOS[os];
+            rs.n_itens += 1;
+            rs.custo_total += custoTotal;
+            if (dataSaida) {
+              if (!rs.primeira_saida || dataSaida < rs.primeira_saida) rs.primeira_saida = dataSaida;
+              if (!rs.ultima_saida   || dataSaida > rs.ultima_saida)   rs.ultima_saida   = dataSaida;
+            }
+            if (func) rs._funcionarios[func] = true;
+
+            var k = os + "|" + mes;
+            evoluByOSMes[k] = (evoluByOSMes[k] || 0) + custoTotal;
+          } else if (ehDireto) {
+            totalCPVDireto += custoTotal;
+            diretos.push({
+              mes_ref: mes, data_saida: dataSaida, valor: custoTotal,
+              numero_plano_contas: numPlano, plano_contas_descritivo: descPlano,
+              descricao_material: descMat, codigo_material: codMat, funcionario: func
+            });
+          }
         });
-        var linhas = Object.keys(agg).map(function (k) {
+
+        var resumo = Object.keys(resumoByOS).map(function (os) {
+          var rs = resumoByOS[os];
+          return {
+            codigo_os: rs.codigo_os, n_itens: rs.n_itens,
+            custo_total: Math.round(rs.custo_total * 100) / 100,
+            primeira_saida: rs.primeira_saida, ultima_saida: rs.ultima_saida,
+            funcionarios: Object.keys(rs._funcionarios).join("; ")
+          };
+        });
+        var evolucao = Object.keys(evoluByOSMes).map(function (k) {
           var p = k.split("|");
-          return { os: p[0], mes_ref: p[1], custo_saida: Math.round(agg[k] * 100) / 100 };
+          return { os: p[0], mes_ref: p[1], custo_saida: Math.round(evoluByOSMes[k] * 100) / 100 };
         });
-        impParsed = { linhas: linhas, cabs: ["os","mes_ref","custo_saida"], tipo: "saida_estoque" };
-        renderPreviewImport(linhas, ["os","mes_ref","custo_saida"]);
-        setImpStatus(linhas.length + " agregação(ões) de CPV-Matéria Prima prontas. " + ignorados + " linha(s) ignorada(s) (DRE diferente, sem OS, etc).", "ok");
+
+        impParsed = {
+          tipo: "saida_estoque",
+          detalhes: detalhes, resumo: resumo,
+          evolucao: evolucao, diretos: diretos
+        };
+        var previewLinhas = detalhes.length ? detalhes : diretos;
+        var previewCols = detalhes.length
+          ? ["os","item","funcionario","descricao_material","quantidade","custo_total","data_saida","compet"]
+          : ["mes_ref","data_saida","funcionario","descricao_material","valor"];
+        impParsed.linhas = previewLinhas;
+        impParsed.cabs = previewCols;
+        renderPreviewImport(previewLinhas, previewCols);
+
+        var msg = "Resultado do parse: " + detalhes.length + " em estoque_detalhes (CPV-MP R$ " + totalCPVMP.toFixed(2) + "), " + resumo.length + " em estoque_resumo, " + evolucao.length + " em os_evolucao_mensal, " + diretos.length + " em custo_direto_competencia (CPV-Direto R$ " + totalCPVDireto.toFixed(2) + "). " + ignorados + " linha(s) ignorada(s).";
+        setImpStatus(msg, "ok");
         atualizarEstadoImport();
       } catch (e) {
         setImpStatus("Erro lendo arquivo: " + e.message, "erro");
@@ -3690,6 +3888,57 @@
     };
     reader.readAsArrayBuffer(arq);
   }
+
+  // M18 — Confirma import RICO de saída de estoque (4 destinos)
+  function confirmarSaidaEstoqueRico(parsed) {
+    if (!parsed) return;
+    var msg = "Vai inserir: " + (parsed.detalhes||[]).length + " em estoque_detalhes, "
+              + (parsed.resumo||[]).length + " em estoque_resumo, "
+              + (parsed.evolucao||[]).length + " em os_evolucao_mensal (UPSERT), "
+              + (parsed.diretos||[]).length + " em custo_direto_competencia. Confirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Inserindo nos 4 destinos…", "carregando");
+
+    function enviarLote(tabela, linhas, opts, cb) {
+      if (!linhas || !linhas.length) return cb(null);
+      var lotes = [];
+      for (var i = 0; i < linhas.length; i += 200) lotes.push(linhas.slice(i, i + 200));
+      var idx = 0;
+      function proximo() {
+        if (idx >= lotes.length) return cb(null);
+        var q;
+        if (opts && opts.upsert) q = client.from(tabela).upsert(lotes[idx], { onConflict: opts.upsert });
+        else q = client.from(tabela).insert(lotes[idx]);
+        q.then(function (r) {
+          if (r.error) return cb({ tabela: tabela, lote: idx, erro: r.error.message });
+          idx++; proximo();
+        });
+      }
+      proximo();
+    }
+
+    enviarLote("estoque_detalhes", parsed.detalhes, null, function (e1) {
+      if (e1) { setImpStatus("Erro em " + e1.tabela + ": " + e1.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+      enviarLote("estoque_resumo", parsed.resumo, null, function (e2) {
+        if (e2) { setImpStatus("Erro em " + e2.tabela + ": " + e2.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+        enviarLote("os_evolucao_mensal", parsed.evolucao, { upsert: "os,mes_ref" }, function (e3) {
+          if (e3) { setImpStatus("Erro em " + e3.tabela + ": " + e3.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+          enviarLote("custo_direto_competencia", parsed.diretos, null, function (e4) {
+            if (e4) { setImpStatus("Erro em " + e4.tabela + ": " + e4.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+            try { aprCarregado = false; } catch (e) {}
+            try { orcamentosCarregados = false; } catch (e) {}
+            try { rcCarregado = false; } catch (e) {}
+            setImpStatus("Sucesso! 4 destinos atualizados. Reabra as telas (Custo por OS, Custo Direto, etc.) pra ver os dados novos.", "ok");
+            impBtnConf.disabled = false;
+            impBtnPrev.disabled = false;
+          });
+        });
+      });
+    });
+  }
+
 
   function confirmarImport() {
     if (!impParsed) return;
@@ -3785,8 +4034,12 @@
 
   function confirmarImportContinuar(tpl) {
 
-    // Tipos especiais usam UPSERT em os_evolucao_mensal
-    if (impParsed.tipo === "evolucao_pct" || impParsed.tipo === "saida_estoque") {
+    // M18: saída de estoque agora vai pra 4 destinos
+    if (impParsed.tipo === "saida_estoque") {
+      return confirmarSaidaEstoqueRico(impParsed);
+    }
+    // evolucao_pct continua no UPSERT clássico em os_evolucao_mensal
+    if (impParsed.tipo === "evolucao_pct") {
       return confirmarUpsertEvolucao(impParsed.tipo, impParsed.linhas);
     }
     if (impParsed.tipo === "funcionarios_tc") {
