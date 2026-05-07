@@ -32,8 +32,8 @@
   --info:       #1A4A7A; --info-bg:    #E6EFF8;
 
   /* Borda */
-  --borda:  rgba(139,105,20,0.20);   /* 0.15 → 0.20 (separadores mais visíveis) */
-  --borda2: rgba(139,105,20,0.40);   /* 0.30 → 0.40 (divisores fortes) */
+  --borda:  rgba(139,105,20,0.10);   /* mais sutil — pedido Juliana 07/05 */
+  --borda2: rgba(139,105,20,0.22);   /* divisores fortes mas suaves — pedido Juliana 07/05 */
 
   /* Raios */
   --r-sm: 4px;
@@ -1568,10 +1568,13 @@ small, .text-small { font-size: 12.5px; }
 .tabela tbody td {
   padding: 7px 10px;
   border-bottom: 1px solid var(--borda);
+  border-right: 0;
+  border-left: 0;
   color: var(--text);
   vertical-align: middle;
   white-space: nowrap;
 }
+.tabela thead th { border-right: 0; border-left: 0; }
 .tabela tbody tr:nth-child(even) td { background: var(--bg2); }
 .tabela tbody tr:hover td {
   background: var(--bg4);
