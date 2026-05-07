@@ -363,6 +363,8 @@
     if (pageId === "cfg_reset")                   carregarResetSeNecessario();
     // M19 Fase 1 — Medidas Disciplinares
     if (pageId === "medidas_disciplinares")       carregarMedidasDisciplinaresSeNecessario();
+    // M19 Fase 2 — Avaliação de Desempenho
+    if (pageId === "avaliacao_desempenho")        carregarAvalDesempSeNecessario();
     // M18 Onda 3.3 — Dashboard de Faturamento rico
     if (pageId === "dashboard_faturamento")       carregarDashFatRico();
   }
@@ -9506,6 +9508,251 @@
     var m = medidasDiscLista.find(function (x) { return Number(x.id) === Number(medidaId); });
     if (!m) return;
     abrirModalEditarMedida(m);
+  }
+
+  // ===========================================================================
+  // M21 — Avaliação de Desempenho
+  // 5 dimensões (1-5): Técnico, Qualidade, Comprometimento, Equipe, Iniciativa
+  // Nota geral = média das dimensões (ou definida manualmente)
+  // ===========================================================================
+
+  var avalDesempLista = [];
+  var avalDesempCarregado = false;
+
+  function carregarAvalDesempSeNecessario() {
+    if (avalDesempCarregado) { renderAvalDesemp(); return; }
+    setStatus("ad-status", "Carregando avaliações…", "carregando");
+    client.from("avaliacao_desempenho").select("*").order("data_avaliacao", { ascending: false, nullsLast: true }).then(function (r) {
+      if (r.error) { setStatus("ad-status", "Erro: " + r.error.message, "erro"); return; }
+      avalDesempLista = r.data || [];
+      avalDesempCarregado = true;
+      setStatus("ad-status", null);
+      renderAvalDesemp();
+    });
+
+    var bus = document.getElementById("ad-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderAvalDesemp); }
+    var fSt = document.getElementById("ad-filtro-status");
+    if (fSt && !fSt.dataset.bound) { fSt.dataset.bound = "1"; fSt.addEventListener("change", renderAvalDesemp); }
+    var btn = document.getElementById("ad-btn-nova");
+    if (btn && !btn.dataset.bound) { btn.dataset.bound = "1"; btn.addEventListener("click", function () { abrirModalAvaliacao(null); }); }
+  }
+
+  function _calcMedia5(a) {
+    var notas = [a.nota_tecnica, a.nota_qualidade, a.nota_comprometimento, a.nota_equipe, a.nota_iniciativa].filter(function (n) { return typeof n === "number" && n > 0; });
+    if (!notas.length) return null;
+    return notas.reduce(function (s, n) { return s + n; }, 0) / notas.length;
+  }
+
+  function renderAvalDesemp() {
+    var tbody = document.getElementById("ad-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("ad-busca") || {}).value || "").trim().toLowerCase();
+    var fSt = (document.getElementById("ad-filtro-status") || {}).value || "";
+
+    var filtrados = avalDesempLista.filter(function (a) {
+      if (fSt && a.status_avaliacao !== fSt) return false;
+      if (busca) {
+        var nomeF = _nomeFuncionario(a.funcionario_id);
+        var alvo = (nomeF + " " + (a.observacoes || "") + " " + (a.avaliador_nome || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      return true;
+    });
+
+    var totConcl = 0, totRascunho = 0, mediaGlobal = 0, mediaCount = 0;
+    filtrados.forEach(function (a) {
+      if (a.status_avaliacao === "concluida") totConcl++;
+      else if (a.status_avaliacao === "rascunho") totRascunho++;
+      var m = a.nota || _calcMedia5(a);
+      if (m) { mediaGlobal += m; mediaCount++; }
+    });
+    var setEl = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    setEl("ad-m-total", String(filtrados.length));
+    setEl("ad-m-concluidas", String(totConcl));
+    setEl("ad-m-rascunhos", String(totRascunho));
+    setEl("ad-m-media", mediaCount ? (mediaGlobal / mediaCount).toFixed(2) : "—");
+    setEl("ad-lbl", filtrados.length + " de " + avalDesempLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="tbl-vazio">Nenhuma avaliação. Use "+ Nova" pra cadastrar.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(function (a) {
+      var media = a.nota || _calcMedia5(a);
+      var statusTag = a.status_avaliacao === "concluida"
+        ? '<span class="tag ok">Concluída</span>'
+        : a.status_avaliacao === "rascunho"
+          ? '<span class="tag warn">Rascunho</span>'
+          : a.status_avaliacao === "contestada"
+            ? '<span class="tag danger">Contestada</span>'
+            : '<span class="tag">Arquivada</span>';
+      var notaTxt = media ? media.toFixed(2) : '<span class="muted">—</span>';
+      return '<tr>' +
+        '<td>' + (a.data_avaliacao ? fmtData(a.data_avaliacao) : "—") + '</td>' +
+        '<td>' + escHtml(_nomeFuncionario(a.funcionario_id)) + '</td>' +
+        '<td>' + escHtml(a.avaliador_nome || "—") + '</td>' +
+        '<td class="num"><strong>' + notaTxt + '</strong></td>' +
+        '<td>' + statusTag + '</td>' +
+        '<td><button type="button" class="btn-limpar" data-adid="' + a.id + '">Ver</button></td>' +
+      '</tr>';
+    }).join("");
+
+    tbody.querySelectorAll('button[data-adid]').forEach(function (b) {
+      if (b.dataset.bound) return;
+      b.dataset.bound = "1";
+      b.addEventListener("click", function () {
+        var id = Number(b.getAttribute("data-adid"));
+        var a = avalDesempLista.find(function (x) { return Number(x.id) === id; });
+        if (a) abrirModalAvaliacao(a);
+      });
+    });
+  }
+
+  function abrirModalAvaliacao(av) {
+    var ehEdicao = !!av;
+    var funcs = _getFuncionariosCache().filter(function (f) { return f.status === "ATIVO" || ehEdicao; });
+
+    function notaSelectHTML(name, valor) {
+      var opts = '<option value="">—</option>';
+      [1,2,3,4,5].forEach(function (n) {
+        opts += '<option value="' + n + '"' + (Number(valor) === n ? " selected" : "") + '>' + n + '</option>';
+      });
+      return '<select id="ad-form-' + name + '">' + opts + '</select>';
+    }
+
+    var html = '<div style="display:grid; gap:12px; max-width: 700px;">';
+    if (!ehEdicao) {
+      html += '<div class="finding info" style="margin:0;"><strong>Avaliação de Desempenho:</strong> 5 dimensões com nota 1-5 (1=Insuficiente, 5=Excepcional). A nota geral é calculada como média (ou pode ser definida manualmente).</div>';
+    }
+
+    html += '<div class="form-field"><label>Funcionário *</label><select id="ad-form-func"><option value="">— escolher —</option>';
+    funcs.forEach(function (f) {
+      var sel = ehEdicao && Number(av.funcionario_id) === Number(f.id) ? " selected" : "";
+      html += '<option value="' + f.id + '"' + sel + '>' + escHtml(f.nome) + (f.cargo ? " · " + escHtml(f.cargo) : "") + '</option>';
+    });
+    html += '</select></div>';
+
+    var hojeISO = new Date().toISOString().slice(0,10);
+    html += '<div class="form-field"><label>Data da avaliação *</label><input type="date" id="ad-form-data" value="' + (av && av.data_avaliacao ? av.data_avaliacao : hojeISO) + '" /></div>';
+
+    html += '<div class="form-field"><label>Avaliador (nome do gestor que fez a avaliação)</label><input type="text" id="ad-form-avaliador" value="' + escHtml((av && av.avaliador_nome) || "") + '" /></div>';
+
+    html += '<div style="padding:12px; background:var(--bg3); border-radius:6px; display:grid; gap:8px;">';
+    html += '<strong>5 Dimensões (1=Insuficiente, 2=Abaixo, 3=Atende, 4=Supera, 5=Excepcional)</strong>';
+    html += '<div class="form-field"><label>1. Conhecimento Técnico</label>' + notaSelectHTML("tec", av && av.nota_tecnica) + '</div>';
+    html += '<div class="form-field"><label>2. Qualidade do Trabalho</label>' + notaSelectHTML("qual", av && av.nota_qualidade) + '</div>';
+    html += '<div class="form-field"><label>3. Comprometimento e Pontualidade</label>' + notaSelectHTML("comp", av && av.nota_comprometimento) + '</div>';
+    html += '<div class="form-field"><label>4. Trabalho em Equipe / Comunicação</label>' + notaSelectHTML("equ", av && av.nota_equipe) + '</div>';
+    html += '<div class="form-field"><label>5. Iniciativa / Proatividade</label>' + notaSelectHTML("ini", av && av.nota_iniciativa) + '</div>';
+    html += '<div class="form-field" style="margin-top:8px;"><label>Nota geral (1-5) — auto-calculada como média se vazia</label><input type="number" id="ad-form-nota-geral" min="1" max="5" step="0.01" value="' + ((av && av.nota) || "") + '" placeholder="Vazio = média das dimensões" /></div>';
+    html += '</div>';
+
+    html += '<div class="form-field"><label>Pontos fortes</label><textarea id="ad-form-fortes" rows="2">' + escHtml((av && av.pontos_fortes) || "") + '</textarea></div>';
+    html += '<div class="form-field"><label>Pontos de melhoria</label><textarea id="ad-form-melhoria" rows="2">' + escHtml((av && av.pontos_melhoria) || "") + '</textarea></div>';
+    html += '<div class="form-field"><label>Metas para o próximo ciclo</label><textarea id="ad-form-metas" rows="2">' + escHtml((av && av.metas_proximo_ciclo) || "") + '</textarea></div>';
+    html += '<div class="form-field"><label>Observações do gestor</label><textarea id="ad-form-obs" rows="2">' + escHtml((av && av.observacoes) || "") + '</textarea></div>';
+    html += '<div class="form-field"><label>Observações do colaborador (autoavaliação opcional)</label><textarea id="ad-form-obs-func" rows="2">' + escHtml((av && av.observacoes_funcionario) || "") + '</textarea></div>';
+
+    html += '<div class="form-field"><label>Status</label><select id="ad-form-status">';
+    ["rascunho","concluida","contestada","arquivada"].forEach(function (s) {
+      var sel = (ehEdicao ? av.status_avaliacao : "rascunho") === s ? " selected" : "";
+      html += '<option value="' + s + '"' + sel + '>' + s + '</option>';
+    });
+    html += '</select></div>';
+    html += '</div>';
+
+    html += '<div class="modal-acoes" style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">';
+    if (ehEdicao) html += '<button type="button" class="btn-perigo" id="ad-form-btn-arquivar">Arquivar</button><span style="flex:1"></span>';
+    html += '<button type="button" class="btn-limpar" id="ad-form-btn-cancelar">Cancelar</button>';
+    html += '<button type="button" class="btn-ouro" id="ad-form-btn-salvar">' + (ehEdicao ? "Salvar alterações" : "Cadastrar avaliação") + '</button>';
+    html += '</div>';
+
+    abrirModalDetalhe(ehEdicao ? "Editar Avaliação de Desempenho" : "Nova Avaliação de Desempenho", html);
+
+    document.getElementById("ad-form-btn-cancelar").addEventListener("click", function () {
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov) ov.parentNode.removeChild(ov);
+    });
+
+    if (ehEdicao) {
+      document.getElementById("ad-form-btn-arquivar").addEventListener("click", function () {
+        if (!confirm("Arquivar esta avaliação? Status será marcado como 'arquivada'.")) return;
+        client.from("avaliacao_desempenho").update({ status_avaliacao: "arquivada" }).eq("id", av.id).then(function (r) {
+          if (r.error) { alert("Erro: " + r.error.message); return; }
+          avalDesempCarregado = false;
+          var ov = document.getElementById("modal-detalhe-overlay");
+          if (ov) ov.parentNode.removeChild(ov);
+          carregarAvalDesempSeNecessario();
+        });
+      });
+    }
+
+    document.getElementById("ad-form-btn-salvar").addEventListener("click", function () {
+      var fid = document.getElementById("ad-form-func").value;
+      if (!fid) { alert("Escolha o funcionário."); return; }
+      var data = document.getElementById("ad-form-data").value;
+      if (!data) { alert("Defina a data."); return; }
+
+      function getNota(name) {
+        var v = document.getElementById("ad-form-" + name).value;
+        return v ? Number(v) : null;
+      }
+      var notas = {
+        nota_tecnica: getNota("tec"),
+        nota_qualidade: getNota("qual"),
+        nota_comprometimento: getNota("comp"),
+        nota_equipe: getNota("equ"),
+        nota_iniciativa: getNota("ini")
+      };
+      var notaGeralInput = document.getElementById("ad-form-nota-geral").value;
+      var notaGeral;
+      if (notaGeralInput) {
+        notaGeral = Math.round(Number(notaGeralInput));
+      } else {
+        var calc = _calcMedia5(notas);
+        notaGeral = calc ? Math.round(calc) : null;
+      }
+
+      var dados = {
+        funcionario_id: Number(fid),
+        data_avaliacao: data,
+        avaliador_nome: document.getElementById("ad-form-avaliador").value.trim() || null,
+        nota: notaGeral,
+        nota_tecnica: notas.nota_tecnica,
+        nota_qualidade: notas.nota_qualidade,
+        nota_comprometimento: notas.nota_comprometimento,
+        nota_equipe: notas.nota_equipe,
+        nota_iniciativa: notas.nota_iniciativa,
+        pontos_fortes: document.getElementById("ad-form-fortes").value.trim() || null,
+        pontos_melhoria: document.getElementById("ad-form-melhoria").value.trim() || null,
+        metas_proximo_ciclo: document.getElementById("ad-form-metas").value.trim() || null,
+        observacoes: document.getElementById("ad-form-obs").value.trim() || null,
+        observacoes_funcionario: document.getElementById("ad-form-obs-func").value.trim() || null,
+        status_avaliacao: document.getElementById("ad-form-status").value
+      };
+
+      var btn = document.getElementById("ad-form-btn-salvar");
+      btn.disabled = true; btn.textContent = "Salvando…";
+
+      var op = ehEdicao
+        ? client.from("avaliacao_desempenho").update(dados).eq("id", av.id)
+        : client.from("avaliacao_desempenho").insert(dados);
+
+      op.then(function (r) {
+        if (r.error) {
+          alert("Erro: " + r.error.message);
+          btn.disabled = false;
+          btn.textContent = ehEdicao ? "Salvar alterações" : "Cadastrar avaliação";
+          return;
+        }
+        avalDesempCarregado = false;
+        var ov = document.getElementById("modal-detalhe-overlay");
+        if (ov) ov.parentNode.removeChild(ov);
+        carregarAvalDesempSeNecessario();
+      });
+    });
   }
 
 })();

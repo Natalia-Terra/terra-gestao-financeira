@@ -245,6 +245,7 @@
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
               <button class="sb-sub" data-page="medidas_disciplinares" type="button">Medidas Disciplinares</button>
+              <button class="sb-sub" data-page="avaliacao_desempenho" type="button">Avaliação de Desempenho</button>
               <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
               <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
@@ -1096,6 +1097,44 @@
             </div>
           </div>
         </section>
+
+        <!-- M21 — Avaliação de Desempenho (RH) -->
+        <section class="page" data-page="avaliacao_desempenho" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Avaliação de Desempenho</h1>
+            <p class="page-sub">Avaliação por funcionário em 5 dimensões (técnico, qualidade, comprometimento, equipe, iniciativa) com nota 1-5.</p>
+          </div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="ad-m-total">—</div></div>
+            <div class="metric-card"><div class="metric-label">Concluídas</div><div class="metric-value" id="ad-m-concluidas">—</div></div>
+            <div class="metric-card"><div class="metric-label">Rascunhos</div><div class="metric-value" id="ad-m-rascunhos">—</div></div>
+            <div class="metric-card"><div class="metric-label">Média geral</div><div class="metric-value" id="ad-m-media">—</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="search" id="ad-busca" class="input-search" placeholder="Buscar funcionário, avaliador…" />
+              <select id="ad-filtro-status">
+                <option value="">Todos os status</option>
+                <option value="rascunho">Rascunho</option>
+                <option value="concluida">Concluída</option>
+                <option value="contestada">Contestada</option>
+                <option value="arquivada">Arquivada</option>
+              </select>
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="ad-lbl">—</span>
+              <span style="flex:1"></span>
+              <button id="ad-btn-nova" class="btn-ouro" type="button">+ Nova avaliação</button>
+            </div>
+            <div id="ad-status" class="status" hidden role="status" aria-live="polite"></div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Data</th><th>Funcionário</th><th>Avaliador</th><th class="num">Nota</th><th>Status</th><th></th></tr></thead>
+                <tbody id="ad-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
 
 
         <!-- Configuração — hub com 5 sub-telas -->
