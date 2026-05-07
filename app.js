@@ -4192,6 +4192,37 @@
     var tpl = impTemplates[impTipo.value];
     if (!tpl) return;
 
+    // M18 — Modal tipo_faturamento (apenas pra import de orcamentos)
+    if (tpl.alvo === "orcamentos" && impParsed.linhas && impParsed.linhas.length) {
+      // Conta quantas linhas já vêm com tipo_faturamento da própria planilha
+      var jaTem = impParsed.linhas.filter(function (l) { return l.tipo_faturamento; }).length;
+      if (jaTem < impParsed.linhas.length) {
+        var faltam = impParsed.linhas.length - jaTem;
+        var resp = prompt(
+          "Tipo de faturamento padrão para " + faltam + " orçamento(s) sendo importado(s):\n\n" +
+          "• Digite 100  = 100% com NF (padrão)\n" +
+          "• Digite 0    = 0% com NF (sem NF, entrega informal)\n" +
+          "• Digite 1-99 = parcial X% com NF (ex: 50 = 50/50)\n\n" +
+          (jaTem > 0 ? "(" + jaTem + " linha(s) com tipo já preenchido na planilha serão preservadas)" : ""),
+          "100"
+        );
+        if (resp === null) return;  // cancelou
+        var pct = Number(String(resp).replace(",", "."));
+        if (isNaN(pct) || pct < 0 || pct > 100) {
+          setImpStatus("Valor inválido para tipo de faturamento. Operação cancelada.", "erro");
+          return;
+        }
+        var tipoPadrao = pct >= 100 ? "100_NF" : pct <= 0 ? "0_NF" : "PARCIAL";
+        impParsed.linhas.forEach(function (l) {
+          if (!l.tipo_faturamento) {
+            l.tipo_faturamento = tipoPadrao;
+            l.pct_com_nf = pct;
+          }
+        });
+      }
+    }
+
+
     // Resolução de conta_codigo → conta_id (saldos_contas: conta bancária)
     var temColunaContaBanc = (impParsed.linhas || []).some(function (l) { return "conta_codigo" in l; });
     if (temColunaContaBanc) {
