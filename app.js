@@ -2079,6 +2079,15 @@
       alvo: "orcamento_items + os_custos_planejados + ordens_servico",
       especial: true,
       dicas: "Arquivo 'Dashboard de Orçamentos.xlsx'. Cabeçalho na linha 2. Popula: orcamento_items (1 por item), os_custos_planejados (agregado por OS — previsto vs realizado em materiais/horas/terceiros/outros) e ordens_servico (UPSERT por OS)."
+    },
+    pagar_receber: {
+      // M18: importa "Relatório A Pagar x A Receber - Dt. Baixa.xlsx" → movimentos_caixa
+      // Aplica classificação automática em RECEBER c/ planos isentos.
+      // Demais linhas RECEBER ficam com natureza=null (classificar depois na tela).
+      nomeLegivel: "A Pagar x A Receber (Dt. Baixa)",
+      alvo: "movimentos_caixa",
+      especial: true,
+      dicas: "Arquivo 'Relatório A Pagar x A Receber - Dt. Baixa.xlsx'. 22 colunas. Linhas PAGAR vão direto. Linhas RECEBER com plano 33.01.003.001.001 ou 33.01.003.001.007 são marcadas automaticamente como 'Resultado Financeiro'. Outras linhas RECEBER ficam pendentes (classificar depois na tela Contas a Receber)."
     }
   };
 
@@ -2163,6 +2172,7 @@
     if (impTipo.value === "evolucao_pct")          return previsualizarEvolucaoPct(arq);
     if (impTipo.value === "saida_estoque")         return previsualizarSaidaEstoque(arq);
     if (impTipo.value === "dashboard_orcamentos")  return previsualizarDashboardOrcamentos(arq);
+    if (impTipo.value === "pagar_receber")         return previsualizarPagarReceber(arq);
     if (impTipo.value === "funcionarios_tc")       return previsualizarFuncionariosTc(arq);
     if (impTipo.value === "despesas_folha_mensal") return previsualizarDespesasFolha(arq);
 
@@ -4331,6 +4341,195 @@
     });
   }
 
+  // ===========================================================================
+  // M18 — A Pagar x A Receber - Dt. Baixa (parser + confirm)
+  // 22 colunas. Atenção: uma mesma transação pode aparecer em VÁRIAS LINHAS
+  // (uma por plano de contas — VL PLANO CONTAS rateia o VALOR total).
+  // Destino: tabela movimentos_caixa.
+  // Classificação automática: tipo=RECEBER + numero_plano_contas em
+  // ['33.01.003.001.001','33.01.003.001.007'] → natureza='Resultado Financeiro'.
+  // Outras linhas RECEBER ficam com natureza=null (classificar depois na tela).
+  // ===========================================================================
+
+  var PAGAR_RECEBER_CONTAS_RENDIMENTO = ["33.01.003.001.001", "33.01.003.001.007"];
+
+  function previsualizarPagarReceber(arq) {
+    setImpStatus("Lendo A Pagar x A Receber…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+        if (!raw.length) { setImpStatus("Planilha vazia.", "erro"); return; }
+
+        var headers = Object.keys(raw[0]);
+        function findCol(nomes) {
+          for (var i = 0; i < headers.length; i++) {
+            var n = normalizarCabecalho(headers[i]);
+            if (nomes.indexOf(n) !== -1) return headers[i];
+          }
+          return null;
+        }
+        var colTipo       = findCol(["contas a pagar/receber","contas a pagar receber","tipo"]);
+        var colCodPN      = findCol(["cod pn","codigo pn"]);
+        var colParceiro   = findCol(["parceiro de negocio","parceiro de negócio","parceiro"]);
+        var colCnpj       = findCol(["cnpj"]);
+        var colPrevisao   = findCol(["previsao","previsão"]);
+        var colValor      = findCol(["valor"]);
+        var colValorCorr  = findCol(["valor_corrigido","valor corrigido"]);
+        var colValorPago  = findCol(["valor_pago","valor pago"]);
+        var colVlPlano    = findCol(["vl plano contas","valor plano contas"]);
+        var colPago       = findCol(["pago"]);
+        var colDtAbertura = findCol(["dt_abertura","dt abertura","data abertura"]);
+        var colDtPagto    = findCol(["dt_pagamento","dt pagamento","data pagamento","dt baixa"]);
+        var colDtVenc     = findCol(["dt_vencimento","dt vencimento","data vencimento","vencimento"]);
+        var colDoc        = findCol(["documento"]);
+        var colHist       = findCol(["historico","histórico"]);
+        var colTpDoc      = findCol(["tp_doc","tp doc","tipo doc"]);
+        var colCodPC      = findCol(["cod_plano_contas","cod plano contas"]);
+        var colNumPC      = findCol(["numero_plano_contas","numero plano contas"]);
+        var colDescPC     = findCol(["plano_contas","plano de contas"]);
+        var colNumConta   = findCol(["numeroconta","numero conta"]);
+        var colContaCorr  = findCol(["contacorrente","conta corrente"]);
+
+        var faltam = [];
+        if (!colTipo) faltam.push("CONTAS A PAGAR/RECEBER");
+        if (!colValor && !colVlPlano) faltam.push("VALOR ou VL PLANO CONTAS");
+        if (!colDoc) faltam.push("DOCUMENTO");
+        if (faltam.length) { setImpStatus("Faltando colunas: " + faltam.join(", "), "erro"); return; }
+
+        function parseNum(v) {
+          if (v === null || v === undefined || v === "") return null;
+          var n = Number(String(v).replace(/\./g,"").replace(",", "."));
+          return isNaN(n) ? null : n;
+        }
+        function parseDateBR(v) {
+          if (!v) return null;
+          if (v instanceof Date) return v.toISOString().slice(0,10);
+          var s = String(v).trim();
+          var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+          if (m) {
+            var y = m[3].length === 2 ? "20" + m[3] : m[3];
+            return y + "-" + ("0"+m[2]).slice(-2) + "-" + ("0"+m[1]).slice(-2);
+          }
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+          return null;
+        }
+        function getStr(r, c) { if (!c) return null; var v = r[c]; return v === null || v === undefined || v === "" ? null : String(v).trim(); }
+        function getBool(r, c) { var v = getStr(r, c); if (!v) return false; var lo = v.toLowerCase(); return lo === "sim" || lo === "true" || lo === "yes" || lo === "1"; }
+
+        var linhas = [];
+        var classifAuto = 0;
+        var pendentesReceber = 0;
+        var pagar = 0;
+
+        raw.forEach(function (r) {
+          var tipoRaw = String(r[colTipo] || "").trim().toUpperCase();
+          var tipo = tipoRaw === "PAGAR" ? "PAGAR" : tipoRaw === "RECEBER" ? "RECEBER" : null;
+          if (!tipo) return;
+
+          var numPC = colNumPC ? getStr(r, colNumPC) : null;
+          var natureza = null;
+          // Regra automática: se RECEBER + plano isento → Resultado Financeiro
+          if (tipo === "RECEBER" && numPC && PAGAR_RECEBER_CONTAS_RENDIMENTO.indexOf(numPC) !== -1) {
+            natureza = "Resultado Financeiro";
+            classifAuto++;
+          } else if (tipo === "RECEBER") {
+            pendentesReceber++;
+          } else {
+            pagar++;
+          }
+
+          linhas.push({
+            tipo: tipo,
+            cod_pn: getStr(r, colCodPN),
+            parceiro: getStr(r, colParceiro),
+            cnpj: getStr(r, colCnpj),
+            previsao: getStr(r, colPrevisao),
+            valor_total: parseNum(r[colValor]),
+            valor_corrigido: colValorCorr ? parseNum(r[colValorCorr]) : null,
+            valor_pago: colValorPago ? parseNum(r[colValorPago]) : null,
+            valor_rateado: colVlPlano ? parseNum(r[colVlPlano]) : null,
+            pago: getBool(r, colPago),
+            data_abertura: colDtAbertura ? parseDateBR(r[colDtAbertura]) : null,
+            data_pagamento: colDtPagto ? parseDateBR(r[colDtPagto]) : null,
+            data_vencimento: colDtVenc ? parseDateBR(r[colDtVenc]) : null,
+            documento: getStr(r, colDoc),
+            historico: getStr(r, colHist),
+            tp_doc: getStr(r, colTpDoc),
+            cod_plano_contas: colCodPC ? getStr(r, colCodPC) : null,
+            numero_plano_contas: numPC,
+            plano_contas_descritivo: colDescPC ? getStr(r, colDescPC) : null,
+            numero_conta: colNumConta ? getStr(r, colNumConta) : null,
+            conta_corrente: colContaCorr ? getStr(r, colContaCorr) : null,
+            natureza: natureza,
+            orcamento_vinculado: null
+          });
+        });
+
+        impParsed = {
+          tipo: "pagar_receber",
+          linhas: linhas,
+          classifAuto: classifAuto,
+          pendentesReceber: pendentesReceber,
+          pagar: pagar
+        };
+        var previewCols = ["tipo","parceiro","valor_total","valor_rateado","data_pagamento","documento","numero_plano_contas","natureza"];
+        impParsed.cabs = previewCols;
+        renderPreviewImport(linhas, previewCols);
+
+        var msg = "Resultado do parse: " + linhas.length + " linha(s) totais. "
+                + pagar + " PAGAR, " + classifAuto + " RECEBER classificadas automaticamente como 'Resultado Financeiro' (planos isentos), "
+                + pendentesReceber + " RECEBER pendentes de classificação manual (serão inseridas com natureza=null e devem ser classificadas depois na tela Contas a Receber).";
+        setImpStatus(msg, "ok");
+        atualizarEstadoImport();
+      } catch (e) {
+        setImpStatus("Erro lendo arquivo: " + e.message, "erro");
+      }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  function confirmarPagarReceber(parsed) {
+    if (!parsed || !parsed.linhas || !parsed.linhas.length) return;
+    var msg = "Vai inserir " + parsed.linhas.length + " linha(s) em movimentos_caixa:\n"
+            + "• " + parsed.pagar + " PAGAR\n"
+            + "• " + parsed.classifAuto + " RECEBER já classificadas como 'Resultado Financeiro' (planos isentos)\n"
+            + "• " + parsed.pendentesReceber + " RECEBER pendentes de classificação manual\n\nConfirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Inserindo em movimentos_caixa…", "carregando");
+
+    var lotes = [];
+    for (var i = 0; i < parsed.linhas.length; i += 200) lotes.push(parsed.linhas.slice(i, i + 200));
+    var idx = 0;
+    var inseridos = 0;
+    function proximo() {
+      if (idx >= lotes.length) {
+        setImpStatus("Sucesso! " + inseridos + " linhas inseridas em movimentos_caixa. Pendentes de classificação: " + parsed.pendentesReceber + " (vão aparecer na tela Contas a Receber refatorada).", "ok");
+        impBtnConf.disabled = false;
+        impBtnPrev.disabled = false;
+        return;
+      }
+      client.from("movimentos_caixa").insert(lotes[idx]).then(function (r) {
+        if (r.error) {
+          setImpStatus("Erro no lote " + (idx+1) + ": " + r.error.message, "erro");
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          return;
+        }
+        inseridos += lotes[idx].length;
+        setImpStatus("Inseridos " + inseridos + " / " + parsed.linhas.length + "…", "carregando");
+        idx++;
+        proximo();
+      });
+    }
+    proximo();
+  }
+
+
 
 
 
@@ -4470,6 +4669,10 @@
     // M18: notas_fiscais — abre modal de revisão de vínculo NF↔OS antes de gravar
     if (tpl.alvo === "notas_fiscais") {
       return confirmarNFsComVinculo(impParsed);
+    }
+    // M18: pagar_receber — insere em movimentos_caixa com classificação automática
+    if (impParsed.tipo === "pagar_receber") {
+      return confirmarPagarReceber(impParsed);
     }
     // evolucao_pct continua no UPSERT clássico em os_evolucao_mensal
     if (impParsed.tipo === "evolucao_pct") {
