@@ -8942,4 +8942,156 @@
     }).join("");
   }
 
+  // ===========================================================================
+  // M18 — Refacs incrementais com FALLBACK
+  // Telas Notas Fiscais / Contas a Receber / Contas a Pagar passam a olhar
+  // primeiro pras tabelas novas (notas_fiscais rica, movimentos_caixa);
+  // se vazias, mantém o comportamento antigo (compatibilidade).
+  // ===========================================================================
+
+  // --- Carregamento de notas_fiscais (rica) + nf_os ---
+  var notasFiscaisRicasLista = [];
+  var nfosLista = [];
+  var nfRicasCarregado = false;
+
+  function carregarNFsRicas() {
+    if (nfRicasCarregado) return Promise.resolve();
+    return Promise.all([
+      client.from("notas_fiscais").select("*").order("emissao", { ascending: false }),
+      client.from("nf_os").select("numero_nf, os")
+    ]).then(function (rs) {
+      if (rs[0].data) notasFiscaisRicasLista = rs[0].data;
+      if (rs[1].data) nfosLista = rs[1].data;
+      nfRicasCarregado = true;
+    }).catch(function () { /* tolerar erro — só não usa fallback */ });
+  }
+
+  // Override de renderNotas: se notas_fiscais (rica) tiver dados, usa ela; senão, usa a antiga.
+  if (typeof renderNotas === "function") {
+    var _renderNotasOriginal = renderNotas;
+    renderNotas = function () {
+      // Carrega NFs ricas se ainda não carregou
+      if (!nfRicasCarregado) {
+        carregarNFsRicas().then(function () { renderNotas(); });
+        return;
+      }
+      // Se a tabela rica está vazia, fallback pra versão antiga
+      if (!notasFiscaisRicasLista.length) {
+        _renderNotasOriginal();
+        return;
+      }
+      // Versão rica: mostra colunas de notas_fiscais + OSs vinculadas
+      var tbody = document.getElementById("nf-tbody");
+      if (!tbody) return;
+      var busca = ((document.getElementById("nf-busca") || {}).value || "").trim().toLowerCase();
+      var mes = (document.getElementById("nf-mes") || {}).value;
+
+      // Indexar OSs por NF
+      var ossPorNF = {};
+      nfosLista.forEach(function (l) {
+        var k = String(l.numero_nf || "");
+        if (!ossPorNF[k]) ossPorNF[k] = [];
+        ossPorNF[k].push(l.os);
+      });
+
+      var filtrados = notasFiscaisRicasLista.filter(function (n) {
+        if (mes && n.emissao && String(n.emissao).slice(0,7) !== mes) return false;
+        if (busca) {
+          var alvo = ((n.numero_nf || "") + " " + (n.razao_social || "") + " " + (n.numero_orcamento || "")).toLowerCase();
+          if (alvo.indexOf(busca) === -1) return false;
+        }
+        return true;
+      });
+
+      var soma = 0;
+      filtrados.forEach(function (n) { soma += Number(n.valor_nf || 0); });
+
+      var elQ = document.getElementById("nf-m-qtd"); if (elQ) elQ.textContent = fmtInt(filtrados.length);
+      var elV = document.getElementById("nf-m-valor"); if (elV) elV.textContent = fmtBRL(soma);
+      var elL = document.getElementById("nf-lbl"); if (elL) elL.textContent = filtrados.length + " NF (rica)";
+
+      if (!filtrados.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhuma NF bate com filtros.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtrados.map(function (n) {
+        var oss = (ossPorNF[String(n.numero_nf)] || []).join(", ") || "—";
+        return '<tr>' +
+          '<td>' + (n.emissao ? fmtData(n.emissao) : "—") + '</td>' +
+          '<td class="mono">' + escHtml(n.numero_orcamento || "—") + '</td>' +
+          '<td>' + escHtml(n.razao_social || "—") + '</td>' +
+          '<td class="mono">' + escHtml(n.numero_nf || "—") + '</td>' +
+          '<td class="mono">' + escHtml(oss) + '</td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(n.cfop || "—") + '</td>' +
+          '<td class="num">' + fmtBRL(n.valor_nf) + '</td>' +
+        '</tr>';
+      }).join("");
+    };
+  }
+
+  // Override de renderRecebimentos: se movimentos_caixa (RECEBER) tiver dados, usa.
+  if (typeof renderRecebimentos === "function") {
+    var _renderRecebimentosOriginal = renderRecebimentos;
+    renderRecebimentos = function () {
+      // Garante que movCaixaLista esteja carregada
+      if (typeof movCaixaCarregado !== "undefined" && !movCaixaCarregado && typeof carregarMovimentosCaixaSeNecessario === "function") {
+        carregarMovimentosCaixaSeNecessario();
+        // Não esperar — se ainda não tem, usa a antiga por enquanto
+      }
+      // Se movCaixaLista vazia ou indefinida, fallback
+      if (typeof movCaixaLista === "undefined" || !movCaixaLista || !movCaixaLista.length) {
+        _renderRecebimentosOriginal();
+        return;
+      }
+      // Filtra apenas RECEBER
+      var receber = movCaixaLista.filter(function (m) { return m.tipo === "RECEBER"; });
+      if (!receber.length) {
+        _renderRecebimentosOriginal();
+        return;
+      }
+      var tbody = document.getElementById("rec-tbody");
+      if (!tbody) return;
+      var busca = ((document.getElementById("rec-busca") || {}).value || "").trim().toLowerCase();
+      var mes = (document.getElementById("rec-mes") || {}).value;
+
+      var filtrados = receber.filter(function (m) {
+        if (mes && m.data_pagamento && String(m.data_pagamento).slice(0,7) !== mes) return false;
+        if (busca) {
+          var alvo = ((m.parceiro || "") + " " + (m.documento || "") + " " + (m.orcamento_vinculado || "") + " " + (m.natureza || "")).toLowerCase();
+          if (alvo.indexOf(busca) === -1) return false;
+        }
+        return true;
+      });
+      var soma = 0;
+      filtrados.forEach(function (m) { soma += Number(m.valor_total || 0); });
+
+      var elQ = document.getElementById("rec-m-qtd"); if (elQ) elQ.textContent = fmtInt(filtrados.length);
+      var elV = document.getElementById("rec-m-valor"); if (elV) elV.textContent = fmtBRL(soma);
+      var elL = document.getElementById("rec-lbl"); if (elL) elL.textContent = filtrados.length + " recebimentos (caixa)";
+
+      if (!filtrados.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhum recebimento bate com filtros.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtrados.map(function (m) {
+        var nat = m.natureza || '<span class="muted">—</span>';
+        return '<tr>' +
+          '<td>' + (m.data_pagamento ? fmtData(m.data_pagamento) : "—") + '</td>' +
+          '<td class="mono">' + escHtml(m.orcamento_vinculado || "—") + '</td>' +
+          '<td>' + escHtml(m.parceiro || "—") + '</td>' +
+          '<td><span class="muted-tag">' + nat + '</span></td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(m.documento || "—") + '</td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(m.numero_plano_contas || "—") + '</td>' +
+          '<td class="num">' + fmtBRL(m.valor_total) + '</td>' +
+        '</tr>';
+      }).join("");
+    };
+  }
+
+  // Para Contas a Pagar — adicionar lógica que mostra PAGAR de movimentos_caixa.
+  // Como a tela "Contas a Pagar" hoje (caixa_compromissos) usa compromissos_financeiros,
+  // que é um conceito diferente (compromissos FUTUROS),
+  // NÃO faz sentido substituir — fica em paralelo via tela "Lançamentos de Caixa".
+  // A refac fica como anotação de design: as 2 telas têm propósitos diferentes.
+
 })();
