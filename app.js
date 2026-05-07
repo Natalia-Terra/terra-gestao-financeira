@@ -2072,6 +2072,13 @@
       },
       obrigatorias: ["orcamento","competencia"],
       dicas: "Aba 'Saldo a Reconhecer' do arquivo. Cabeçalho na linha 2. Colunas: Orçamento, Comp., Data, Nota Fiscal, Valor, Adiantamento, NF Emitidas, Valor a Reconhecer. Importa pra tabela 'saldo_reconhecer'."
+    },
+    dashboard_orcamentos: {
+      // M18: importa "Dashboard de Orçamentos.xlsx" — popula 3 destinos
+      nomeLegivel: "Dashboard de Orçamentos",
+      alvo: "orcamento_items + os_custos_planejados + ordens_servico",
+      especial: true,
+      dicas: "Arquivo 'Dashboard de Orçamentos.xlsx'. Cabeçalho na linha 2. Popula: orcamento_items (1 por item), os_custos_planejados (agregado por OS — previsto vs realizado em materiais/horas/terceiros/outros) e ordens_servico (UPSERT por OS)."
     }
   };
 
@@ -2155,6 +2162,7 @@
 
     if (impTipo.value === "evolucao_pct")          return previsualizarEvolucaoPct(arq);
     if (impTipo.value === "saida_estoque")         return previsualizarSaidaEstoque(arq);
+    if (impTipo.value === "dashboard_orcamentos")  return previsualizarDashboardOrcamentos(arq);
     if (impTipo.value === "funcionarios_tc")       return previsualizarFuncionariosTc(arq);
     if (impTipo.value === "despesas_folha_mensal") return previsualizarDespesasFolha(arq);
 
@@ -3939,6 +3947,245 @@
     });
   }
 
+  // ===========================================================================
+  // M18 — Dashboard de Orçamentos (parser + confirm)
+  // Importa "Dashboard de Orçamentos.xlsx" → 3 destinos:
+  //   - orcamento_items (linha-a-linha por item)
+  //   - os_custos_planejados (1 linha por OS, com previsto vs realizado nas 4 dimensões)
+  //   - ordens_servico (1 linha por OS — metadado básico, UPSERT)
+  // ===========================================================================
+
+  function previsualizarDashboardOrcamentos(arq) {
+    setImpStatus("Lendo Dashboard de Orçamentos…", "carregando");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        // Cabeçalho real está na linha 2 (índice 1) — linha 1 (índice 0) é título do grupo
+        var matriz = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+        if (matriz.length < 3) { setImpStatus("Planilha vazia ou sem cabeçalho.", "erro"); return; }
+
+        var headers = matriz[1] || [];
+        function findColIdx(nomes) {
+          for (var i = 0; i < headers.length; i++) {
+            var n = normalizarCabecalho(String(headers[i] || ""));
+            if (nomes.indexOf(n) !== -1) return i;
+          }
+          return -1;
+        }
+
+        // Mapear índices das colunas
+        var iOrc       = findColIdx(["n orcamento","nº orçamento","numero orcamento","número orçamento"]);
+        var iCliente   = findColIdx(["cliente"]);
+        var iRepr      = findColIdx(["representante"]);
+        var iComissao  = findColIdx(["vl total comissao","vl total comissão","valor total comissao","valor total comissão"]);
+        var iItem      = findColIdx(["item"]);
+        var iFamilia   = findColIdx(["familia","família"]);
+        var iGrupo     = findColIdx(["grupo"]);
+        var iPedido    = findColIdx(["n pedido","nº pedido","numero pedido","número pedido"]);
+        var iNFs       = findColIdx(["notas fiscais"]);
+        var iQtdVend   = findColIdx(["qtde vendida","quantidade vendida"]);
+        var iQtdRes    = findColIdx(["qtde reservada"]);
+        var iQtdFat    = findColIdx(["qtde faturada"]);
+        var iQtdAFat   = findColIdx(["qtde a faturar"]);
+        var iQtdDisp   = findColIdx(["qtde disponivel para faturar","qtde disponível para faturar"]);
+        var iVlUnit    = findColIdx(["vl unitario","vl unitário","valor unitario","valor unitário"]);
+        var iVlTot     = findColIdx(["vl total","valor total"]);
+        var iVlAFat    = findColIdx(["vl a faturar","valor a faturar"]);
+        var iVlDisp    = findColIdx(["valor disponivel para faturar","valor disponível para faturar"]);
+        var iCodInt    = findColIdx(["cod interno","código interno","cod. interno","cód. interno"]);
+        var iServAnd   = findColIdx(["servicos em andamento","serviços em andamento"]);
+        var iServConc  = findColIdx(["servicos concluidos","serviços concluídos"]);
+        var iCruz      = findColIdx(["cruzada"]);
+        var iLucroPrev = findColIdx(["lucro previsto"]);
+        var iLucroReal = findColIdx(["lucro realizado"]);
+        var iSaldoLucr = findColIdx(["saldo do lucro"]);
+        var iServReal  = findColIdx(["servicos para o realizado","serviços para o realizado"]);
+        var iTotPrev   = findColIdx(["total previsto"]);
+        var iTotReal   = findColIdx(["total realizado"]);
+        var iSaldoTot  = findColIdx(["saldo total"]);
+        var iMatPrev   = findColIdx(["materiais previstos"]);
+        var iMatReal   = findColIdx(["materiais realizados"]);
+        var iSaldoMat  = findColIdx(["saldo de materiais"]);
+        var iCompNE    = findColIdx(["comprados e nao entregues","comprados e não entregues"]);
+        var iResNU     = findColIdx(["reservado e nao utilizado","reservado e não utilizado"]);
+        var iHrPrev    = findColIdx(["horas previstas"]);
+        var iHrReal    = findColIdx(["horas realizadas"]);
+        var iSaldoHr   = findColIdx(["saldo de horas"]);
+        var iSTPrev    = findColIdx(["st previstos"]);
+        var iSTReal    = findColIdx(["st realizados"]);
+        var iSaldoST   = findColIdx(["saldo de st"]);
+        var iOutPrev   = findColIdx(["outros previstos"]);
+        var iOutReal   = findColIdx(["outros realizados"]);
+        var iSaldoOut  = findColIdx(["saldo de outros"]);
+
+        if (iOrc === -1) { setImpStatus("Coluna 'Nº Orçamento' não encontrada.", "erro"); return; }
+
+        function parseNum(v) {
+          if (v === null || v === undefined || v === "") return null;
+          var n = Number(String(v).replace(/\./g,"").replace(",", "."));
+          return isNaN(n) ? null : n;
+        }
+        function getCell(row, idx) {
+          return idx === -1 ? null : row[idx];
+        }
+        function getStr(row, idx) {
+          var v = getCell(row, idx);
+          if (v === null || v === undefined) return null;
+          var s = String(v).trim();
+          return s === "" ? null : s;
+        }
+        function getNum(row, idx) {
+          return parseNum(getCell(row, idx));
+        }
+
+        var items = [];                 // orcamento_items
+        var osPlanejByOS = {};          // os_custos_planejados (por OS)
+        var ordensServByOS = {};        // ordens_servico (por OS)
+        var ignorados = 0;
+
+        // Começa da linha 3 (índice 2) — pulando 2 linhas de cabeçalho
+        for (var i = 2; i < matriz.length; i++) {
+          var r = matriz[i];
+          if (!r || r.length === 0) { ignorados++; continue; }
+          var orcamento = getStr(r, iOrc);
+          if (!orcamento) { ignorados++; continue; }
+
+          // 1) orcamento_items — uma linha por item do orçamento
+          items.push({
+            orcamento: orcamento,
+            item: getStr(r, iItem),
+            familia: getStr(r, iFamilia),
+            grupo: getStr(r, iGrupo),
+            cod_interno: getStr(r, iCodInt),
+            qtd_vendida: getNum(r, iQtdVend),
+            qtd_reservada: getNum(r, iQtdRes),
+            qtd_faturada: getNum(r, iQtdFat),
+            qtd_a_faturar: getNum(r, iQtdAFat),
+            qtd_disponivel: getNum(r, iQtdDisp),
+            vl_unitario: getNum(r, iVlUnit),
+            vl_total: getNum(r, iVlTot),
+            vl_a_faturar: getNum(r, iVlAFat),
+            vl_disponivel_faturar: getNum(r, iVlDisp),
+            representante: getStr(r, iRepr),
+            vl_total_comissao: getNum(r, iComissao),
+            num_pedido: getStr(r, iPedido),
+            notas_fiscais: getStr(r, iNFs),
+            lucro_previsto: getNum(r, iLucroPrev),
+            lucro_realizado: getNum(r, iLucroReal),
+            saldo_lucro: getNum(r, iSaldoLucr)
+          });
+
+          // OS pode estar em "Serviços em andamento" OU "Serviços concluídos" OU "Serviços para o realizado"
+          var os = getStr(r, iServAnd) || getStr(r, iServConc) || getStr(r, iServReal);
+          if (!os) continue;
+
+          // 2) os_custos_planejados — agregado por OS (último valor prevalece se OS aparecer 2x)
+          osPlanejByOS[os] = {
+            os: os,
+            total_previsto: getNum(r, iTotPrev),
+            total_realizado: getNum(r, iTotReal),
+            saldo_total: getNum(r, iSaldoTot),
+            servicos_para_realizado: getStr(r, iServReal),
+            materiais_previstos: getNum(r, iMatPrev),
+            materiais_realizados: getNum(r, iMatReal),
+            saldo_materiais: getNum(r, iSaldoMat),
+            comprados_nao_entregues: getNum(r, iCompNE),
+            reservado_nao_utilizado: getNum(r, iResNU),
+            horas_previstas: getNum(r, iHrPrev),
+            horas_realizadas: getNum(r, iHrReal),
+            saldo_horas: getNum(r, iSaldoHr),
+            st_previstos: getNum(r, iSTPrev),
+            st_realizados: getNum(r, iSTReal),
+            saldo_st: getNum(r, iSaldoST),
+            outros_previstos: getNum(r, iOutPrev),
+            outros_realizados: getNum(r, iOutReal),
+            saldo_outros: getNum(r, iSaldoOut)
+          };
+
+          // 3) ordens_servico — metadado básico (UPSERT por OS se a tabela tiver constraint)
+          ordensServByOS[os] = {
+            os: os,
+            orcamento: orcamento,
+            item: getStr(r, iItem),
+            familia: getStr(r, iFamilia),
+            grupo: getStr(r, iGrupo),
+            status: getStr(r, iCruz)
+          };
+        }
+
+        var osCustos = Object.keys(osPlanejByOS).map(function (k) { return osPlanejByOS[k]; });
+        var ordens = Object.keys(ordensServByOS).map(function (k) { return ordensServByOS[k]; });
+
+        impParsed = {
+          tipo: "dashboard_orcamentos",
+          items: items,
+          os_custos: osCustos,
+          ordens: ordens
+        };
+        // Preview: items
+        var previewCols = ["orcamento","item","familia","grupo","vl_total","qtd_vendida","qtd_faturada","lucro_previsto","lucro_realizado"];
+        impParsed.linhas = items;
+        impParsed.cabs = previewCols;
+        renderPreviewImport(items, previewCols);
+
+        var msg = "Resultado do parse: " + items.length + " itens em orcamento_items, " + osCustos.length + " OSs em os_custos_planejados, " + ordens.length + " entradas em ordens_servico (UPSERT). " + ignorados + " linha(s) ignorada(s).";
+        setImpStatus(msg, "ok");
+        atualizarEstadoImport();
+      } catch (e) {
+        setImpStatus("Erro lendo arquivo: " + e.message, "erro");
+      }
+    };
+    reader.readAsArrayBuffer(arq);
+  }
+
+  // M18 — Confirma import do Dashboard de Orçamentos (3 destinos)
+  function confirmarDashboardOrcamentos(parsed) {
+    if (!parsed) return;
+    var msg = "Vai inserir: " + (parsed.items||[]).length + " em orcamento_items, "
+              + (parsed.os_custos||[]).length + " em os_custos_planejados (UPSERT por os), "
+              + (parsed.ordens||[]).length + " em ordens_servico (UPSERT por os). Confirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Inserindo nos 3 destinos…", "carregando");
+
+    function enviarLote(tabela, linhas, opts, cb) {
+      if (!linhas || !linhas.length) return cb(null);
+      var lotes = [];
+      for (var i = 0; i < linhas.length; i += 200) lotes.push(linhas.slice(i, i + 200));
+      var idx = 0;
+      function proximo() {
+        if (idx >= lotes.length) return cb(null);
+        var q;
+        if (opts && opts.upsert) q = client.from(tabela).upsert(lotes[idx], { onConflict: opts.upsert });
+        else q = client.from(tabela).insert(lotes[idx]);
+        q.then(function (r) {
+          if (r.error) return cb({ tabela: tabela, lote: idx, erro: r.error.message });
+          idx++; proximo();
+        });
+      }
+      proximo();
+    }
+
+    enviarLote("orcamento_items", parsed.items, null, function (e1) {
+      if (e1) { setImpStatus("Erro em " + e1.tabela + ": " + e1.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+      enviarLote("os_custos_planejados", parsed.os_custos, { upsert: "os" }, function (e2) {
+        if (e2) { setImpStatus("Erro em " + e2.tabela + ": " + e2.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+        enviarLote("ordens_servico", parsed.ordens, { upsert: "os" }, function (e3) {
+          if (e3) { setImpStatus("Erro em " + e3.tabela + ": " + e3.erro, "erro"); impBtnConf.disabled = false; impBtnPrev.disabled = false; return; }
+          try { aprCarregado = false; } catch (e) {}
+          try { orcamentosCarregados = false; } catch (e) {}
+          setImpStatus("Sucesso! 3 destinos atualizados (orcamento_items, os_custos_planejados, ordens_servico).", "ok");
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+        });
+      });
+    });
+  }
+
+
 
   function confirmarImport() {
     if (!impParsed) return;
@@ -4037,6 +4284,10 @@
     // M18: saída de estoque agora vai pra 4 destinos
     if (impParsed.tipo === "saida_estoque") {
       return confirmarSaidaEstoqueRico(impParsed);
+    }
+    // M18: dashboard de orçamentos vai pra 3 destinos
+    if (impParsed.tipo === "dashboard_orcamentos") {
+      return confirmarDashboardOrcamentos(impParsed);
     }
     // evolucao_pct continua no UPSERT clássico em os_evolucao_mensal
     if (impParsed.tipo === "evolucao_pct") {
