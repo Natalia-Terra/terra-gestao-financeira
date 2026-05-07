@@ -1,62 +1,71 @@
 # Próxima Sessão
 
-**Atualizado em 2026-05-07 (final — M19 quase fechado).**
+**Atualizado em 2026-05-07 noite — pós M24 (Política de Histórico).**
 
 ## Estado consolidado
 
-✅ **M18 — Plena Gestão de Faturamento** (backend + frontend)
-✅ **M19 Master + Reset** (perfil master, tela Reset Completo)
-✅ **M19 Fase 1 — Medidas Disciplinares** (POL_001, graduação automática por ano civil)
-✅ **M19 Fase 2 — Avaliação de Desempenho** (5 dimensões, escala 1-5)
-✅ **M19 Fase 4 — Cálculo do Bônus completo** (4 RPCs, 3 esferas + pool + R$ estimado)
-⏳ **M19 Fase 3 — Parser PDF Folha de Ponto** (bloqueada: aguarda amostra real)
+✅ M18 — Plena Gestão de Faturamento
+✅ M19 Master + Reset
+✅ M19 Fase 1 — Medidas Disciplinares
+✅ M19 Fase 2 — Avaliação de Desempenho
+✅ M19 Fase 4 — Cálculo do Bônus completo (4 RPCs)
+✅ M24 — Política de Histórico (estrutura aplicada)
 
-## Único bloqueio externo
+## Bloqueios externos (depende de Juliana)
 
-**Folha de Ponto consolidada (PDF)** — Juliana confirmou que sistema gera 1 PDF único com todos os funcionários. Falta mandar amostra real pra eu desenhar o parser. Sem isso, frequencia_mensal fica vazio e os componentes Faltas/Atrasos do bônus retornam 0% com flag `frequencia_disponivel: false` (UI já mostra "aguardando dados").
+1. **PDF Folha de Ponto consolidado** — destrava M19 Fase 3 + parser. Decisões já registradas:
+   - Periodicidade: livre, sob demanda
+   - Match por CPF
+   - Funcionários sem ponto: importa o resto + LISTA DE EXCEÇÃO obrigatória
+   - Política de histórico: SEMPRE append + competência (sem sobrescrever)
 
-## Frentes que valem a pena na próxima sessão
+2. **Cadastrar metas iniciais** — em bonif_metas_empresa (faturamento, margem, caixa) e bonif_metas_area
+3. **Importar dados reais** — 4 imports da M18
 
-### A) Tela "Bônus Individual" — visão consolidada (não só drill-down)
+## Frentes técnicas pra próximas sessões
 
-Hoje o cálculo é acessível via Funcionários > drill-down > "Calcular Bônus". Ideal: tela própria que lista TODOS funcionários com seu % atingido + valor estimado + filtro por organograma. Talvez gerando ranking.
+### M25 — Refac dos imports existentes pra Política de Histórico
 
-### B) Cadastro guiado de Metas (M19 Fase 5)
+Atualmente 10 tabelas têm colunas `vigente`/`import_id` (M24) MAS os imports continuam usando UPSERT. Refatorar pra:
+- Cada import → entrada em `imports_historico`
+- Novos registros: vigente=true + import_id
+- Registros do mesmo período: vigente=false
+- Funções de cálculo: filtrar vigente=true
 
-A simulação tem sheets "Meta TC" e "Meta Área" detalhadas. Tela de Configuração que reproduz isso: define metas anuais, periodicidade, % do LL distribuído, escalas customizadas.
+Imports a refatorar:
+- Saída de Estoque, Dashboard de Orçamentos, A Pagar x A Receber
+- Caixa Saldo Mensal, Saldos Contas, Compromissos, Recebimentos Previstos
+- Histórico Mov Financeiro, Histórico Saldo a Reconhecer
 
-### C) Cargas iniciais de dados
+### M26 — Tela "Histórico de Imports"
 
-Dependem de Juliana decidir começar:
-- 4 imports da M18 (Dashboard de Orçamentos, A Pagar x A Receber, Saída de Estoque, Históricos da bíblia)
-- Cadastro de meta Faturamento, Margem, Caixa em bonif_metas_empresa
-- Cadastro de metas por área no organograma
-- Frequência mensal (quando PDF for parseado)
+Lista entries de `imports_historico` com filtros (tipo, competência, período).
+Drill-down: ver registros vigentes vs não-vigentes daquele import.
+Permite "reverter" um import (marca os registros dele como vigente=false e re-marca o anterior como vigente=true).
 
-### D) Refacs incrementais
+### M19 Fase 3 — Parser PDF Folha de Ponto
 
-- Substituir tela "Gestão de Faturamento" antiga pelo Dashboard rico (após validação)
-- Refac "Contas a Pagar" pra cruzar movimentos_caixa PAGAR
-- Configuração: tela pra ajustar pesos/escalas do bônus (hoje hardcoded nas funções SQL)
+Quando Juliana mandar amostra real:
+1. Cria entrada em `imports_historico`
+2. Parser separa por seção (Nome+CPF)
+3. Extrai totais agregados
+4. Lista de exceção: funcionários ATIVOS que NÃO apareceram no PDF
+5. Insere em `frequencia_mensal` com vigente=true + import_id
+6. Marca registros anteriores do mesmo (funcionario, mes_ref) como vigente=false
 
-### E) Operacional
+### Outras frentes (sem urgência)
 
-- Habilitar Leaked Password Protection (Pro plan)
-- SMTP próprio
-- Logo Terra (visual fino)
+- Tela "Bônus Individual" consolidada (lista todos com cálculo)
+- Tela de Configuração de Metas (Meta TC e Meta Área)
+- Refac "Gestão de Faturamento" → Dashboard rico
+- SMTP próprio, logo Terra
 
-## Como retomar
+## Estatísticas finais 2026-05-07
 
-Próxima sessão começa idealmente com:
-1. Lista de bugs encontrados nos testes da Juliana
-2. Amostra do PDF Folha de Ponto (pra Fase 3)
-3. Decisão sobre ordem das frentes (A → B → C → D → E)
-
-## Estatísticas finais da sessão 2026-05-07
-
-- 10 migrações SQL: M18, M18b, M19, M19b, M19c, M20, M21, M22, M22b, M23
-- 21 commits frontend
-- ~5.000 linhas de código novas em app.js
-- 6 telas novas + 4 templates de import + 4 funções RPC de bônus + drill-downs
-- 0 toques no PC da Juliana (tudo via API GitHub e MCP Supabase)
-- 0 ERRORs no advisor de segurança
+- 11 migrações SQL (M18, M18b, M19, M19b, M19c, M20, M21, M22, M22b, M23, M24)
+- 22+ commits frontend
+- ~5.500 linhas novas em app.js
+- 0 ERROR no advisor; 5 WARN arquiteturais aceitos
+- 0 toques no PC da Juliana
+- M19 quase fechado (Fase 3 aguarda PDF)
+- Política arquitetural "nunca sobrescrever" estabelecida e infraestrutura pronta
