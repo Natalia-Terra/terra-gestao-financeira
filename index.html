@@ -244,6 +244,7 @@
               <button class="sb-sub" data-page="rh_beneficios" type="button">Benefícios</button>
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
+              <button class="sb-sub" data-page="medidas_disciplinares" type="button">Medidas Disciplinares</button>
               <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
               <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
@@ -1033,6 +1034,69 @@
             </div>
           </div>
         </section>
+
+        <!-- M19 Fase 1 — Medidas Disciplinares (RH) -->
+        <section class="page" data-page="medidas_disciplinares" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Medidas Disciplinares</h1>
+            <p class="page-sub">Registro de advertências, suspensões e demissões por justa causa conforme POL_001. Reincidência conta no ano civil.</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="md-m-total">—</div></div>
+            <div class="metric-card"><div class="metric-label">Adv. Verbais</div><div class="metric-value" id="md-m-verbal">—</div></div>
+            <div class="metric-card"><div class="metric-label">Adv. Escritas</div><div class="metric-value" id="md-m-escrita">—</div></div>
+            <div class="metric-card"><div class="metric-label">Suspensões</div><div class="metric-value" id="md-m-suspensao">—</div></div>
+            <div class="metric-card"><div class="metric-label">Demissões</div><div class="metric-value" id="md-m-demissao">—</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="search" id="md-busca" class="input-search" placeholder="Buscar funcionário, descrição, gestor…" />
+              <select id="md-filtro-gravidade">
+                <option value="">Todas as gravidades</option>
+                <option value="Leve">Leve</option>
+                <option value="Moderada">Moderada</option>
+                <option value="Grave">Grave</option>
+                <option value="Muito Grave">Muito Grave</option>
+              </select>
+              <select id="md-filtro-tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Advertência Verbal">Advertência Verbal</option>
+                <option value="Advertência Escrita">Advertência Escrita</option>
+                <option value="Suspensão">Suspensão</option>
+                <option value="Demissão por Justa Causa">Demissão por Justa Causa</option>
+              </select>
+              <select id="md-filtro-ano">
+                <option value="">Todos os anos</option>
+              </select>
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="md-lbl">—</span>
+              <span style="flex:1"></span>
+              <button id="md-btn-nova" class="btn-ouro" type="button">+ Nova medida</button>
+            </div>
+
+            <div id="md-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Funcionário</th>
+                    <th>Gravidade</th>
+                    <th>Medida</th>
+                    <th>Descrição</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="md-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
 
         <!-- Configuração — hub com 5 sub-telas -->
         <section class="page" data-page="configuracao" hidden>

@@ -361,6 +361,8 @@
     if (pageId === "movimentos_caixa")            carregarMovimentosCaixaSeNecessario();
     // M19 — Reset (master only)
     if (pageId === "cfg_reset")                   carregarResetSeNecessario();
+    // M19 Fase 1 — Medidas Disciplinares
+    if (pageId === "medidas_disciplinares")       carregarMedidasDisciplinaresSeNecessario();
     // M18 Onda 3.3 — Dashboard de Faturamento rico
     if (pageId === "dashboard_faturamento")       carregarDashFatRico();
   }
@@ -9093,5 +9095,417 @@
   // que é um conceito diferente (compromissos FUTUROS),
   // NÃO faz sentido substituir — fica em paralelo via tela "Lançamentos de Caixa".
   // A refac fica como anotação de design: as 2 telas têm propósitos diferentes.
+
+  // ===========================================================================
+  // M19 Fase 1 — Medidas Disciplinares (POL_001)
+  // Reincidência por ANO CIVIL.
+  // Graduação automática:
+  //   1ª Leve  → Advertência Verbal
+  //   2ª Leve  ou 1ª Moderada → Advertência Escrita
+  //   3ª Leve  ou 2ª Moderada ou 1ª Grave → Suspensão
+  //   reincidência Grave OU 1ª Muito Grave → Demissão por Justa Causa
+  // ===========================================================================
+
+  var medidasDiscLista = [];
+  var medidasDiscCarregado = false;
+
+  function carregarMedidasDisciplinaresSeNecessario() {
+    if (medidasDiscCarregado) { renderMedidasDisciplinares(); return; }
+    setStatus("md-status", "Carregando medidas disciplinares…", "carregando");
+    Promise.all([
+      client.from("medidas_disciplinares").select("*").order("data", { ascending: false }),
+      // Garante funcionários carregados pra fazer o JOIN no front
+      typeof funcionariosLista !== "undefined" && funcionariosLista.length
+        ? Promise.resolve({ data: funcionariosLista })
+        : client.from("funcionarios").select("id, nome, cpf, status, cargo")
+    ]).then(function (rs) {
+      if (rs[0].error) { setStatus("md-status", "Erro: " + rs[0].error.message, "erro"); return; }
+      medidasDiscLista = rs[0].data || [];
+      // Se carreguei funcionarios localmente, salva
+      if (rs[1] && rs[1].data && (typeof funcionariosLista === "undefined" || !funcionariosLista.length)) {
+        try { funcionariosLista = rs[1].data; } catch (e) { window._funcsLocal = rs[1].data; }
+      }
+      medidasDiscCarregado = true;
+      setStatus("md-status", null);
+      renderMedidasDisciplinares();
+    });
+
+    // Listeners (uma vez)
+    var bus = document.getElementById("md-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderMedidasDisciplinares); }
+    var fGrav = document.getElementById("md-filtro-gravidade");
+    if (fGrav && !fGrav.dataset.bound) { fGrav.dataset.bound = "1"; fGrav.addEventListener("change", renderMedidasDisciplinares); }
+    var fTipo = document.getElementById("md-filtro-tipo");
+    if (fTipo && !fTipo.dataset.bound) { fTipo.dataset.bound = "1"; fTipo.addEventListener("change", renderMedidasDisciplinares); }
+    var fAno = document.getElementById("md-filtro-ano");
+    if (fAno && !fAno.dataset.bound) { fAno.dataset.bound = "1"; fAno.addEventListener("change", renderMedidasDisciplinares); }
+    var btnNova = document.getElementById("md-btn-nova");
+    if (btnNova && !btnNova.dataset.bound) { btnNova.dataset.bound = "1"; btnNova.addEventListener("click", abrirModalNovaMedida); }
+  }
+
+  function _getFuncionariosCache() {
+    if (typeof funcionariosLista !== "undefined" && funcionariosLista.length) return funcionariosLista;
+    if (window._funcsLocal && window._funcsLocal.length) return window._funcsLocal;
+    return [];
+  }
+  function _funcionarioById(id) {
+    var lista = _getFuncionariosCache();
+    return lista.find(function (f) { return Number(f.id) === Number(id); });
+  }
+  function _nomeFuncionario(id) {
+    var f = _funcionarioById(id);
+    return f ? f.nome : ("(funcionário " + id + ")");
+  }
+
+  function renderMedidasDisciplinares() {
+    var tbody = document.getElementById("md-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("md-busca") || {}).value || "").trim().toLowerCase();
+    var fGrav = (document.getElementById("md-filtro-gravidade") || {}).value || "";
+    var fTipo = (document.getElementById("md-filtro-tipo") || {}).value || "";
+    var fAno = (document.getElementById("md-filtro-ano") || {}).value || "";
+
+    // Popular dropdown de anos
+    var selAno = document.getElementById("md-filtro-ano");
+    if (selAno && selAno.children.length <= 1) {
+      var anos = {};
+      medidasDiscLista.forEach(function (m) { if (m.data) anos[String(m.data).slice(0,4)] = true; });
+      var anosOrdenados = Object.keys(anos).sort().reverse();
+      anosOrdenados.forEach(function (a) {
+        var opt = document.createElement("option"); opt.value = a; opt.textContent = a;
+        selAno.appendChild(opt);
+      });
+    }
+
+    var filtrados = medidasDiscLista.filter(function (m) {
+      if (m.status_medida === "cancelada") {
+        // mostra só se o filtro pedir explicitamente
+      }
+      if (fGrav && m.gravidade_infracao !== fGrav) return false;
+      if (fTipo && m.tipo_medida !== fTipo) return false;
+      if (fAno && (!m.data || String(m.data).slice(0,4) !== fAno)) return false;
+      if (busca) {
+        var nomeF = _nomeFuncionario(m.funcionario_id);
+        var alvo = (nomeF + " " + (m.descricao_infracao || "") + " " + (m.gestor_responsavel || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      return true;
+    });
+
+    // Cards
+    var t = { total: filtrados.length, verbal: 0, escrita: 0, suspensao: 0, demissao: 0 };
+    filtrados.forEach(function (m) {
+      if (m.tipo_medida === "Advertência Verbal") t.verbal++;
+      else if (m.tipo_medida === "Advertência Escrita") t.escrita++;
+      else if (m.tipo_medida === "Suspensão") t.suspensao++;
+      else if (m.tipo_medida === "Demissão por Justa Causa") t.demissao++;
+    });
+    var setEl = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    setEl("md-m-total", String(t.total));
+    setEl("md-m-verbal", String(t.verbal));
+    setEl("md-m-escrita", String(t.escrita));
+    setEl("md-m-suspensao", String(t.suspensao));
+    setEl("md-m-demissao", String(t.demissao));
+    setEl("md-lbl", t.total + " de " + medidasDiscLista.length);
+
+    if (!filtrados.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="tbl-vazio">Nenhuma medida disciplinar encontrada. Use "+ Nova" pra registrar a primeira.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(function (m) {
+      var statusTag = m.status_medida === "aplicada"
+        ? '<span class="tag ok">Aplicada</span>'
+        : (m.status_medida === "cancelada" ? '<span class="tag">Cancelada</span>' : '<span class="tag warn">Contestada</span>');
+      var gravTag = '<span class="tag ' + (m.gravidade_infracao === "Muito Grave" || m.gravidade_infracao === "Grave" ? "danger" : (m.gravidade_infracao === "Moderada" ? "warn" : "")) + '">' + escHtml(m.gravidade_infracao || "—") + '</span>';
+      return '<tr class="linha-clicavel" data-mdid="' + m.id + '">' +
+        '<td>' + (m.data ? fmtData(m.data) : "—") + '</td>' +
+        '<td>' + escHtml(_nomeFuncionario(m.funcionario_id)) + '</td>' +
+        '<td>' + gravTag + '</td>' +
+        '<td>' + escHtml(m.tipo_medida || "—") + (m.dias_suspensao ? ' <span class="muted-tag">(' + m.dias_suspensao + ' dias)</span>' : '') + '</td>' +
+        '<td>' + escHtml((m.descricao_infracao || "").slice(0, 80)) + (m.descricao_infracao && m.descricao_infracao.length > 80 ? "…" : "") + '</td>' +
+        '<td>' + statusTag + (m.ciencia_data ? ' <span class="muted-tag" title="Ciência em ' + fmtData(m.ciencia_data) + '">✓ ciente</span>' : '') + '</td>' +
+        '<td><button type="button" class="btn-limpar" data-mdid="' + m.id + '" data-action="ver">Ver</button></td>' +
+      '</tr>';
+    }).join("");
+
+    // Listener de "Ver"
+    tbody.querySelectorAll('button[data-action="ver"]').forEach(function (b) {
+      if (b.dataset.bound) return;
+      b.dataset.bound = "1";
+      b.addEventListener("click", function () {
+        abrirDetalheMedida(Number(b.getAttribute("data-mdid")));
+      });
+    });
+  }
+
+  // Sugere tipo de medida baseado em ocorrências do ANO CIVIL atual
+  function sugerirTipoMedida(funcionarioId, gravidadeProposta) {
+    var anoAtual = new Date().getFullYear();
+    var ocorrencias = { Leve: 0, Moderada: 0, Grave: 0, "Muito Grave": 0 };
+    medidasDiscLista.forEach(function (m) {
+      if (Number(m.funcionario_id) !== Number(funcionarioId)) return;
+      if (m.status_medida !== "aplicada") return;
+      if (!m.data || Number(String(m.data).slice(0,4)) !== anoAtual) return;
+      ocorrencias[m.gravidade_infracao] = (ocorrencias[m.gravidade_infracao] || 0) + 1;
+    });
+    // Conta ESTA nova ocorrência
+    var contagemDepoisDesta = JSON.parse(JSON.stringify(ocorrencias));
+    contagemDepoisDesta[gravidadeProposta] = (contagemDepoisDesta[gravidadeProposta] || 0) + 1;
+
+    // Aplica regras da POL_001
+    if (gravidadeProposta === "Muito Grave") return "Demissão por Justa Causa";
+    if (gravidadeProposta === "Grave") {
+      if (contagemDepoisDesta.Grave >= 2) return "Demissão por Justa Causa";
+      return "Suspensão";
+    }
+    if (gravidadeProposta === "Moderada") {
+      if (contagemDepoisDesta.Moderada >= 2) return "Suspensão";
+      return "Advertência Escrita";
+    }
+    if (gravidadeProposta === "Leve") {
+      if (contagemDepoisDesta.Leve >= 3) return "Suspensão";
+      if (contagemDepoisDesta.Leve >= 2) return "Advertência Escrita";
+      return "Advertência Verbal";
+    }
+    return null;
+  }
+
+  function abrirModalNovaMedida() {
+    abrirModalEditarMedida(null);
+  }
+
+  function abrirModalEditarMedida(medidaExistente) {
+    var ehEdicao = !!medidaExistente;
+    var funcs = _getFuncionariosCache().filter(function (f) { return f.status === "ATIVO" || ehEdicao; });
+
+    var html = '<div style="display:grid; gap:12px; max-width: 700px;">';
+    if (!ehEdicao) {
+      html += '<div class="finding info" style="margin:0;"><strong>Política POL_001:</strong> reincidência conta no ano civil. O sistema sugere o tipo de medida automaticamente baseado na gravidade e nas ocorrências do funcionário em ' + new Date().getFullYear() + '.</div>';
+    }
+
+    html += '<div class="form-field"><label for="md-form-func">Funcionário *</label>';
+    html += '<select id="md-form-func"><option value="">— escolher —</option>';
+    funcs.forEach(function (f) {
+      var sel = ehEdicao && Number(medidaExistente.funcionario_id) === Number(f.id) ? " selected" : "";
+      html += '<option value="' + f.id + '"' + sel + '>' + escHtml(f.nome) + (f.cargo ? " · " + escHtml(f.cargo) : "") + '</option>';
+    });
+    html += '</select></div>';
+
+    var hojeISO = new Date().toISOString().slice(0,10);
+    html += '<div class="form-field"><label for="md-form-data">Data *</label><input type="date" id="md-form-data" value="' + (medidaExistente && medidaExistente.data ? medidaExistente.data : hojeISO) + '" /></div>';
+
+    html += '<div class="form-field"><label for="md-form-grav">Gravidade da Infração *</label><select id="md-form-grav">';
+    ["Leve","Moderada","Grave","Muito Grave"].forEach(function (g) {
+      var sel = ehEdicao && medidaExistente.gravidade_infracao === g ? " selected" : "";
+      html += '<option value="' + g + '"' + sel + '>' + g + '</option>';
+    });
+    html += '</select></div>';
+
+    html += '<div class="finding warn" id="md-form-sugestao" style="margin:0; display:none;"></div>';
+
+    html += '<div class="form-field"><label for="md-form-tipo">Tipo de Medida *</label><select id="md-form-tipo">';
+    ["Advertência Verbal","Advertência Escrita","Suspensão","Demissão por Justa Causa"].forEach(function (t) {
+      var sel = ehEdicao && medidaExistente.tipo_medida === t ? " selected" : "";
+      html += '<option value="' + t + '"' + sel + '>' + t + '</option>';
+    });
+    html += '</select></div>';
+
+    html += '<div class="form-field"><label for="md-form-desc">Descrição da Infração *</label><textarea id="md-form-desc" rows="3" placeholder="Descreva a infração cometida pelo colaborador">' + escHtml((medidaExistente && medidaExistente.descricao_infracao) || "") + '</textarea></div>';
+
+    // Bloco de Suspensão (só visível se tipo=Suspensão)
+    html += '<div id="md-form-bloco-suspensao" style="display:none; padding:12px; background:var(--bg3); border-radius:6px; display:grid; gap:8px;">';
+    html += '<strong>Detalhes da Suspensão</strong>';
+    html += '<div class="form-field"><label for="md-form-dias">Dias (1-30) *</label><input type="number" id="md-form-dias" min="1" max="30" value="' + ((medidaExistente && medidaExistente.dias_suspensao) || "") + '" /></div>';
+    html += '<div class="form-field"><label for="md-form-iniciosusp">Início</label><input type="date" id="md-form-iniciosusp" value="' + ((medidaExistente && medidaExistente.data_inicio_suspensao) || "") + '" /></div>';
+    html += '<div class="form-field"><label for="md-form-fimsusp">Fim</label><input type="date" id="md-form-fimsusp" value="' + ((medidaExistente && medidaExistente.data_fim_suspensao) || "") + '" /></div>';
+    html += '</div>';
+
+    // Bloco de Demissão por Justa Causa (só visível se tipo=Demissão)
+    html += '<div id="md-form-bloco-demissao" style="display:none; padding:12px; background:var(--danger-bg); border-radius:6px;">';
+    html += '<label style="display:flex; align-items:center; gap:8px; cursor:pointer;">';
+    html += '<input type="checkbox" id="md-form-marcar-inativo" />';
+    html += '<span><strong>Marcar funcionário como INATIVO</strong> (define data_demissao = data desta medida e status = INATIVO)</span>';
+    html += '</label></div>';
+
+    html += '<div class="form-field"><label for="md-form-gestor">Gestor Responsável</label><input type="text" id="md-form-gestor" value="' + escHtml((medidaExistente && medidaExistente.gestor_responsavel) || "") + '" /></div>';
+
+    html += '<div style="padding:12px; background:var(--bg3); border-radius:6px; display:grid; gap:8px;">';
+    html += '<strong>Ciência do Colaborador</strong>';
+    html += '<div class="form-field"><label for="md-form-ciencia">Data e hora da ciência (deixe vazio se ainda não assinou)</label><input type="datetime-local" id="md-form-ciencia" value="' + ((medidaExistente && medidaExistente.ciencia_data) ? String(medidaExistente.ciencia_data).slice(0,16) : "") + '" /></div>';
+    html += '<div class="form-field"><label for="md-form-ciencia-obs">Observações da ciência (opcional)</label><textarea id="md-form-ciencia-obs" rows="2">' + escHtml((medidaExistente && medidaExistente.ciencia_observacao) || "") + '</textarea></div>';
+    html += '</div>';
+
+    html += '<div class="form-field"><label for="md-form-status">Status</label><select id="md-form-status">';
+    ["aplicada","cancelada","contestada"].forEach(function (s) {
+      var sel = (ehEdicao ? medidaExistente.status_medida : "aplicada") === s ? " selected" : "";
+      html += '<option value="' + s + '"' + sel + '>' + s + '</option>';
+    });
+    html += '</select></div>';
+
+    html += '<div class="form-field"><label for="md-form-obs">Observações Gerais</label><textarea id="md-form-obs" rows="2">' + escHtml((medidaExistente && medidaExistente.observacoes) || "") + '</textarea></div>';
+    html += '</div>';  // fim do grid
+
+    html += '<div class="modal-acoes" style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">';
+    if (ehEdicao) {
+      html += '<button type="button" class="btn-perigo" id="md-form-btn-excluir">Excluir</button>';
+      html += '<span style="flex:1"></span>';
+    }
+    html += '<button type="button" class="btn-limpar" id="md-form-btn-cancelar">Cancelar</button>';
+    html += '<button type="button" class="btn-ouro" id="md-form-btn-salvar">' + (ehEdicao ? "Salvar alterações" : "Cadastrar medida") + '</button>';
+    html += '</div>';
+
+    abrirModalDetalhe(ehEdicao ? "Editar Medida Disciplinar" : "Nova Medida Disciplinar", html);
+
+    // ========== Listeners do formulário ==========
+    var selFunc = document.getElementById("md-form-func");
+    var selGrav = document.getElementById("md-form-grav");
+    var selTipo = document.getElementById("md-form-tipo");
+    var divSusp = document.getElementById("md-form-bloco-suspensao");
+    var divDem = document.getElementById("md-form-bloco-demissao");
+    var divSugestao = document.getElementById("md-form-sugestao");
+    var inpDias = document.getElementById("md-form-dias");
+    var inpInicio = document.getElementById("md-form-iniciosusp");
+    var inpFim = document.getElementById("md-form-fimsusp");
+    var inpData = document.getElementById("md-form-data");
+
+    function atualizarBlocosCondicionais() {
+      var t = selTipo.value;
+      divSusp.style.display = t === "Suspensão" ? "grid" : "none";
+      divDem.style.display = t === "Demissão por Justa Causa" ? "block" : "none";
+    }
+    function atualizarSugestao() {
+      if (!selFunc.value || !selGrav.value) { divSugestao.style.display = "none"; return; }
+      var sugestao = sugerirTipoMedida(Number(selFunc.value), selGrav.value);
+      if (!sugestao) { divSugestao.style.display = "none"; return; }
+      var anoAtual = new Date().getFullYear();
+      var ocs = { Leve:0, Moderada:0, Grave:0, "Muito Grave":0 };
+      medidasDiscLista.forEach(function (m) {
+        if (Number(m.funcionario_id) !== Number(selFunc.value)) return;
+        if (m.status_medida !== "aplicada") return;
+        if (!m.data || Number(String(m.data).slice(0,4)) !== anoAtual) return;
+        ocs[m.gravidade_infracao] = (ocs[m.gravidade_infracao] || 0) + 1;
+      });
+      var hist = "Histórico " + anoAtual + ": " + ocs.Leve + " leve(s), " + ocs.Moderada + " moderada(s), " + ocs.Grave + " grave(s), " + ocs["Muito Grave"] + " muito grave(s).";
+      divSugestao.style.display = "block";
+      divSugestao.innerHTML = '<strong>Sugestão automática:</strong> ' + sugestao + '. <span style="font-size:12px; color:var(--text3)">' + hist + '</span> <button type="button" class="btn-limpar" id="md-form-aplicar-sugestao" style="margin-left:8px;">Aplicar</button>';
+      var btnApl = document.getElementById("md-form-aplicar-sugestao");
+      if (btnApl) btnApl.addEventListener("click", function () {
+        selTipo.value = sugestao;
+        atualizarBlocosCondicionais();
+      });
+    }
+
+    if (selFunc) selFunc.addEventListener("change", atualizarSugestao);
+    if (selGrav) selGrav.addEventListener("change", atualizarSugestao);
+    if (selTipo) selTipo.addEventListener("change", atualizarBlocosCondicionais);
+
+    // Auto-calcular data fim da suspensão a partir de início + dias
+    function autoCalcFimSusp() {
+      if (selTipo.value !== "Suspensão") return;
+      if (!inpInicio.value || !inpDias.value) return;
+      var d = new Date(inpInicio.value);
+      d.setDate(d.getDate() + Number(inpDias.value) - 1);
+      if (!inpFim.value) inpFim.value = d.toISOString().slice(0,10);
+    }
+    if (inpInicio) inpInicio.addEventListener("change", autoCalcFimSusp);
+    if (inpDias) inpDias.addEventListener("change", autoCalcFimSusp);
+
+    atualizarBlocosCondicionais();
+    if (!ehEdicao) atualizarSugestao();
+
+    document.getElementById("md-form-btn-cancelar").addEventListener("click", function () {
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov) ov.parentNode.removeChild(ov);
+    });
+
+    if (ehEdicao) {
+      document.getElementById("md-form-btn-excluir").addEventListener("click", function () {
+        if (!confirm("Cancelar (logicamente) esta medida disciplinar? Status será marcado como 'cancelada'.")) return;
+        client.from("medidas_disciplinares").update({ status_medida: "cancelada" }).eq("id", medidaExistente.id).then(function (r) {
+          if (r.error) { alert("Erro: " + r.error.message); return; }
+          medidasDiscCarregado = false;
+          var ov = document.getElementById("modal-detalhe-overlay");
+          if (ov) ov.parentNode.removeChild(ov);
+          carregarMedidasDisciplinaresSeNecessario();
+        });
+      });
+    }
+
+    document.getElementById("md-form-btn-salvar").addEventListener("click", function () {
+      // Validar
+      if (!selFunc.value) { alert("Escolha o funcionário."); return; }
+      if (!inpData.value) { alert("Defina a data."); return; }
+      if (!selGrav.value) { alert("Escolha a gravidade."); return; }
+      if (!selTipo.value) { alert("Escolha o tipo de medida."); return; }
+      var desc = document.getElementById("md-form-desc").value.trim();
+      if (!desc) { alert("Descreva a infração."); return; }
+      if (selTipo.value === "Suspensão") {
+        if (!inpDias.value || Number(inpDias.value) < 1 || Number(inpDias.value) > 30) {
+          alert("Suspensão precisa de dias entre 1 e 30."); return;
+        }
+      }
+
+      var dados = {
+        funcionario_id: Number(selFunc.value),
+        data: inpData.value,
+        gravidade_infracao: selGrav.value,
+        tipo_medida: selTipo.value,
+        descricao_infracao: desc,
+        dias_suspensao: selTipo.value === "Suspensão" ? Number(inpDias.value) : null,
+        data_inicio_suspensao: selTipo.value === "Suspensão" ? (inpInicio.value || null) : null,
+        data_fim_suspensao: selTipo.value === "Suspensão" ? (inpFim.value || null) : null,
+        gestor_responsavel: document.getElementById("md-form-gestor").value.trim() || null,
+        ciencia_data: document.getElementById("md-form-ciencia").value || null,
+        ciencia_observacao: document.getElementById("md-form-ciencia-obs").value.trim() || null,
+        status_medida: document.getElementById("md-form-status").value,
+        observacoes: document.getElementById("md-form-obs").value.trim() || null
+      };
+
+      var marcarInativo = selTipo.value === "Demissão por Justa Causa" && document.getElementById("md-form-marcar-inativo") && document.getElementById("md-form-marcar-inativo").checked;
+
+      var btn = document.getElementById("md-form-btn-salvar");
+      btn.disabled = true;
+      btn.textContent = "Salvando…";
+
+      var op = ehEdicao
+        ? client.from("medidas_disciplinares").update(dados).eq("id", medidaExistente.id)
+        : client.from("medidas_disciplinares").insert(dados);
+
+      op.then(function (r) {
+        if (r.error) {
+          alert("Erro ao salvar: " + r.error.message);
+          btn.disabled = false;
+          btn.textContent = ehEdicao ? "Salvar alterações" : "Cadastrar medida";
+          return;
+        }
+        // Demissão por Justa Causa → marcar inativo
+        if (marcarInativo) {
+          client.from("funcionarios").update({
+            status: "INATIVO",
+            data_demissao: dados.data
+          }).eq("id", dados.funcionario_id).then(function () {
+            // continua mesmo se der erro — a medida foi salva
+            finalizar();
+          });
+        } else {
+          finalizar();
+        }
+      });
+
+      function finalizar() {
+        var ov = document.getElementById("modal-detalhe-overlay");
+        if (ov) ov.parentNode.removeChild(ov);
+        medidasDiscCarregado = false;
+        carregarMedidasDisciplinaresSeNecessario();
+      }
+    });
+  }
+
+  function abrirDetalheMedida(medidaId) {
+    var m = medidasDiscLista.find(function (x) { return Number(x.id) === Number(medidaId); });
+    if (!m) return;
+    abrirModalEditarMedida(m);
+  }
 
 })();
