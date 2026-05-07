@@ -9942,4 +9942,296 @@
     }
   });
 
+  // ===========================================================================
+  // M25 — Política "Nunca Sobrescrever" aplicada nos imports
+  // Cada import: 1) cria entrada em imports_historico
+  //              2) marca registros anteriores do mesmo período como vigente=false
+  //              3) insere novos com vigente=true + import_id
+  // ===========================================================================
+
+  // Helper genérico
+  function aplicarPoliticaHistorico(opts, cb) {
+    // opts = {
+    //   tipo: string,
+    //   arquivo: string?,
+    //   competencia: string?,
+    //   excecoes: array?,
+    //   marcarAnteriores: [{ tabela, filtros: {col:val ou [val1,val2]} }],
+    //   inserts: [{ tabela, linhas, opts: {batch?} }]
+    // }
+    var totalRegistros = (opts.inserts || []).reduce(function (s, i) { return s + (i.linhas || []).length; }, 0);
+    var qtdExcecoes = (opts.excecoes || []).length;
+
+    // 1) Cria entrada em imports_historico
+    client.from("imports_historico").insert({
+      tipo_import: opts.tipo,
+      nome_arquivo: opts.arquivo || null,
+      competencia_referencia: opts.competencia || null,
+      qtd_registros: totalRegistros,
+      qtd_excecoes: qtdExcecoes,
+      excecoes_json: opts.excecoes && opts.excecoes.length ? opts.excecoes : null,
+      observacoes: opts.observacoes || null
+    }).select().single().then(function (r) {
+      if (r.error) { cb({ erro: "Erro criando imports_historico: " + r.error.message }); return; }
+      var importId = r.data.id;
+
+      // 2) Marca anteriores como vigente=false
+      var idx = 0;
+      function marcarProximo() {
+        if (!opts.marcarAnteriores || idx >= opts.marcarAnteriores.length) {
+          inserirNovos();
+          return;
+        }
+        var ma = opts.marcarAnteriores[idx++];
+        if (!ma || !ma.tabela) { marcarProximo(); return; }
+        var q = client.from(ma.tabela).update({ vigente: false }).eq("vigente", true);
+        if (ma.filtros) {
+          Object.keys(ma.filtros).forEach(function (col) {
+            var val = ma.filtros[col];
+            if (Array.isArray(val) && val.length) q = q.in(col, val);
+            else if (!Array.isArray(val)) q = q.eq(col, val);
+            // se array vazio, não filtra (sem-op)
+          });
+        }
+        q.then(function (r2) {
+          if (r2.error) console.warn("Erro update vigente em", ma.tabela, r2.error.message);
+          marcarProximo();
+        });
+      }
+
+      // 3) Insere novos com vigente=true + import_id
+      function inserirNovos() {
+        var insIdx = 0;
+        var totalInseridos = 0;
+        var erros = [];
+        function inserirProx() {
+          if (insIdx >= (opts.inserts || []).length) {
+            cb({ importId: importId, totalInseridos: totalInseridos, erros: erros });
+            return;
+          }
+          var ins = opts.inserts[insIdx++];
+          if (!ins.linhas || !ins.linhas.length) { inserirProx(); return; }
+          var linhas = ins.linhas.map(function (l) {
+            var copia = {};
+            Object.keys(l).forEach(function (k) { copia[k] = l[k]; });
+            copia.vigente = true;
+            copia.import_id = importId;
+            return copia;
+          });
+          var lotes = [];
+          for (var i = 0; i < linhas.length; i += 200) lotes.push(linhas.slice(i, i + 200));
+          var li = 0;
+          function lote() {
+            if (li >= lotes.length) { inserirProx(); return; }
+            client.from(ins.tabela).insert(lotes[li]).then(function (r3) {
+              if (r3.error) erros.push({ tabela: ins.tabela, erro: r3.error.message });
+              else totalInseridos += lotes[li].length;
+              li++; lote();
+            });
+          }
+          lote();
+        }
+        inserirProx();
+      }
+
+      marcarProximo();
+    });
+  }
+
+  // ===========================================================================
+  // REFAC dos imports existentes — substituem as funções `confirmar*` antigas
+  // ===========================================================================
+
+  // 1) Saída de Estoque (4 destinos)
+  function confirmarSaidaEstoqueRico(parsed) {
+    if (!parsed) return;
+    var ossUnicas = Array.from(new Set((parsed.detalhes || []).map(function (d) { return d.os; })));
+    var ossResumo = Array.from(new Set((parsed.resumo || []).map(function (r) { return r.codigo_os; })));
+    var competsMP = Array.from(new Set((parsed.detalhes || []).map(function (d) { return d.compet; })));
+    var competsDir = Array.from(new Set((parsed.diretos || []).map(function (d) { return d.mes_ref; })));
+    var competencias = Array.from(new Set(competsMP.concat(competsDir).filter(Boolean)));
+
+    var msg = "Vai inserir (NOVAS versões + manter histórico):\n"
+            + "• " + (parsed.detalhes || []).length + " em estoque_detalhes\n"
+            + "• " + (parsed.resumo || []).length + " em estoque_resumo\n"
+            + "• " + (parsed.evolucao || []).length + " em os_evolucao_mensal\n"
+            + "• " + (parsed.diretos || []).length + " em custo_direto_competencia\n\n"
+            + "Versões anteriores serão marcadas vigente=false (não apagadas).\nConfirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Aplicando política de histórico…", "carregando");
+
+    aplicarPoliticaHistorico({
+      tipo: "saida_estoque",
+      arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+      competencia: competencias.length === 1 ? competencias[0] : (competencias.length + " competências"),
+      marcarAnteriores: [
+        { tabela: "estoque_detalhes", filtros: { os: ossUnicas } },
+        { tabela: "estoque_resumo", filtros: { codigo_os: ossResumo } },
+        { tabela: "os_evolucao_mensal", filtros: { os: ossUnicas } },
+        { tabela: "custo_direto_competencia", filtros: { mes_ref: competsDir } }
+      ],
+      inserts: [
+        { tabela: "estoque_detalhes", linhas: parsed.detalhes || [] },
+        { tabela: "estoque_resumo", linhas: parsed.resumo || [] },
+        { tabela: "os_evolucao_mensal", linhas: parsed.evolucao || [] },
+        { tabela: "custo_direto_competencia", linhas: parsed.diretos || [] }
+      ]
+    }, function (res) {
+      impBtnConf.disabled = false;
+      impBtnPrev.disabled = false;
+      if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+      if (res.erros && res.erros.length) {
+        setImpStatus("Concluído com avisos. Inseridos: " + res.totalInseridos + " · Erros: " + res.erros.map(function(e){return e.tabela+": "+e.erro;}).slice(0,3).join(" | "), "alerta");
+      } else {
+        setImpStatus("Sucesso! " + res.totalInseridos + " registros inseridos. Import #" + res.importId + " registrado em imports_historico.", "ok");
+      }
+      try { aprCarregado = false; orcamentosCarregados = false; rcCarregado = false; } catch (e) {}
+    });
+  }
+
+  // 2) Dashboard de Orçamentos (3 destinos)
+  function confirmarDashboardOrcamentos(parsed) {
+    if (!parsed) return;
+    var orcs = Array.from(new Set((parsed.items || []).map(function (i) { return i.orcamento; })));
+    var oss = Array.from(new Set((parsed.os_custos || []).map(function (o) { return o.os; })));
+    var ossOrdens = Array.from(new Set((parsed.ordens || []).map(function (o) { return o.os; })));
+
+    var msg = "Vai inserir:\n• " + (parsed.items||[]).length + " em orcamento_items\n"
+            + "• " + (parsed.os_custos||[]).length + " em os_custos_planejados\n"
+            + "• " + (parsed.ordens||[]).length + " em ordens_servico\n\n"
+            + "Versões anteriores serão marcadas vigente=false.\nConfirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Aplicando política de histórico…", "carregando");
+
+    aplicarPoliticaHistorico({
+      tipo: "dashboard_orcamentos",
+      arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+      marcarAnteriores: [
+        { tabela: "orcamento_items", filtros: { orcamento: orcs } },
+        { tabela: "os_custos_planejados", filtros: { os: oss } },
+        { tabela: "ordens_servico", filtros: { os: ossOrdens } }
+      ],
+      inserts: [
+        { tabela: "orcamento_items", linhas: parsed.items || [] },
+        { tabela: "os_custos_planejados", linhas: parsed.os_custos || [] },
+        { tabela: "ordens_servico", linhas: parsed.ordens || [] }
+      ]
+    }, function (res) {
+      impBtnConf.disabled = false;
+      impBtnPrev.disabled = false;
+      if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+      if (res.erros && res.erros.length) {
+        setImpStatus("Concluído com avisos. Inseridos: " + res.totalInseridos + " · Erros: " + res.erros.length, "alerta");
+      } else {
+        setImpStatus("Sucesso! " + res.totalInseridos + " registros. Import #" + res.importId, "ok");
+      }
+      try { aprCarregado = false; orcamentosCarregados = false; } catch (e) {}
+    });
+  }
+
+  // 3) A Pagar x A Receber → movimentos_caixa
+  function confirmarPagarReceber(parsed) {
+    if (!parsed || !parsed.linhas || !parsed.linhas.length) return;
+    var msg = "Vai inserir " + parsed.linhas.length + " linhas em movimentos_caixa "
+            + "(" + parsed.pagar + " PAGAR, " + parsed.classifAuto + " RECEBER auto-classificadas, "
+            + parsed.pendentesReceber + " RECEBER pendentes).\n\nVersões anteriores marcadas vigente=false.\nConfirma?";
+    if (!confirm(msg)) return;
+    impBtnConf.disabled = true;
+    impBtnPrev.disabled = true;
+    setImpStatus("Aplicando política de histórico…", "carregando");
+
+    // Coletar documentos únicos (chave de identidade no relatório)
+    var docs = Array.from(new Set(parsed.linhas.map(function (m) { return m.documento; }).filter(Boolean)));
+
+    aplicarPoliticaHistorico({
+      tipo: "pagar_receber",
+      arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+      marcarAnteriores: [
+        // Marca como não-vigentes os movimentos com mesmos documentos (re-import do mesmo arquivo)
+        { tabela: "movimentos_caixa", filtros: { documento: docs } }
+      ],
+      inserts: [
+        { tabela: "movimentos_caixa", linhas: parsed.linhas }
+      ]
+    }, function (res) {
+      impBtnConf.disabled = false;
+      impBtnPrev.disabled = false;
+      if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+      setImpStatus("Sucesso! " + res.totalInseridos + " linhas em movimentos_caixa. Import #" + res.importId + ". " + parsed.pendentesReceber + " RECEBER pendentes pra classificar manualmente em 'Lançamentos de Caixa'.", "ok");
+    });
+  }
+
+  // ===========================================================================
+  // Imports simples — substituir UPSERT por política de histórico
+  // (caixa_saldo_mensal, saldos_contas, compromissos, recebimentos_previstos)
+  //
+  // Esses passam pela função genérica `confirmarImportContinuar`. Vou substituir
+  // o caminho default lá (que faz upsert/insert puro) pra aplicar a política
+  // quando a tabela está na lista das que têm `vigente`.
+  // ===========================================================================
+
+  var TABELAS_COM_HISTORICO = [
+    'frequencia_mensal',
+    'os_evolucao_mensal',
+    'caixa_saldo_mensal',
+    'saldos_contas',
+    'os_custos_planejados',
+    'ordens_servico',
+    'estoque_detalhes',
+    'estoque_resumo',
+    'custo_direto_competencia',
+    'movimentos_caixa'
+  ];
+
+  // Tabelas SEM mes_ref/competência (cadastros) — continuam INSERT puro
+  // (compromissos_financeiros, recebimentos_previstos, contas_bancarias, movimentos, saldo_reconhecer, notas_fiscais não estão na M24 — não têm coluna vigente)
+
+  // Override de confirmarImportContinuar — adiciona política nos casos aplicáveis
+  // (a função original será chamada se não for caso especial)
+  if (typeof confirmarImportContinuar === "function") {
+    var _confirmarImportContinuarOriginal = confirmarImportContinuar;
+    confirmarImportContinuar = function (tpl) {
+      // Os tipos especiais (saida_estoque, dashboard_orcamentos, pagar_receber)
+      // já são tratados antes (vão pelas funções refatoradas acima).
+      // Pra os tipos com onConflict: aplicar política (caixa_saldo_mensal, saldos_contas)
+      if (tpl && tpl.alvo && tpl.onConflict && TABELAS_COM_HISTORICO.indexOf(tpl.alvo) !== -1) {
+        if (!confirm("Confirmar importação de " + impParsed.linhas.length + " linhas para " + tpl.nomeLegivel + "?\nVersões anteriores marcadas vigente=false (histórico preservado).")) return;
+        impBtnConf.disabled = true;
+        impBtnPrev.disabled = true;
+        setImpStatus("Aplicando política de histórico…", "carregando");
+
+        // Calcular filtros de "marcar anteriores" baseado no onConflict
+        var conflictCols = String(tpl.onConflict).split(",").map(function (s) { return s.trim(); });
+        var filtros = {};
+        conflictCols.forEach(function (col) {
+          var vals = Array.from(new Set(impParsed.linhas.map(function (l) { return l[col]; }).filter(function (v) { return v !== null && v !== undefined; })));
+          if (vals.length) filtros[col] = vals;
+        });
+
+        aplicarPoliticaHistorico({
+          tipo: impTipo.value,
+          arquivo: (impArquivo && impArquivo.files && impArquivo.files[0] ? impArquivo.files[0].name : null),
+          marcarAnteriores: [{ tabela: tpl.alvo, filtros: filtros }],
+          inserts: [{ tabela: tpl.alvo, linhas: impParsed.linhas }]
+        }, function (res) {
+          impBtnConf.disabled = false;
+          impBtnPrev.disabled = false;
+          if (res.erro) { setImpStatus(res.erro, "erro"); return; }
+          if (res.erros && res.erros.length) {
+            setImpStatus("Concluído com avisos. Inseridos: " + res.totalInseridos + " · Erros: " + res.erros.length, "alerta");
+          } else {
+            setImpStatus("Sucesso! " + res.totalInseridos + " linhas em " + tpl.alvo + ". Import #" + res.importId + ".", "ok");
+          }
+        });
+        return;
+      }
+      // Demais casos — chama a original
+      return _confirmarImportContinuarOriginal(tpl);
+    };
+  }
+
 })();
