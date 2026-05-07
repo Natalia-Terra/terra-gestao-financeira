@@ -818,6 +818,46 @@
       return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
     });
   }
+
+  // Modal customizado Terra (substitui alert nativo). Tipo: 'ok' | 'erro' | 'info'
+  function mostrarMensagem(titulo, mensagem, tipo, onOk) {
+    tipo = tipo || "info";
+    var existente = document.getElementById("modal-msg");
+    if (existente) existente.remove();
+
+    var icone = ({ ok: "✓", erro: "⚠", info: "ℹ" })[tipo] || "";
+    var cor = ({
+      ok:   { bg: "#d4eede",   borda: "#1A6B45", texto: "#1A6B45" },
+      erro: { bg: "#fdf2f2",   borda: "#8B2020", texto: "#8B2020" },
+      info: { bg: "var(--bg3)", borda: "var(--ouro-esc)", texto: "var(--ouro-esc)" }
+    })[tipo];
+
+    var div = document.createElement("div");
+    div.id = "modal-msg";
+    div.className = "modal-overlay";
+    div.innerHTML =
+      '<div class="modal-content" style="max-width:440px; text-align:center; padding:32px 28px 24px;">' +
+        '<div style="display:inline-flex; align-items:center; justify-content:center; width:64px; height:64px; border-radius:50%; background:' + cor.bg + '; border:2px solid ' + cor.borda + '; margin-bottom:12px; font-size:32px; color:' + cor.texto + '; font-weight:bold;">' + icone + '</div>' +
+        '<h2 style="text-align:center; color:' + cor.texto + '; margin:0 0 12px; font-size:20px;">' + escHtml(titulo) + '</h2>' +
+        '<p style="margin:0 0 22px; color:var(--text); white-space:pre-line;">' + escHtml(mensagem) + '</p>' +
+        '<button type="button" class="btn-ouro" id="modal-msg-ok" style="min-width:100px;">OK</button>' +
+      '</div>';
+    document.body.appendChild(div);
+
+    function fechar() {
+      try { div.remove(); } catch (e) {}
+      document.removeEventListener("keydown", onKey);
+      if (typeof onOk === "function") { try { onOk(); } catch (e) {} }
+    }
+    function onKey(e) {
+      if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); fechar(); }
+    }
+    document.getElementById("modal-msg-ok").addEventListener("click", fechar);
+    div.addEventListener("click", function (e) { if (e.target === div) fechar(); });
+    document.addEventListener("keydown", onKey);
+    setTimeout(function () { var b = document.getElementById("modal-msg-ok"); if (b) b.focus(); }, 0);
+  }
+
   function badgeTipo(tipo) {
     if (!tipo || tipo === "—") return '<span class="badge-tipo vazio">—</span>';
     var classe = "outras";
@@ -2697,7 +2737,7 @@
           }).then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
             .then(function (resp) {
               if (resp.status >= 200 && resp.status < 300) {
-                alert("Usuário criado!\n\n" + (resp.body.mensagem || "Email de redefinição enviado."));
+                mostrarMensagem("Usuário criado!", "Um email de cadastro foi enviado para que a pessoa defina a senha de acesso.", "ok");
                 carregarUsuariosSeNecessario();
                 done(null);
               } else {
