@@ -355,6 +355,8 @@
     // M18 Onda 3.1 — telas novas
     if (pageId === "saldo_reconhecer")            carregarSaldoReconhecerSeNecessario();
     if (pageId === "dashboard_orcamentos_view")   carregarDashboardOrcamentosTeleSeNecessario();
+    // M18 Onda 3.2 — Lançamentos de Caixa
+    if (pageId === "movimentos_caixa")            carregarMovimentosCaixaSeNecessario();
   }
 
   // ------------- Dashboard: 4 cards de totais ------------------------------
@@ -8424,5 +8426,190 @@
     var n = Number(v || 0);
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+
+  // ===========================================================================
+  // M18 Onda 3.2 — Tela "Lançamentos de Caixa" (movimentos_caixa) + bulk action
+  // ===========================================================================
+  var movCaixaLista = [];
+  var movCaixaCarregado = false;
+  var movCaixaCarregando = false;
+  var movCaixaOrcOptions = [];   // cache de orçamentos pra dropdown
+
+  function carregarMovimentosCaixaSeNecessario() {
+    if (movCaixaCarregado) { renderMovimentosCaixa(); return; }
+    if (movCaixaCarregando) return;
+    movCaixaCarregando = true;
+    setStatus("mc-status", "Consultando movimentos_caixa…", "carregando");
+    var p1 = client.from("movimentos_caixa").select("*").order("data_pagamento", { ascending: false }).limit(5000).then(function (r) {
+      if (r.error) throw r.error;
+      movCaixaLista = r.data || [];
+    });
+    var p2 = client.from("orcamentos").select("orcamento, nome, parceiro").then(function (r) {
+      if (r.error) throw r.error;
+      movCaixaOrcOptions = r.data || [];
+    });
+    Promise.all([p1, p2]).then(function () {
+      movCaixaCarregando = false;
+      movCaixaCarregado = true;
+      setStatus("mc-status", null);
+      renderMovimentosCaixa();
+    }).catch(function (e) {
+      movCaixaCarregando = false;
+      setStatus("mc-status", "Erro: " + e.message, "erro");
+    });
+
+    // Listeners (uma vez)
+    var bus = document.getElementById("mc-busca");
+    if (bus && !bus.dataset.bound) { bus.dataset.bound = "1"; bus.addEventListener("input", renderMovimentosCaixa); }
+    var tipo = document.getElementById("mc-tipo");
+    if (tipo && !tipo.dataset.bound) { tipo.dataset.bound = "1"; tipo.addEventListener("change", renderMovimentosCaixa); }
+    var status = document.getElementById("mc-status-filtro");
+    if (status && !status.dataset.bound) { status.dataset.bound = "1"; status.addEventListener("change", renderMovimentosCaixa); }
+    var btnSel = document.getElementById("mc-btn-sel-todos");
+    if (btnSel && !btnSel.dataset.bound) {
+      btnSel.dataset.bound = "1";
+      btnSel.addEventListener("click", function () {
+        var marcar = btnSel.dataset.estado !== "marcado";
+        document.querySelectorAll('#mc-tbody input[type="checkbox"][data-mcid]').forEach(function (c) { c.checked = marcar; });
+        btnSel.dataset.estado = marcar ? "marcado" : "";
+        btnSel.textContent = marcar ? "✕ Desmarcar todos" : "✓ Selecionar todos";
+      });
+    }
+    var btnAplicar = document.getElementById("mc-btn-aplicar-bulk");
+    if (btnAplicar && !btnAplicar.dataset.bound) {
+      btnAplicar.dataset.bound = "1";
+      btnAplicar.addEventListener("click", aplicarBulkClassificacao);
+    }
+    var selOrcBulk = document.getElementById("mc-bulk-orc");
+    if (selOrcBulk && !selOrcBulk.dataset.bound) { selOrcBulk.dataset.bound = "1"; }
+  }
+
+  function renderMovimentosCaixa() {
+    var tbody = document.getElementById("mc-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("mc-busca") || {}).value || "").trim().toLowerCase();
+    var fTipo = (document.getElementById("mc-tipo") || {}).value || "";
+    var fStatus = (document.getElementById("mc-status-filtro") || {}).value || "";
+
+    var filtrados = movCaixaLista.filter(function (m) {
+      if (fTipo && m.tipo !== fTipo) return false;
+      if (fStatus === "pendentes" && (m.tipo !== "RECEBER" || m.natureza)) return false;
+      if (fStatus === "classificados" && !m.natureza) return false;
+      if (busca) {
+        var alvo = ((m.parceiro || "") + " " + (m.documento || "") + " " + (m.historico || "") + " " + (m.numero_plano_contas || "")).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      return true;
+    });
+
+    var totLin = filtrados.length;
+    var totVal = 0;
+    var totPend = 0;
+    filtrados.forEach(function (m) {
+      totVal += Number(m.valor_total || 0);
+      if (m.tipo === "RECEBER" && !m.natureza) totPend++;
+    });
+    var elQtd = document.getElementById("mc-m-qtd"); if (elQtd) elQtd.textContent = fmtInt(totLin);
+    var elVal = document.getElementById("mc-m-valor"); if (elVal) elVal.textContent = fmtBRL(totVal);
+    var elPend = document.getElementById("mc-m-pend"); if (elPend) elPend.textContent = fmtInt(totPend);
+    var elLbl = document.getElementById("mc-lbl"); if (elLbl) elLbl.textContent = totLin + " de " + movCaixaLista.length;
+
+    // Popular dropdown de orçamentos do bulk (filtrar por parceiro do primeiro pendente, se houver)
+    var selOrc = document.getElementById("mc-bulk-orc");
+    if (selOrc) {
+      var opts = '<option value="">— Manter sem vínculo —</option>';
+      movCaixaOrcOptions.forEach(function (o) {
+        opts += '<option value="' + escHtml(o.orcamento) + '">' + escHtml(o.orcamento) + ' · ' + escHtml(o.nome || o.parceiro || "") + '</option>';
+      });
+      selOrc.innerHTML = opts;
+    }
+
+    if (!totLin) {
+      tbody.innerHTML = '<tr><td colspan="9" class="tbl-vazio">Nenhum lançamento bate com os filtros.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(function (m) {
+      var pend = m.tipo === "RECEBER" && !m.natureza;
+      var rowCls = pend ? "linha-pendente" : "";
+      var nat = m.natureza ? '<span class="tag">' + escHtml(m.natureza) + '</span>' : '<span class="tag warn">Pendente</span>';
+      var vinc = m.orcamento_vinculado ? '<span class="mono">' + escHtml(m.orcamento_vinculado) + '</span>' : '—';
+      return (
+        '<tr class="' + rowCls + '">' +
+          '<td>' + (pend ? '<input type="checkbox" data-mcid="' + m.id + '" />' : '') + '</td>' +
+          '<td><span class="tag ' + (m.tipo === "PAGAR" ? "danger" : "ok") + '">' + escHtml(m.tipo) + '</span></td>' +
+          '<td>' + (m.data_pagamento ? fmtData(m.data_pagamento) : "—") + '</td>' +
+          '<td>' + escHtml(m.parceiro || "—") + '</td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(m.documento || "—") + '</td>' +
+          '<td class="num">' + fmtBRL(m.valor_total) + '</td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(m.numero_plano_contas || "—") + '</td>' +
+          '<td>' + nat + '</td>' +
+          '<td>' + vinc + '</td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  function aplicarBulkClassificacao() {
+    var natureza = (document.getElementById("mc-bulk-natureza") || {}).value;
+    var orcamento = (document.getElementById("mc-bulk-orc") || {}).value;
+    if (!natureza) { alert("Escolha uma Natureza para aplicar."); return; }
+
+    var selecionados = [];
+    document.querySelectorAll('#mc-tbody input[type="checkbox"][data-mcid]:checked').forEach(function (c) {
+      selecionados.push(Number(c.getAttribute("data-mcid")));
+    });
+    if (!selecionados.length) { alert("Selecione pelo menos 1 linha pendente."); return; }
+    if (!confirm("Aplicar Natureza='" + natureza + "'" + (orcamento ? " + Orçamento='" + orcamento + "'" : "") + " em " + selecionados.length + " linha(s)?")) return;
+
+    setStatus("mc-status", "Atualizando " + selecionados.length + " linha(s)…", "carregando");
+    var update = { natureza: natureza, classificado_em: new Date().toISOString() };
+    if (orcamento) update.orcamento_vinculado = orcamento;
+
+    client.from("movimentos_caixa").update(update).in("id", selecionados).then(function (r) {
+      if (r.error) { setStatus("mc-status", "Erro: " + r.error.message, "erro"); return; }
+      // Atualizar lista local
+      var sels = {};
+      selecionados.forEach(function (id) { sels[id] = true; });
+      movCaixaLista.forEach(function (m) {
+        if (sels[m.id]) {
+          m.natureza = natureza;
+          if (orcamento) m.orcamento_vinculado = orcamento;
+          m.classificado_em = update.classificado_em;
+        }
+      });
+      setStatus("mc-status", "✓ " + selecionados.length + " linha(s) classificadas.", "ok");
+      renderMovimentosCaixa();
+    });
+  }
+
+  // ===========================================================================
+  // M18 Onda 3.2 — Drill-down "Custo por OS" via event delegation
+  // ===========================================================================
+  // Habilita: ao clicar numa linha de #cos-tbody com [data-cos-os], abre modal
+  // com itens de matéria-prima (estoque_detalhes) daquela OS.
+  document.addEventListener("DOMContentLoaded", function () {
+    var tb = document.getElementById("cos-tbody");
+    if (tb && !tb.dataset.drillBound) {
+      tb.dataset.drillBound = "1";
+      tb.addEventListener("click", function (ev) {
+        var tr = ev.target && ev.target.closest && ev.target.closest("tr[data-cos-os]");
+        if (!tr) return;
+        var os = tr.getAttribute("data-cos-os");
+        if (os && typeof abrirDetalheItensMP === "function") abrirDetalheItensMP(os);
+      });
+    }
+    // Mesmo pra Custo Direto Via OS
+    var tb2 = document.getElementById("cdvos-tbody");
+    if (tb2 && !tb2.dataset.drillBound) {
+      tb2.dataset.drillBound = "1";
+      tb2.addEventListener("click", function (ev) {
+        var tr = ev.target && ev.target.closest && ev.target.closest("tr[data-cdvos-os]");
+        if (!tr) return;
+        var os = tr.getAttribute("data-cdvos-os");
+        if (os && typeof abrirDetalheItensMP === "function") abrirDetalheItensMP(os);
+      });
+    }
+  });
 
 })();

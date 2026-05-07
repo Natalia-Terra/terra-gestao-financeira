@@ -185,6 +185,7 @@
               <button class="sb-sub" data-page="consolidado" type="button">Consolidado</button>
               <button class="sb-sub" data-page="recebimentos" type="button">Contas a Receber</button>
               <button class="sb-sub" data-page="caixa_compromissos" type="button">Contas a Pagar</button>
+              <button class="sb-sub" data-page="movimentos_caixa" type="button">Lançamentos de Caixa</button>
             </div>
           </div>
 
@@ -1568,6 +1569,78 @@
             </div>
           </div>
         </section>
+
+        <!-- M18 Onda 3.2 — Lançamentos de Caixa (movimentos_caixa) -->
+        <section class="page" data-page="movimentos_caixa" hidden>
+          <div class="page-header">
+            <h1 class="page-title">Lançamentos de Caixa</h1>
+            <p class="page-sub">Movimentações do "A Pagar x A Receber - Dt. Baixa". Linhas RECEBER pendentes podem ser classificadas em bulk.</p>
+          </div>
+
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Linhas (filtro)</div><div class="metric-value" id="mc-m-qtd">—</div></div>
+            <div class="metric-card"><div class="metric-label">Valor total</div><div class="metric-value" id="mc-m-valor">—</div></div>
+            <div class="metric-card"><div class="metric-label">RECEBER pendentes</div><div class="metric-value" id="mc-m-pend">—</div><div class="metric-sub">precisam classificação</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input type="search" id="mc-busca" class="input-search" placeholder="Buscar parceiro, documento, plano…" />
+              <select id="mc-tipo">
+                <option value="">Todos</option>
+                <option value="PAGAR">PAGAR</option>
+                <option value="RECEBER">RECEBER</option>
+              </select>
+              <select id="mc-status-filtro">
+                <option value="">Todos</option>
+                <option value="pendentes" selected>Pendentes (RECEBER s/ natureza)</option>
+                <option value="classificados">Classificados</option>
+              </select>
+              <span class="toolbar-sep"></span>
+              <span class="muted-tag" id="mc-lbl">—</span>
+            </div>
+
+            <div id="mc-status" class="status" hidden role="status" aria-live="polite"></div>
+
+            <!-- Bulk action bar -->
+            <div class="card" style="background: var(--bg3); padding: 10px; margin-bottom: 12px;">
+              <div class="toolbar" style="flex-wrap: wrap; gap: 8px;">
+                <strong>Bulk:</strong>
+                <button id="mc-btn-sel-todos" class="btn-limpar" type="button">✓ Selecionar todos</button>
+                <select id="mc-bulk-natureza">
+                  <option value="">— Natureza —</option>
+                  <option value="Recebimento">Recebimento</option>
+                  <option value="Adiantamento">Adiantamento</option>
+                  <option value="Resultado Financeiro">Resultado Financeiro</option>
+                  <option value="Reembolso">Reembolso</option>
+                  <option value="Outras Receitas">Outras Receitas</option>
+                </select>
+                <select id="mc-bulk-orc" style="min-width: 240px;"><option value="">— Orçamento —</option></select>
+                <button id="mc-btn-aplicar-bulk" class="btn-ouro" type="button">Aplicar nas selecionadas</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th style="width:32px;"></th>
+                    <th>Tipo</th>
+                    <th>Dt. Baixa</th>
+                    <th>Parceiro</th>
+                    <th>Documento</th>
+                    <th class="num">Valor</th>
+                    <th>Plano contas</th>
+                    <th>Natureza</th>
+                    <th>Orç. vinculado</th>
+                  </tr>
+                </thead>
+                <tbody id="mc-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
 
         <!-- Página: Bônus Individual > Detalhamento por funcionário -->
         <section class="page" data-page="bonus_indiv_detalhe" hidden>
