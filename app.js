@@ -4185,6 +4185,153 @@
     });
   }
 
+  // ===========================================================================
+  // M18 — NFs com vínculo NF↔OS (refac)
+  // Após o preview do template "Notas Fiscais", abre modal de revisão:
+  //   - Pra cada NF: lista as OSs do orçamento (de ordens_servico) com checkboxes
+  //   - Natália marca/desmarca, confirma
+  //   - Grava notas_fiscais + nf_os (vínculo N:N)
+  // ===========================================================================
+
+  function confirmarNFsComVinculo(parsed) {
+    if (!parsed || !parsed.linhas || !parsed.linhas.length) return;
+    impBtnConf.disabled = true;
+    setImpStatus("Buscando OSs dos orçamentos no banco…", "carregando");
+
+    // Coletar orçamentos únicos
+    var orcamentosUnicos = {};
+    parsed.linhas.forEach(function (nf) {
+      if (nf.numero_orcamento) orcamentosUnicos[String(nf.numero_orcamento)] = true;
+    });
+    var orcamentosArr = Object.keys(orcamentosUnicos);
+    if (!orcamentosArr.length) {
+      // Nenhum orçamento — só insere as NFs, sem vínculos
+      gravarNFsEnfsOs(parsed.linhas, [], function (msg) { setImpStatus(msg, "ok"); impBtnConf.disabled = false; });
+      return;
+    }
+
+    // Buscar OSs por orçamento na tabela ordens_servico
+    client.from("ordens_servico")
+      .select("os, orcamento, item, familia, grupo, status")
+      .in("orcamento", orcamentosArr)
+      .then(function (r) {
+        if (r.error) {
+          setImpStatus("Erro ao buscar OSs: " + r.error.message, "erro");
+          impBtnConf.disabled = false;
+          return;
+        }
+        var osList = r.data || [];
+        // Indexar OSs por orçamento
+        var osPorOrc = {};
+        osList.forEach(function (o) {
+          var k = String(o.orcamento);
+          if (!osPorOrc[k]) osPorOrc[k] = [];
+          osPorOrc[k].push(o);
+        });
+
+        // Construir HTML do modal de revisão
+        var html = '<p class="muted-tag">Revise os vínculos NF↔OS abaixo. Por padrão, todas as OSs do orçamento ficam pré-marcadas.</p>';
+        html += '<div style="max-height:60vh; overflow-y:auto; margin: 12px 0;">';
+        parsed.linhas.forEach(function (nf, idx) {
+          var orc = nf.numero_orcamento ? String(nf.numero_orcamento) : "";
+          var osDoOrc = orc ? (osPorOrc[orc] || []) : [];
+          html += '<div class="card" style="margin-bottom: 12px; padding: 12px;">';
+          html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">';
+          html += '<strong>NF ' + escHtml(nf.numero_nf || "(sem número)") + '</strong>';
+          html += '<span class="muted-tag">Orç: ' + escHtml(orc || "-") + ' · R$ ' + (nf.valor_nf ? Number(nf.valor_nf).toLocaleString("pt-BR", {minimumFractionDigits: 2}) : "—") + '</span>';
+          html += '</div>';
+          if (nf.razao_social) {
+            html += '<div class="muted" style="font-size:13px; margin-bottom: 8px;">' + escHtml(nf.razao_social) + '</div>';
+          }
+          if (osDoOrc.length === 0) {
+            html += '<div class="muted" style="font-style:italic; font-size:13px;">Nenhuma OS encontrada em ordens_servico pra este orçamento. NF será inserida sem vínculo.</div>';
+          } else {
+            html += '<div style="display:flex; flex-wrap:wrap; gap: 8px;">';
+            osDoOrc.forEach(function (o) {
+              var label = "OS " + o.os + (o.item ? " · item " + o.item : "") + (o.status ? " (" + o.status + ")" : "");
+              html += '<label style="display:inline-flex; align-items:center; gap:4px; padding: 4px 8px; border:1px solid var(--borda); border-radius: var(--r-pill); cursor:pointer;">';
+              html += '<input type="checkbox" data-nfidx="' + idx + '" data-os="' + escHtml(o.os) + '" checked /> ';
+              html += escHtml(label);
+              html += '</label>';
+            });
+            html += '</div>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '<div class="modal-acoes" style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">';
+        html += '<button type="button" class="btn-limpar" id="nfvinc-cancelar">Cancelar</button>';
+        html += '<button type="button" class="btn-ouro" id="nfvinc-confirmar">Confirmar e gravar</button>';
+        html += '</div>';
+
+        abrirModalDetalhe("Revisão de vínculos NF↔OS (" + parsed.linhas.length + " NFs)", html);
+
+        // Listeners
+        document.getElementById("nfvinc-cancelar").addEventListener("click", function () {
+          var ov = document.getElementById("modal-detalhe-overlay");
+          if (ov) ov.parentNode.removeChild(ov);
+          setImpStatus("Operação cancelada pela usuária.", "alerta");
+          impBtnConf.disabled = false;
+        });
+        document.getElementById("nfvinc-confirmar").addEventListener("click", function () {
+          // Coletar vínculos marcados
+          var vinculosPorIdx = {};
+          var checkboxes = document.querySelectorAll('#modal-detalhe-overlay input[type="checkbox"][data-nfidx]');
+          checkboxes.forEach(function (cb) {
+            if (cb.checked) {
+              var idx = cb.getAttribute("data-nfidx");
+              if (!vinculosPorIdx[idx]) vinculosPorIdx[idx] = [];
+              vinculosPorIdx[idx].push(cb.getAttribute("data-os"));
+            }
+          });
+          // Fechar modal
+          var ov = document.getElementById("modal-detalhe-overlay");
+          if (ov) ov.parentNode.removeChild(ov);
+          setImpStatus("Gravando NFs e vínculos…", "carregando");
+
+          // Construir lista de vínculos pra nf_os
+          var vinculosLista = [];
+          parsed.linhas.forEach(function (nf, idx) {
+            var oss = vinculosPorIdx[idx] || [];
+            oss.forEach(function (os) {
+              vinculosLista.push({ numero_nf: String(nf.numero_nf), os: os });
+            });
+          });
+
+          gravarNFsEnfsOs(parsed.linhas, vinculosLista, function (msg, ehErro) {
+            setImpStatus(msg, ehErro ? "erro" : "ok");
+            impBtnConf.disabled = false;
+          });
+        });
+      });
+  }
+
+  // Helper — grava NFs em notas_fiscais e vínculos em nf_os
+  function gravarNFsEnfsOs(nfs, vinculos, cb) {
+    function lote(tabela, linhas, cb2) {
+      if (!linhas.length) return cb2(null);
+      var lotes = [];
+      for (var i = 0; i < linhas.length; i += 200) lotes.push(linhas.slice(i, i + 200));
+      var idx = 0;
+      function proximo() {
+        if (idx >= lotes.length) return cb2(null);
+        client.from(tabela).insert(lotes[idx]).then(function (r) {
+          if (r.error) return cb2({ tabela: tabela, erro: r.error.message });
+          idx++; proximo();
+        });
+      }
+      proximo();
+    }
+    lote("notas_fiscais", nfs, function (e1) {
+      if (e1) return cb("Erro em " + e1.tabela + ": " + e1.erro, true);
+      lote("nf_os", vinculos, function (e2) {
+        if (e2) return cb("NFs OK, mas erro em " + e2.tabela + ": " + e2.erro, true);
+        cb(nfs.length + " NFs e " + vinculos.length + " vínculo(s) NF↔OS gravados com sucesso.", false);
+      });
+    });
+  }
+
+
 
 
   function confirmarImport() {
@@ -4319,6 +4466,10 @@
     // M18: dashboard de orçamentos vai pra 3 destinos
     if (impParsed.tipo === "dashboard_orcamentos") {
       return confirmarDashboardOrcamentos(impParsed);
+    }
+    // M18: notas_fiscais — abre modal de revisão de vínculo NF↔OS antes de gravar
+    if (tpl.alvo === "notas_fiscais") {
+      return confirmarNFsComVinculo(impParsed);
     }
     // evolucao_pct continua no UPSERT clássico em os_evolucao_mensal
     if (impParsed.tipo === "evolucao_pct") {
