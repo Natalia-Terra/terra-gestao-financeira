@@ -11684,6 +11684,30 @@
       });
     }
 
+    // Contas a Receber: total de recebimentos_previstos em aberto (sem recebido_em);
+    // sub-texto mostra quantas estão vencidas (data_prevista < hoje)
+    var elRec = document.getElementById("kpi-receber");
+    var elRecSub = document.getElementById("kpi-receber-sub");
+    if (elRec) {
+      client.from("recebimentos_previstos").select("valor, data_prevista, recebido_em").is("recebido_em", null).then(function (r) {
+        if (r.error) { elRec.textContent = "—"; return; }
+        var lista = r.data || [];
+        var soma = lista.reduce(function (acc, p) { return acc + Number(p.valor || 0); }, 0);
+        elRec.textContent = fmtBRL(soma);
+        if (elRecSub) {
+          var vencidas = lista.filter(function (p) { return p.data_prevista && p.data_prevista < hojeIso; }).length;
+          if (vencidas > 0) {
+            elRecSub.innerHTML = '<strong style="color: var(--danger);">' + vencidas + ' vencida(s)</strong> · ' + lista.length + ' parcela(s) em aberto';
+          } else {
+            elRecSub.textContent = lista.length + " parcela(s) em aberto";
+          }
+        }
+        // Cor de destaque se tem vencidas
+        var temVencidas = lista.some(function (p) { return p.data_prevista && p.data_prevista < hojeIso; });
+        elRec.style.color = temVencidas ? "var(--warn)" : "var(--text)";
+      });
+    }
+
     // OSs em atraso: ordens_servico com prazo_entrega < hoje e status != 'Entregue'
     var elOs = document.getElementById("kpi-os-atraso");
     if (elOs) {
