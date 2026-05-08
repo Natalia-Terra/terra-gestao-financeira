@@ -488,6 +488,7 @@
     if (pageId === "despesas")     carregarDespesasSeNecessario();
     if (pageId === "movimentos")   esperarOrcamentosCarregados(renderLancamentos);
     if (pageId === "custos_os")    esperarOrcamentosCarregados(renderCustosOS);
+    if (pageId === "margem_os")    carregarMargemOsSeNecessario();
     if (pageId === "entregas")     carregarEntregasSeNecessario();
     if (pageId === "cfg_plano")      carregarPlanoContasSeNecessario();
     if (pageId === "cfg_cfop")       carregarCfopSeNecessario();
@@ -11417,6 +11418,165 @@
         elOs.textContent = fmtInt(atrasadas.length);
       });
     }
+  }
+
+
+  // ===========================================================================
+  // MARGEM POR OS — Tela consolidada (Frente 3)
+  // Cruza orcamentos.venda (receita) com os_custos_planejados (custo prev/real)
+  // por OS. Calcula margens e estouros.
+  // ===========================================================================
+
+  var mosCarregado = false;
+  var mosCarregando = false;
+  var mosLista = [];
+
+  function carregarMargemOsSeNecessario() {
+    if (mosCarregado) { renderMargemOs(); return; }
+    if (mosCarregando) return;
+    mosCarregando = true;
+    var tbody = document.getElementById("mos-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="15" class="tbl-vazio">Carregando custos planejados…</td></tr>';
+
+    Promise.all([
+      client.from("os_custos_planejados").select("*").eq("vigente", true),
+      client.from("ordens_servico").select("os, orcamento"),
+      client.from("orcamentos").select("orcamento, nome, parceiro, venda")
+    ]).then(function (rs) {
+      mosCarregando = false;
+      var rOcp = rs[0], rOs = rs[1], rOrc = rs[2];
+      if (rOcp.error) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="15" class="tbl-vazio erro">Erro: ' + rOcp.error.message + '</td></tr>';
+        return;
+      }
+      var custos = rOcp.data || [];
+      var ordens = rOs.data || [];
+      var orcs   = rOrc.data || [];
+
+      // Indexar OS -> orcamento, e orcamento -> dados
+      var osToOrc = {};
+      ordens.forEach(function (o) { if (o.os) osToOrc[o.os] = o.orcamento; });
+      var orcDados = {};
+      orcs.forEach(function (o) { orcDados[o.orcamento] = o; });
+
+      // Construir lista consolidada
+      mosLista = custos.map(function (c) {
+        var orcNum = osToOrc[c.os];
+        var orc = orcDados[orcNum] || {};
+        var receita = Number(orc.venda || 0);
+        var prevTotal = Number(c.total_previsto || 0);
+        var realTotal = Number(c.total_realizado || 0);
+        var saldoTotal = Number(c.saldo_total || (prevTotal - realTotal));
+        var pctExec = prevTotal > 0 ? (realTotal / prevTotal) : 0;
+        var margemPrev = receita > 0 ? ((receita - prevTotal) / receita) : null;
+        var margemReal = receita > 0 ? ((receita - realTotal) / receita) : null;
+        return {
+          os: c.os,
+          orcamento: orcNum,
+          cliente: orc.nome || "—",
+          receita: receita,
+          mp_prev: Number(c.materiais_previstos || 0),
+          mp_real: Number(c.materiais_realizados || 0),
+          mod_prev: Number(c.horas_previstas || 0),
+          mod_real: Number(c.horas_realizadas || 0),
+          st_prev: Number(c.st_previstos || 0),
+          st_real: Number(c.st_realizados || 0),
+          outros_prev: Number(c.outros_previstos || 0),
+          outros_real: Number(c.outros_realizados || 0),
+          prev_total: prevTotal,
+          real_total: realTotal,
+          saldo: saldoTotal,
+          pct_exec: pctExec,
+          margem_prev: margemPrev,
+          margem_real: margemReal
+        };
+      });
+      mosCarregado = true;
+      renderMargemOs();
+
+      // Bind dos filtros (idempotente)
+      var b = document.getElementById("mos-busca");
+      var f = document.getElementById("mos-filtro");
+      var bl = document.getElementById("mos-btn-limpar");
+      if (b && !b.dataset.bound) { b.dataset.bound = "1"; b.addEventListener("input", renderMargemOs); }
+      if (f && !f.dataset.bound) { f.dataset.bound = "1"; f.addEventListener("change", renderMargemOs); }
+      if (bl && !bl.dataset.bound) {
+        bl.dataset.bound = "1";
+        bl.addEventListener("click", function () {
+          if (b) b.value = "";
+          if (f) f.selectedIndex = 0;
+          renderMargemOs();
+        });
+      }
+    });
+  }
+
+  function renderMargemOs() {
+    var tbody = document.getElementById("mos-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("mos-busca")||{}).value || "").trim().toLowerCase();
+    var filtro = ((document.getElementById("mos-filtro")||{}).value || "");
+
+    var filtrados = (mosLista || []).filter(function (m) {
+      if (filtro === "estouro" && m.pct_exec <= 1.10) return false;
+      if (filtro === "atencao" && (m.pct_exec < 0.90 || m.pct_exec > 1.10)) return false;
+      if (filtro === "ok" && m.pct_exec >= 0.90) return false;
+      if (filtro === "naoiniciada" && m.pct_exec > 0) return false;
+      if (busca && (m.os || "").toLowerCase().indexOf(busca) === -1 && (m.cliente || "").toLowerCase().indexOf(busca) === -1) return false;
+      return true;
+    });
+
+    // Cards
+    var totQtd = mosLista.length;
+    var totPrev = mosLista.reduce(function (a, m) { return a + m.prev_total; }, 0);
+    var totReal = mosLista.reduce(function (a, m) { return a + m.real_total; }, 0);
+    var pctTot = totPrev > 0 ? (totReal / totPrev * 100) : 0;
+    var qtdEstouro = mosLista.filter(function (m) { return m.pct_exec > 1.10; }).length;
+    valText(document.getElementById("mos-m-qtd"), fmtInt(totQtd));
+    valText(document.getElementById("mos-m-prev"), fmtBRL(totPrev));
+    valText(document.getElementById("mos-m-real"), fmtBRL(totReal));
+    valText(document.getElementById("mos-m-pct"), pctTot.toFixed(1).replace(".", ",") + "%");
+    valText(document.getElementById("mos-m-estouro"), fmtInt(qtdEstouro));
+    valText(document.getElementById("mos-lbl"), filtrados.length + " de " + mosLista.length + " OSs");
+
+    function fmtPct(v) { return v == null ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
+    function fmtPctClass(v, opts) {
+      // Para % executado: vermelho se >110, amarelo 90-110, verde se <90
+      if (v == null) return "";
+      var pct = (opts && opts.margem) ? v : (v * 100);
+      if (opts && opts.margem) {
+        if (pct < 0) return "destaque-erro";
+        if (pct < 0.20) return "destaque-warn";
+        return "destaque-ok";
+      } else {
+        if (pct > 110) return "destaque-erro";
+        if (pct > 90) return "destaque-warn";
+        return "";
+      }
+    }
+
+    preencherTbody(tbody, filtrados.map(function (m) {
+      var pctClass = fmtPctClass(m.pct_exec * 100);
+      var mPrevClass = fmtPctClass(m.margem_prev, { margem: true });
+      var mRealClass = fmtPctClass(m.margem_real, { margem: true });
+      return '<tr>' +
+        '<td class="mono">' + escHtml(m.os || "—") + '</td>' +
+        '<td>' + escHtml(m.cliente) + '</td>' +
+        '<td class="num">' + (m.receita ? fmtBRL(m.receita) : "—") + '</td>' +
+        '<td class="num">' + fmtBRL(m.mp_prev) + '</td>' +
+        '<td class="num">' + fmtBRL(m.mp_real) + '</td>' +
+        '<td class="num">' + fmtBRL(m.mod_prev) + '</td>' +
+        '<td class="num">' + fmtBRL(m.mod_real) + '</td>' +
+        '<td class="num">' + fmtBRL(m.st_prev) + '</td>' +
+        '<td class="num">' + fmtBRL(m.st_real) + '</td>' +
+        '<td class="num"><strong>' + fmtBRL(m.prev_total) + '</strong></td>' +
+        '<td class="num"><strong>' + fmtBRL(m.real_total) + '</strong></td>' +
+        '<td class="num">' + fmtBRL(m.saldo) + '</td>' +
+        '<td class="num ' + pctClass + '">' + (m.pct_exec * 100).toFixed(1).replace(".", ",") + '%</td>' +
+        '<td class="num ' + mPrevClass + '">' + fmtPct(m.margem_prev) + '</td>' +
+        '<td class="num ' + mRealClass + '">' + fmtPct(m.margem_real) + '</td>' +
+      '</tr>';
+    }), 15, { msg: "Nenhuma OS bate com esse filtro.", icon: "📊" });
   }
 
 })();

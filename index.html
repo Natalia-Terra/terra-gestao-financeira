@@ -235,6 +235,7 @@
               <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="sb-label">Custeio</span><span class="sb-caret">▾</span>
             </button>
             <div class="sb-group-items">
+              <button class="sb-sub" data-page="margem_os" type="button" style="font-weight:700; color:var(--ouro-esc);">★ Margem por OS</button>
               <button class="sb-sub" data-page="custos_os" type="button">Custo por OS</button>
               <div class="sb-subgroup-header">━ Custo Direto ━</div>
               <button class="sb-sub sb-sub-nested" data-page="cust_direto_via_os" type="button">Via OS</button>
@@ -727,6 +728,43 @@
         </section>
 
         <!-- Custo por OS — 4d -->
+        <!-- Margem por OS — Frente 3 (consolidacao 5 telas custeio) -->
+        <section class="page" data-page="margem_os" hidden>
+          <div class="page-header">
+            <h1 class="page-title">★ Margem por OS</h1>
+            <p class="page-sub">Visao consolidada — receita × custo (previsto vs realizado) por Ordem de Servico</p>
+          </div>
+
+          <div class="grid-metrics" id="mos-metrics">
+            <div class="metric-card"><div class="metric-label">OSs analisadas</div><div class="metric-value" id="mos-m-qtd">—</div><div class="metric-sub">com custos planejados</div></div>
+            <div class="metric-card"><div class="metric-label">Custo previsto total</div><div class="metric-value" id="mos-m-prev">—</div><div class="metric-sub">somatorio das OSs</div></div>
+            <div class="metric-card"><div class="metric-label">Custo realizado total</div><div class="metric-value" id="mos-m-real">—</div><div class="metric-sub">somatorio das OSs</div></div>
+            <div class="metric-card"><div class="metric-label">% executado</div><div class="metric-value" id="mos-m-pct">—</div><div class="metric-sub">realizado / previsto</div></div>
+            <div class="metric-card"><div class="metric-label">OSs com estouro</div><div class="metric-value" id="mos-m-estouro" style="color: var(--danger);">—</div><div class="metric-sub">realizado &gt; 110% previsto</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="mos-busca" placeholder="Buscar por OS ou cliente..." />
+              <select id="mos-filtro">
+                <option value="">Todas</option>
+                <option value="estouro">Apenas com estouro (&gt;110%)</option>
+                <option value="atencao">Em atencao (90-110%)</option>
+                <option value="ok">OK (&lt;90%)</option>
+                <option value="naoiniciada">Nao iniciadas (0%)</option>
+              </select>
+              <button class="btn-limpar" id="mos-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="mos-lbl"></span>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>OS</th><th>Cliente</th><th class="num">Receita</th><th class="num">Prev MP</th><th class="num">Real MP</th><th class="num">Prev MOD</th><th class="num">Real MOD</th><th class="num">Prev ST</th><th class="num">Real ST</th><th class="num">Prev Total</th><th class="num">Real Total</th><th class="num">Saldo</th><th class="num">% exec</th><th class="num">Margem prev</th><th class="num">Margem real</th></tr></thead>
+                <tbody id="mos-tbody"><tr><td colspan="15" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="page" data-page="custos_os" hidden>
           <div class="page-header"><h1 class="page-title">Custo por OS</h1><p class="page-sub">Custo agregado por Ordem de Serviço</p></div>
           <div class="grid-metrics">

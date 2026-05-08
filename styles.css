@@ -2256,3 +2256,11 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   /* Mantem o select com mesmo estilo */
   width: 100%;
 }
+
+
+/* =========================================================
+   DESTAQUE NUMERICO — usado em Margem por OS
+   ========================================================= */
+.destaque-erro { color: var(--danger); font-weight: 700; }
+.destaque-warn { color: var(--warn); font-weight: 700; }
+.destaque-ok   { color: var(--success); font-weight: 700; }
