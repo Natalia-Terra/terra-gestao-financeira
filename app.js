@@ -11684,27 +11684,26 @@
       });
     }
 
-    // Contas a Receber: total de recebimentos_previstos em aberto (sem recebido_em);
-    // sub-texto mostra quantas estão vencidas (data_prevista < hoje)
+    // A receber (7 dias): recebimentos_previstos com data_prevista <= +7d e ainda não recebidos.
+    // Espelha simetricamente o "A pagar (7 dias)". Inclui parcelas vencidas (passado) — destacadas.
     var elRec = document.getElementById("kpi-receber");
     var elRecSub = document.getElementById("kpi-receber-sub");
     if (elRec) {
-      client.from("recebimentos_previstos").select("valor, data_prevista, recebido_em").is("recebido_em", null).then(function (r) {
+      client.from("recebimentos_previstos").select("valor, data_prevista, recebido_em").is("recebido_em", null).lte("data_prevista", iso7).then(function (r) {
         if (r.error) { elRec.textContent = "—"; return; }
         var lista = r.data || [];
         var soma = lista.reduce(function (acc, p) { return acc + Number(p.valor || 0); }, 0);
         elRec.textContent = fmtBRL(soma);
+        var vencidas = lista.filter(function (p) { return p.data_prevista && p.data_prevista < hojeIso; }).length;
+        var aVencer  = lista.length - vencidas;
         if (elRecSub) {
-          var vencidas = lista.filter(function (p) { return p.data_prevista && p.data_prevista < hojeIso; }).length;
           if (vencidas > 0) {
-            elRecSub.innerHTML = '<strong style="color: var(--danger);">' + vencidas + ' vencida(s)</strong> · ' + lista.length + ' parcela(s) em aberto';
+            elRecSub.innerHTML = '<strong style="color: var(--danger);">' + vencidas + ' vencida(s)</strong>' + (aVencer > 0 ? ' · ' + aVencer + ' a vencer em 7d' : '');
           } else {
-            elRecSub.textContent = lista.length + " parcela(s) em aberto";
+            elRecSub.textContent = lista.length + " parcela(s) vencendo até 7 dias";
           }
         }
-        // Cor de destaque se tem vencidas
-        var temVencidas = lista.some(function (p) { return p.data_prevista && p.data_prevista < hojeIso; });
-        elRec.style.color = temVencidas ? "var(--warn)" : "var(--text)";
+        elRec.style.color = vencidas > 0 ? "var(--warn)" : "var(--text)";
       });
     }
 
