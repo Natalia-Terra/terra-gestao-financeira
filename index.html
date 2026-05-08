@@ -33,6 +33,7 @@
 
     <!-- Lado direito — formulário -->
     <main class="login-form-pane">
+      <nav id="breadcrumb-nav" class="breadcrumb" aria-label="Caminho de navegação"></nav>
       <section class="login-form-card">
         <header class="login-form-header">
           <h2>Bem-vinda de volta</h2>
@@ -158,8 +159,11 @@
         </div>
         <div class="topbar-spacer"></div>
         <div class="topbar-user">
-          <div class="topbar-user-avatar" id="topbar-avatar">·</div>
-          <span id="topbar-nome">—</span>
+          <div class="topbar-user-avatar" id="topbar-avatar" title="—">·</div>
+          <div class="topbar-user-info">
+            <span id="topbar-nome">—</span>
+            <span id="topbar-perfil" class="topbar-perfil-pill" title="Tipo de perfil">—</span>
+          </div>
           <button class="btn-sair" id="btn-sair" type="button" title="Sair">Sair</button>
         </div>
         <div class="topbar-data" id="topbar-data">—</div>
@@ -316,6 +320,30 @@
               <div class="metric-label">Total recebido</div>
               <div class="metric-value" id="m-recebido">—</div>
               <div class="metric-sub">recebimentos consolidados</div>
+            </div>
+          </div>
+
+          <h2 class="dash-section-title">Indicadores de hoje</h2>
+          <div class="grid-metrics" id="dash-kpis">
+            <div class="metric-card" data-metric="caixa-hoje">
+              <div class="metric-label">Caixa hoje</div>
+              <div class="metric-value" id="kpi-caixa-hoje">—</div>
+              <div class="metric-sub">soma dos últimos saldos por conta</div>
+            </div>
+            <div class="metric-card" data-metric="pagar-7d">
+              <div class="metric-label">A pagar (7 dias)</div>
+              <div class="metric-value" id="kpi-pagar-7d">—</div>
+              <div class="metric-sub">compromissos vencendo até 7 dias</div>
+            </div>
+            <div class="metric-card" data-metric="nf-aberto">
+              <div class="metric-label">NFs em aberto</div>
+              <div class="metric-value" id="kpi-nf-aberto">—</div>
+              <div class="metric-sub">emitidas, ainda não recebidas</div>
+            </div>
+            <div class="metric-card" data-metric="os-atraso">
+              <div class="metric-label">OSs em atraso</div>
+              <div class="metric-value" id="kpi-os-atraso">—</div>
+              <div class="metric-sub">prazo de entrega vencido</div>
             </div>
           </div>
 
@@ -1588,6 +1616,7 @@
                 <option value="DELETE">DELETE</option>
               </select>
               <input type="month" id="aud-mes" />
+              <label class="toolbar-inline" style="font-size:13px"><input type="checkbox" id="aud-minhas" /> Apenas minhas ações</label>
               <button class="btn-limpar" id="aud-btn-limpar" type="button">✕ Limpar</button>
               <span class="toolbar-label" id="aud-lbl"></span>
             </div>

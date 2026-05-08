@@ -33,6 +33,7 @@
   // Topbar
   var topbarNome    = document.getElementById("topbar-nome");
   var topbarAvatar  = document.getElementById("topbar-avatar");
+  var topbarPerfil  = document.getElementById("topbar-perfil");
   var topbarData    = document.getElementById("topbar-data");
   var btnSair       = document.getElementById("btn-sair");
 
@@ -309,7 +310,8 @@
           nome = resposta.data.nome || user.email;
           perfil = resposta.data.perfil || "";
         }
-        topbarNome.textContent = nome + (perfil ? " · " + perfil : "");
+        topbarNome.textContent = nome;
+      if (topbarPerfil) topbarPerfil.textContent = (perfil && (perfil.perfil || perfil.tipo)) || (window.__userPerfilTipo || "") + (perfil ? " · " + perfil : "");
         topbarAvatar.textContent = iniciais(nome);
       });
 
@@ -407,6 +409,7 @@
     if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
     if (pageId === "rh_folha")        carregarFolhaSeNecessario();
     if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
+    if (pageId === "dashboard")       { try { carregarKpisDashboard(); } catch (e) {} }
     if (pageId === "rh_organograma")  carregarOrganogramaSeNecessario();
     if (pageId === "programa_bonus")  carregarProgramaBonusSeNecessario();
     if (pageId === "programa_bonus_individual") carregarBonusIndividualSeNecessario();
@@ -870,6 +873,89 @@
       setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 180);
     });
   }
+
+
+  // -- Breadcrumb global -----------------------------------------------------
+  function setBreadcrumb(parts) {
+    var nav = document.getElementById("breadcrumb-nav");
+    if (!nav) return;
+    if (!parts || !parts.length) { nav.innerHTML = ""; nav.classList.remove("has-content"); return; }
+    var html = parts.map(function (p, i) {
+      var last = i === parts.length - 1;
+      var label = (typeof p === "string") ? p : p.label;
+      var goto  = (typeof p === "object") ? p.goto : null;
+      var sep = i > 0 ? '<span class="sep">›</span>' : '';
+      if (last) return sep + '<span class="current">' + escHtml(label) + '</span>';
+      if (goto) return sep + '<button type="button" data-goto="' + escHtml(goto) + '">' + escHtml(label) + '</button>';
+      return sep + '<span>' + escHtml(label) + '</span>';
+    }).join("");
+    nav.innerHTML = html;
+    nav.classList.add("has-content");
+  }
+
+  // Mapa pageId → breadcrumb parts (Configuração > X / Comercial > X / etc)
+  var BREADCRUMB_MAP = {
+    "dashboard":         ["Dashboard", "Visão geral"],
+    "programa_bonus":    ["Dashboard", "Programa de Bônus"],
+    "consolidado":       ["Receita", "Por Apropriação"],
+    "fat_apropr":        ["Receita", "Por Faturamento"],
+    "vendas":            ["Comercial", "Vendas"],
+    "fat_orcamentos":    ["Comercial", "Gestão de Faturamento"],
+    "notas_fiscais":     ["Comercial", "Notas Fiscais"],
+    "consolidado_fin":   ["Financeiro", "Consolidado"],
+    "contas_receber":    ["Financeiro", "Contas a Receber"],
+    "contas_pagar":      ["Financeiro", "Contas a Pagar"],
+    "despesas":          ["Custeio", "Despesas"],
+    "lancamentos":       ["Contabilidade Gerencial", "Lançamentos"],
+    "fluxo_caixa":       ["Contabilidade Gerencial", "Fluxo de Caixa 12m"],
+    "contas_bancarias":  ["Contabilidade Gerencial", "Contas Bancárias"],
+    "saldos_mensais":    ["Contabilidade Gerencial", "Saldos Mensais"],
+    "entradas_outras":   ["Contabilidade Gerencial", "Entradas Avulsas"],
+    "saidas_outras":     ["Contabilidade Gerencial", "Saídas Avulsas"],
+    "dre":               ["Contabilidade Gerencial", "DRE"],
+    "custo_os":          ["Custeio", "Custo por OS"],
+    "custo_direto_os":   ["Custeio", "Custo Direto Via OS"],
+    "custo_direto_lc":   ["Custeio", "Custo Direto Lançamento"],
+    "custo_indireto":    ["Custeio", "Custo Indireto"],
+    "custo_area":        ["Custeio", "Custo por Área"],
+    "os_excluidas":      ["Custeio", "OSs excluídas"],
+    "entregas":          ["Custeio", "Entregas pendentes"],
+    "organograma":       ["Dep. Pessoal e RH", "Organograma"],
+    "funcionarios":      ["Dep. Pessoal e RH", "Funcionários"],
+    "beneficios":        ["Dep. Pessoal e RH", "Benefícios"],
+    "folha":             ["Dep. Pessoal e RH", "Folha"],
+    "impostos":          ["Dep. Pessoal e RH", "Impostos"],
+    "bonus_config":      ["Dep. Pessoal e RH", "Bônus — Configuração"],
+    "bonus_individual":  ["Dep. Pessoal e RH", "Bônus — Individual"],
+    "configuracao":      ["Configuração"],
+    "cfg_centros":       ["Configuração", "Centros de Custo"],
+    "cfg_plano":         ["Configuração", "Plano de Contas"],
+    "cfg_cfop":          ["Configuração", "CFOP"],
+    "cfg_classif":       ["Configuração", "Classif. Faturamento"],
+    "cfg_estoque":       ["Configuração", "Estoque"],
+    "cfg_auditoria":     ["Configuração", "Auditoria"],
+    "cfg_usuarios":      ["Configuração", "Usuários"],
+    "cfg_perfis":        ["Configuração", "Tipos de Perfil"],
+    "cfg_diagnostico":   ["Configuração", "Diagnóstico"],
+    "cfg_parametros":    ["Configuração", "Parâmetros"],
+    "cfg_rubricas":      ["Configuração", "Rubricas"],
+    "cfg_trocasenha":    ["Configuração", "Trocar minha senha"]
+  };
+
+  function aplicarBreadcrumb(pageId) {
+    var parts = BREADCRUMB_MAP[pageId];
+    if (!parts) { setBreadcrumb([]); return; }
+    setBreadcrumb(parts);
+  }
+
+  // Cliques em botões dentro do breadcrumb (navegação)
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (t && t.matches && t.matches("#breadcrumb-nav [data-goto]")) {
+      var dest = t.getAttribute("data-goto");
+      if (dest && typeof navegarPara === "function") navegarPara(dest);
+    }
+  });
 
   function mostrarMensagem(titulo, mensagem, tipo, onOk) {
     tipo = tipo || "info";
@@ -2835,6 +2921,25 @@
     modalErro.hidden = true;
     modalSalvar.disabled = false;
     modalSalvar.textContent = "Salvar";
+    // Botão opcional "Salvar e adicionar próximo" (#10)
+    var salvarProx = document.getElementById("modal-salvar-prox");
+    if (config.salvarProximo) {
+      if (!salvarProx) {
+        salvarProx = document.createElement("button");
+        salvarProx.id = "modal-salvar-prox";
+        salvarProx.type = "button";
+        salvarProx.className = "btn-limpar";
+        salvarProx.textContent = "Salvar e adicionar próximo";
+        modalSalvar.parentNode.insertBefore(salvarProx, modalSalvar);
+        salvarProx.addEventListener("click", function () {
+          modalConfig._salvarProximoFlag = true;
+          modalForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        });
+      }
+      salvarProx.hidden = false;
+    } else if (salvarProx) {
+      salvarProx.hidden = true;
+    }
     modalOverlay.hidden = false;
     setTimeout(function () {
       var first = modalFields.querySelector("input, select, textarea");
@@ -2875,8 +2980,19 @@
         modalSalvar.textContent = "Salvar";
         return;
       }
+      var reabrir = !!(modalConfig && modalConfig._salvarProximoFlag);
+      var mc = modalConfig;
       fecharModal();
-      try { toast((modalConfig && modalConfig.toastSucesso) || "Salvo com sucesso.", "ok"); } catch (e) {}
+      try { toast((mc && mc.toastSucesso) || "Salvo com sucesso.", "ok"); } catch (e) {}
+      if (reabrir && mc && typeof mc.onAbrirProximo === "function") {
+        try { mc.onAbrirProximo(); } catch (e) {}
+      } else if (reabrir && mc) {
+        // Reabre limpo com a mesma config (campos zerados)
+        var copy = Object.assign({}, mc);
+        copy._salvarProximoFlag = false;
+        copy.fields = (mc.fields || []).map(function (f) { var c = Object.assign({}, f); delete c.valor; return c; });
+        setTimeout(function () { abrirModal(copy); }, 50);
+      }
     });
   });
 
@@ -6668,6 +6784,21 @@
   var audLista = [];
   var audCarregado = false;
 
+  // Bind: re-render quando 'minhas' muda
+  (function () {
+    function bindAudMinhas() {
+      var cb = document.getElementById("aud-minhas");
+      if (!cb || cb.dataset.bound) return;
+      cb.dataset.bound = "aud-minhas-bound";
+      cb.addEventListener("change", function () { if (typeof renderAuditoria === "function") renderAuditoria(); });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bindAudMinhas);
+    } else {
+      setTimeout(bindAudMinhas, 100);
+    }
+  })();
+
   function carregarAuditoriaSeNecessario() {
     document.getElementById("aud-tbody").innerHTML = '<tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr>';
     // Limita a últimos 1000 eventos para não estourar
@@ -6702,6 +6833,7 @@
     var tbody = document.getElementById("aud-tbody");
     var busca   = (document.getElementById("aud-busca").value || "").trim().toLowerCase();
     var tabela  = document.getElementById("aud-tabela").value;
+    var minhas  = (document.getElementById("aud-minhas") || {}).checked;
     var tipo    = document.getElementById("aud-tipo").value;
     var mes     = document.getElementById("aud-mes").value;
 
@@ -6709,6 +6841,10 @@
       if (tabela && e.tabela !== tabela) return false;
       if (tipo && e.acao !== tipo) return false;
       if (mes && String(e.criado_em || "").slice(0,7) !== mes) return false;
+      if (minhas) {
+        var meId = (window._terraUser && window._terraUser.id) || (typeof currentUser !== "undefined" && currentUser && currentUser.id) || "";
+        if (meId && e.usuario_id !== meId) return false;
+      }
       return matchBusca(busca, [e.tabela, e.registro_id, e.usuario_nome, e.acao]);
     });
 
@@ -11046,6 +11182,63 @@
       // Demais casos — chama original (que pode também aplicar política se onConflict + tabela em TABELAS_COM_HISTORICO)
       return _confirmarOriginal_M26(tpl);
     };
+  }
+
+
+  // -- Dashboard KPIs --------------------------------------------------------
+  function carregarKpisDashboard() {
+    var hoje = new Date();
+    var iso7 = new Date(hoje.getTime() + 7*24*60*60*1000).toISOString().slice(0,10);
+    var hojeIso = hoje.toISOString().slice(0,10);
+
+    // Caixa hoje: soma do último saldo de cada conta bancária
+    var elCaixa = document.getElementById("kpi-caixa-hoje");
+    if (elCaixa) {
+      client.from("saldos_contas").select("conta_bancaria_id, saldo_final, mes_ref").order("mes_ref", { ascending: false }).then(function (r) {
+        if (r.error) { elCaixa.textContent = "—"; return; }
+        var byConta = {};
+        (r.data || []).forEach(function (s) {
+          if (!(s.conta_bancaria_id in byConta)) byConta[s.conta_bancaria_id] = Number(s.saldo_final || 0);
+        });
+        var soma = 0;
+        Object.keys(byConta).forEach(function (k) { soma += byConta[k]; });
+        elCaixa.textContent = fmtBRL(soma);
+      });
+    }
+
+    // A pagar 7d: compromissos_financeiros com vencimento <= +7d e pago_em IS NULL
+    var elPagar = document.getElementById("kpi-pagar-7d");
+    if (elPagar) {
+      client.from("compromissos_financeiros").select("valor, vencimento, pago_em").is("pago_em", null).lte("vencimento", iso7).then(function (r) {
+        if (r.error) { elPagar.textContent = "—"; return; }
+        var soma = (r.data || []).reduce(function (acc, c) { return acc + Number(c.valor || 0); }, 0);
+        elPagar.textContent = fmtBRL(soma);
+      });
+    }
+
+    // NFs em aberto: notas fiscais sem recebimento (heurística: status_recebimento != 'Liquidado')
+    var elNf = document.getElementById("kpi-nf-aberto");
+    if (elNf) {
+      // Usar orcamentos como proxy (mesma lógica do Dashboard atual)
+      client.from("orcamentos").select("nota_fiscal, status_recebimento").not("nota_fiscal", "is", null).then(function (r) {
+        if (r.error) { elNf.textContent = "—"; return; }
+        var emAberto = (r.data || []).filter(function (o) { return o.status_recebimento && o.status_recebimento !== "Liquidado"; });
+        elNf.textContent = fmtInt(emAberto.length);
+      });
+    }
+
+    // OSs em atraso: ordens_servico com prazo_entrega < hoje e status != 'Entregue'
+    var elOs = document.getElementById("kpi-os-atraso");
+    if (elOs) {
+      client.from("ordens_servico").select("id, status, prazo_entrega").lt("prazo_entrega", hojeIso).then(function (r) {
+        if (r.error) { elOs.textContent = "—"; return; }
+        var atrasadas = (r.data || []).filter(function (os) {
+          var s = (os.status || "").toLowerCase();
+          return s !== "entregue" && s !== "concluida" && s !== "concluída" && s !== "cancelada";
+        });
+        elOs.textContent = fmtInt(atrasadas.length);
+      });
+    }
   }
 
 })();

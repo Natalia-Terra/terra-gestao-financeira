@@ -2178,3 +2178,63 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 .tbl-vazio .empty-cta .btn-limpar {
   font-size: 12px;
 }
+
+
+/* =========================================================
+   TOPBAR — pílula de perfil + info coluna
+   ========================================================= */
+.topbar-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.1;
+}
+.topbar-perfil-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--borda);
+  border-radius: var(--r-pill);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text2);
+  font-weight: 700;
+}
+
+/* =========================================================
+   BREADCRUMB (caminho de navegação)
+   ========================================================= */
+.breadcrumb {
+  padding: 8px 24px 4px;
+  font-size: 12px;
+  color: var(--text3);
+  display: none;  /* só aparece quando JS popula */
+}
+.breadcrumb.has-content { display: block; }
+.breadcrumb a, .breadcrumb button {
+  background: none;
+  border: 0;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: none;
+}
+.breadcrumb a:hover, .breadcrumb button:hover { color: var(--ouro); text-decoration: underline; }
+.breadcrumb .sep { margin: 0 6px; color: var(--text4); }
+.breadcrumb .current { color: var(--text2); font-weight: 700; }
+
+/* =========================================================
+   DASHBOARD — separador de seção
+   ========================================================= */
+.dash-section-title {
+  margin: 24px 0 8px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+  font-weight: 700;
+}
