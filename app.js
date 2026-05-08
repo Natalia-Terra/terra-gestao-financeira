@@ -7952,6 +7952,8 @@
     if (iniInput && !iniInput.dataset.bound) { iniInput.dataset.bound = "1"; iniInput.addEventListener("change", renderFluxoVisao); }
     var modo = document.getElementById("flv-modo");
     if (modo && !modo.dataset.bound) { modo.dataset.bound = "1"; modo.addEventListener("change", renderFluxoVisao); }
+    var cen = document.getElementById("flv-cenario");
+    if (cen && !cen.dataset.bound) { cen.dataset.bound = "1"; cen.addEventListener("change", renderFluxoVisao); }
     var btnRec = document.getElementById("flv-btn-recarregar");
     if (btnRec && !btnRec.dataset.bound) {
       btnRec.dataset.bound = "1";
@@ -7961,6 +7963,15 @@
         carregarFluxoVisaoSeNecessario();
       });
     }
+  }
+
+
+  // -- Fluxo preditivo: fatores de cenario --------------------------------
+  function getCenarioFatores() {
+    var cenario = ((document.getElementById("flv-cenario")||{}).value || "realista");
+    if (cenario === "otimista")    return { receita: 1.10, saida: 0.95, label: "Otimista" };
+    if (cenario === "pessimista")  return { receita: 0.90, saida: 1.10, label: "Pessimista" };
+    return { receita: 1.00, saida: 1.00, label: "Realista" };
   }
 
   function renderFluxoVisao() {
@@ -8020,9 +8031,11 @@
       var saiOutReal = (saidasOutrasLista || []).filter(function (s) { return s.pago_em && s.pago_em >= inicioMes && s.pago_em <= fimMes; })
         .reduce(function (acc, s) { return acc + Number(s.valor || 0); }, 0);
 
-      var entProj = recProj + entOutProj;
+      // Fatores de cenário aplicados sobre PROJETADO (realizado é fato)
+      var fatores = getCenarioFatores();
+      var entProj = (recProj + entOutProj) * fatores.receita;
       var entReal = recReal + entOutReal;
-      var saiProj = folhaTotal + compProj + saiOutProj;
+      var saiProj = (folhaTotal + compProj + saiOutProj) * fatores.saida;
       var saiReal = folhaTotal + compReal + saiOutReal;  // Folha por enquanto vai sempre nas duas (projetado = realizado)
 
       return {
@@ -8087,6 +8100,65 @@
     rows.push('<tr class="flv-grupo flv-final"><td class="flv-rotulo">SALDO FINAL</td>' + dadosMes.map(function (d) { return celValor(d.saldoFinalProj, d.saldoFinalReal); }).join("") + '</tr>');
 
     document.getElementById("flv-tbody").innerHTML = rows.join("");
+
+    // -- KPIs preditivos: caixa hoje, runway, mês crítico, saldo 12m --
+    try {
+      // Caixa hoje = ultimo saldoFinalProj disponível (ou soma dos saldos por conta)
+      var caixaHoje = 0;
+      // Procura último mês que tem saldoFinalReal não-null; senão usa saldoInicialProj do mês 0
+      for (var i = dadosMes.length - 1; i >= 0; i--) {
+        if (dadosMes[i].saldoFinalReal != null) { caixaHoje = dadosMes[i].saldoFinalReal; break; }
+      }
+      if (caixaHoje === 0 && dadosMes[0].saldoInicialProj != null) caixaHoje = dadosMes[0].saldoInicialProj;
+
+      // Runway: simula saldo acumulado mês a mês com fluxo projetado, e acha primeiro mês negativo
+      var saldoAcum = caixaHoje;
+      var mesCritico = null;
+      var diasRunway = null;
+      var diaInicio = new Date(meses[0].iso);
+      for (var j = 0; j < dadosMes.length; j++) {
+        var d = dadosMes[j];
+        var fluxoMes = d.entProj - d.saiProj;
+        var saldoAntes = saldoAcum;
+        saldoAcum += fluxoMes;
+        if (saldoAcum < 0 && mesCritico === null) {
+          mesCritico = meses[j].label;
+          // Estimar quantos dias dentro deste mês
+          var diasNoMes = new Date(meses[j].ano, meses[j].mes, 0).getDate();
+          var fracaoConsumida = saldoAntes > 0 ? (saldoAntes / Math.abs(fluxoMes)) : 0;
+          var diasEsteMes = Math.floor(fracaoConsumida * diasNoMes);
+          // Soma dias dos meses anteriores
+          var diasAcum = 0;
+          for (var k = 0; k < j; k++) {
+            diasAcum += new Date(meses[k].ano, meses[k].mes, 0).getDate();
+          }
+          diasRunway = diasAcum + diasEsteMes;
+        }
+      }
+      var saldo12m = dadosMes[dadosMes.length - 1].saldoFinalProj != null ? dadosMes[dadosMes.length - 1].saldoFinalProj : saldoAcum;
+
+      // Popular cards
+      function vt(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
+      vt("flv-k-caixa", fmtBRL(caixaHoje));
+      if (diasRunway !== null) {
+        vt("flv-k-runway", diasRunway + " dias");
+        var elRunway = document.getElementById("flv-k-runway");
+        if (elRunway) elRunway.style.color = diasRunway < 60 ? "var(--danger)" : (diasRunway < 180 ? "var(--warn)" : "var(--success)");
+        vt("flv-k-runway-sub", "no cenário " + getCenarioFatores().label);
+        vt("flv-k-mes-critico", mesCritico || "—");
+        var elMc = document.getElementById("flv-k-mes-critico");
+        if (elMc) elMc.style.color = "var(--danger)";
+      } else {
+        vt("flv-k-runway", "12m+");
+        var elRunway2 = document.getElementById("flv-k-runway");
+        if (elRunway2) elRunway2.style.color = "var(--success)";
+        vt("flv-k-runway-sub", "saldo nunca fica negativo no horizonte");
+        vt("flv-k-mes-critico", "—");
+      }
+      vt("flv-k-saldo-12m", fmtBRL(saldo12m));
+      var elS = document.getElementById("flv-k-saldo-12m");
+      if (elS) elS.style.color = saldo12m < 0 ? "var(--danger)" : "var(--text)";
+    } catch (e) { console.error("Erro nos KPIs preditivos:", e); }
 
     fluxoVisaoCarregado = true;
   }

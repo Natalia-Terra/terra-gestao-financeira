@@ -1730,6 +1730,12 @@
             <h1 class="page-title">Fluxo de Caixa — Visão 12 meses</h1>
             <p class="page-sub">Saldo Inicial · Entradas · Saídas · Saldo Final — Projetado vs Realizado</p>
           </div>
+          <div class="grid-metrics" id="flv-kpis">
+            <div class="metric-card"><div class="metric-label">Caixa hoje (estimado)</div><div class="metric-value" id="flv-k-caixa">—</div><div class="metric-sub">soma do último saldo por conta</div></div>
+            <div class="metric-card"><div class="metric-label">Runway</div><div class="metric-value" id="flv-k-runway">—</div><div class="metric-sub" id="flv-k-runway-sub">dias até o caixa zerar (cenário atual)</div></div>
+            <div class="metric-card"><div class="metric-label">Mês crítico</div><div class="metric-value" id="flv-k-mes-critico">—</div><div class="metric-sub">primeiro mês com saldo negativo</div></div>
+            <div class="metric-card"><div class="metric-label">Saldo final em 12m</div><div class="metric-value" id="flv-k-saldo-12m">—</div><div class="metric-sub">projeção no fim do horizonte</div></div>
+          </div>
 
           <div class="toolbar" style="margin-bottom:14px">
             <label class="toolbar-inline">A partir de:
@@ -1740,6 +1746,13 @@
                 <option value="comparar">Comparar (Projetado × Realizado)</option>
                 <option value="projetado">Só Projetado</option>
                 <option value="realizado">Só Realizado</option>
+              </select>
+            </label>
+            <label class="toolbar-inline">Cenário:
+              <select id="flv-cenario">
+                <option value="realista">Realista (dados atuais)</option>
+                <option value="otimista">Otimista (+10% receita / −5% saída)</option>
+                <option value="pessimista">Pessimista (−10% receita / +10% saída)</option>
               </select>
             </label>
             <button class="btn-limpar" id="flv-btn-recarregar" type="button">Recarregar</button>
