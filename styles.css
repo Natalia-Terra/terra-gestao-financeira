@@ -2238,3 +2238,21 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   color: var(--text2);
   font-weight: 700;
 }
+
+
+/* =========================================================
+   SELECT COM BUSCA — wrapper para selects grandes (>50 opcoes)
+   ========================================================= */
+.select-com-busca {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.select-com-busca .select-busca-input {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.select-com-busca select {
+  /* Mantem o select com mesmo estilo */
+  width: 100%;
+}

@@ -394,6 +394,58 @@
     }
   });
 
+  // -- Busca em selects grandes (>50 opcoes) ---------------------------------
+  // Insere um input de busca acima do <select> e filtra as opcoes conforme o
+  // usuario digita. Idempotente — nao aplica duas vezes no mesmo select.
+  function enhanceLargeSelect(sel, opts) {
+    if (!sel || sel.dataset.enhanced === "1") return;
+    var minOpts = (opts && opts.minOpts) || 50;
+    if (sel.options.length < minOpts) return;
+    sel.dataset.enhanced = "1";
+
+    var wrapper = document.createElement("div");
+    wrapper.className = "select-com-busca";
+    sel.parentNode.insertBefore(wrapper, sel);
+    wrapper.appendChild(sel);
+
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "input-search select-busca-input";
+    inp.placeholder = "🔍 Filtrar (" + sel.options.length + " opcoes)";
+    inp.style.marginBottom = "4px";
+    wrapper.insertBefore(inp, sel);
+
+    // Snapshot inicial das opcoes (sem filtro)
+    var snap = Array.prototype.slice.call(sel.options).map(function (o) {
+      return { value: o.value, text: o.textContent, parent: o.parentNode };
+    });
+
+    inp.addEventListener("input", function () {
+      var q = (inp.value || "").trim().toLowerCase();
+      var visiveis = 0;
+      Array.prototype.forEach.call(sel.options, function (opt) {
+        var bate = !q || opt.textContent.toLowerCase().indexOf(q) !== -1;
+        opt.hidden = !bate;
+        if (bate) visiveis++;
+      });
+      // Se a opcao atualmente selecionada foi escondida, abrir o select pra
+      // forcar o usuario a escolher uma visivel
+      if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) {
+        // Procura a primeira visivel e seleciona
+        var firstVis = Array.prototype.find.call(sel.options, function (o) { return !o.hidden; });
+        if (firstVis) sel.value = firstVis.value;
+      }
+    });
+  }
+
+  // Auto-aplicar enhanceLargeSelect em todos os <select> visiveis com >50 opcoes
+  function autoEnhanceLargeSelects(root) {
+    var scope = root || document;
+    scope.querySelectorAll("select").forEach(function (s) {
+      try { enhanceLargeSelect(s); } catch (e) {}
+    });
+  }
+
   function showPage(pageId) {
     // Self-healing: limpa overlays orfaos antes de navegar (bug do Reset)
     try { limparOverlaysOrfaos(); } catch (e) {}
@@ -403,6 +455,8 @@
     });
     // Auto-inject export XLSX em toolbars que ainda nao tem
     setTimeout(function () { try { autoInjetarExportXlsx(); } catch (e) {} }, 100);
+    // Auto-enhance selects grandes (>50 opcoes)
+    setTimeout(function () { try { autoEnhanceLargeSelects(); } catch (e) {} }, 200);
 
     // Atualiza a faixa 2 da topbar com o título da página atual
     var pagina = document.querySelector('#shell .main .page[data-page="' + pageId + '"]');
@@ -3041,6 +3095,8 @@
     modalErro.hidden = true;
     modalSalvar.disabled = false;
     modalSalvar.textContent = "Salvar";
+    // Auto-enhance selects grandes dentro do modal apos render
+    setTimeout(function () { try { autoEnhanceLargeSelects(modalFields); } catch (e) {} }, 50);
     // Botão opcional "Salvar e adicionar próximo" (#10)
     var salvarProx = document.getElementById("modal-salvar-prox");
     if (config.salvarProximo) {
