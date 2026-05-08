@@ -401,6 +401,8 @@
     document.querySelectorAll("#shell .main .page").forEach(function (sec) {
       sec.hidden = sec.getAttribute("data-page") !== pageId;
     });
+    // Auto-inject export XLSX em toolbars que ainda nao tem
+    setTimeout(function () { try { autoInjetarExportXlsx(); } catch (e) {} }, 100);
 
     // Atualiza a faixa 2 da topbar com o título da página atual
     var pagina = document.querySelector('#shell .main .page[data-page="' + pageId + '"]');
@@ -702,11 +704,36 @@
 
   function ligarFiltros(prefixo, renderFn) {
     var ids = ["busca", "mes", "ano", "tipo", "natureza", "status", "filtro", "grupo", "nivel", "livro", "cc", "org", "dre"];
+    var STORAGE_KEY = "terra-filtros-" + prefixo;
+
+    function salvar() {
+      var snap = {};
+      ids.forEach(function (suf) {
+        var el = document.getElementById(prefixo + suf);
+        if (el) snap[suf] = el.value;
+      });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snap)); } catch (e) {}
+    }
+    function restaurar() {
+      var snap = null;
+      try { snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch (e) {}
+      if (!snap) return false;
+      var aplicou = false;
+      ids.forEach(function (suf) {
+        var el = document.getElementById(prefixo + suf);
+        if (el && snap[suf] !== undefined && snap[suf] !== "") {
+          el.value = snap[suf];
+          aplicou = true;
+        }
+      });
+      return aplicou;
+    }
+
     ids.forEach(function (suf) {
       var el = document.getElementById(prefixo + suf);
       if (!el) return;
       var evt = el.tagName === "INPUT" && el.type !== "month" ? "input" : "change";
-      el.addEventListener(evt, renderFn);
+      el.addEventListener(evt, function () { salvar(); renderFn(); });
     });
     var btn = document.getElementById(prefixo + "btn-limpar");
     if (btn) {
@@ -718,9 +745,67 @@
             else el.value = "";
           }
         });
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         renderFn();
       });
     }
+    // Restaurar filtros salvos (se houver) na primeira chamada — postergar
+    // pra acontecer apos a tabela ter carregado.
+    setTimeout(function () {
+      if (restaurar()) renderFn();
+    }, 50);
+  }
+
+  // -- Export XLSX universal (qualquer tabela renderizada) -------------------
+  function exportarTabelaXlsx(tableEl, nomeArquivo, abaName) {
+    if (typeof window.XLSX === "undefined") {
+      try { toast("Biblioteca XLSX ainda carregando — tente em alguns segundos.", "warn"); } catch (e) { alert("XLSX ainda carregando."); }
+      return;
+    }
+    if (!tableEl) {
+      try { toast("Tabela nao encontrada para exportar.", "erro"); } catch (e) {}
+      return;
+    }
+    try {
+      var wb = window.XLSX.utils.book_new();
+      var ws = window.XLSX.utils.table_to_sheet(tableEl);
+      window.XLSX.utils.book_append_sheet(wb, ws, (abaName || "Dados").slice(0, 31));
+      var iso = new Date().toISOString().slice(0, 10);
+      var nome = (nomeArquivo || "exportacao") + "-" + iso + ".xlsx";
+      window.XLSX.writeFile(wb, nome);
+      try { toast("Exportado: " + nome, "ok"); } catch (e) {}
+    } catch (e) {
+      try { toast("Erro ao exportar: " + e.message, "erro"); } catch (er) { alert("Erro: " + e.message); }
+    }
+  }
+
+  // -- Auto-injeta botao "Exportar XLSX" em todas as toolbars dentro de .fat-card --
+  // Idempotente: nao adiciona dois.
+  function autoInjetarExportXlsx() {
+    document.querySelectorAll(".fat-card .toolbar").forEach(function (toolbar) {
+      // Se ja tem botao de export, pular
+      if (toolbar.querySelector(".btn-export-auto") || toolbar.querySelector("[id$=\"-btn-export\"]")) return;
+      // Procurar a tabela irma (dentro do mesmo fat-card)
+      var card = toolbar.closest(".fat-card");
+      if (!card) return;
+      var table = card.querySelector("table.tabela");
+      if (!table) return;
+      var tbody = table.querySelector("tbody");
+      var tbodyId = tbody ? tbody.id : "";
+      // Derivar nome do arquivo a partir do prefix do tbody (ex: "fn-tbody" -> "funcionarios")
+      var pageSec = card.closest("section.page");
+      var pageId = pageSec ? pageSec.getAttribute("data-page") : "tabela";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-limpar btn-export-auto";
+      btn.title = "Exportar tabela atual em XLSX";
+      btn.textContent = "⤓ Exportar XLSX";
+      btn.style.marginLeft = "auto";
+      btn.addEventListener("click", function () {
+        exportarTabelaXlsx(table, pageId || "exportacao", pageId || "Dados");
+      });
+      toolbar.appendChild(btn);
+    });
   }
 
   function carregarOrcamentosSeNecessario() {
