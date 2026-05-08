@@ -581,6 +581,32 @@
     if (btnNovoFol) btnNovoFol.addEventListener("click", abrirModalFolha);
     if (btnNovoImp) btnNovoImp.addEventListener("click", abrirModalImposto);
 
+    // Plano de Contas — Novo + Importar XLSX
+    var btnNovoPc = document.getElementById("pc-btn-novo");
+    var btnImpPc  = document.getElementById("pc-btn-import");
+    var fileImpPc = document.getElementById("pc-import-file");
+    if (btnNovoPc) btnNovoPc.addEventListener("click", function () { abrirModalPlanoContas(); });
+    if (btnImpPc && fileImpPc) {
+      btnImpPc.addEventListener("click", function () { fileImpPc.value = ""; fileImpPc.click(); });
+      fileImpPc.addEventListener("change", function () {
+        if (fileImpPc.files && fileImpPc.files[0]) importarPlanoContasXlsx(fileImpPc.files[0]);
+      });
+    }
+
+    // CFOP — Marcar / Desmarcar visíveis + Importar XLSX
+    var btnCfMarcar    = document.getElementById("cf-btn-marcar-todos");
+    var btnCfDesmarcar = document.getElementById("cf-btn-desmarcar-todos");
+    var btnCfImp       = document.getElementById("cf-btn-import");
+    var fileCfImp      = document.getElementById("cf-import-file");
+    if (btnCfMarcar)    btnCfMarcar.addEventListener("click",    function () { aplicarCfopMassa(true);  });
+    if (btnCfDesmarcar) btnCfDesmarcar.addEventListener("click", function () { aplicarCfopMassa(false); });
+    if (btnCfImp && fileCfImp) {
+      btnCfImp.addEventListener("click", function () { fileCfImp.value = ""; fileCfImp.click(); });
+      fileCfImp.addEventListener("change", function () {
+        if (fileCfImp.files && fileCfImp.files[0]) importarCfopXlsx(fileCfImp.files[0]);
+      });
+    }
+
     // Organograma
     var orgExp = document.getElementById("org-btn-expandir");
     var orgRec = document.getElementById("org-btn-recolher");
@@ -1414,11 +1440,11 @@
     if (pcCarregado) { renderPlanoContas(); return; }
     if (pcCarregando) return;          // evita fetch+populate em paralelo
     pcCarregando = true;
-    document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio">Carregando 510 contas…</td></tr>';
+    document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="8" class="tbl-vazio">Carregando contas…</td></tr>';
     client.from("plano_contas").select("*").order("seq", { ascending: true }).then(function (r) {
       pcCarregando = false;
       if (r.error) {
-        document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        document.getElementById("pc-tbody").innerHTML = '<tr><td colspan="8" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
         return;
       }
       planoContas = r.data || [];
@@ -1477,8 +1503,203 @@
         '<td>' + escHtml(p.descritivo) + '</td>' +
         '<td>' + escHtml(p.grupo || "—") + '</td>' +
         '<td>' + escHtml(p.dre || "—") + '</td>' +
+        '<td>' +
+          '<button class="btn-limpar" data-pc-edit="' + p.id + '" title="Editar">✎ Editar</button> ' +
+          '<button class="btn-limpar" data-pc-del="' + p.id + '" title="Excluir">🗑 Excluir</button>' +
+        '</td>' +
       '</tr>';
-    }), 7);
+    }), 8);
+
+    // Wire-up: editar
+    tbody.querySelectorAll("[data-pc-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-pc-edit"));
+        var p = planoContas.find(function (x) { return x.id === id; });
+        if (p) abrirModalPlanoContas(p);
+      });
+    });
+    // Wire-up: excluir
+    tbody.querySelectorAll("[data-pc-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-pc-del"));
+        var p = planoContas.find(function (x) { return x.id === id; });
+        if (!p) return;
+        if (!confirm("Excluir conta " + (p.cod_conta || "?") + " - " + (p.descritivo || "") + "?\n\nEssa ação não pode ser desfeita.")) return;
+        client.from("plano_contas").delete().eq("id", id).then(function (r) {
+          if (r.error) { alert("Erro ao excluir: " + r.error.message); return; }
+          pcCarregado = false; carregarPlanoContasSeNecessario();
+        });
+      });
+    });
+  }
+
+  // -- CRUD: modal Novo/Editar conta -----------------------------------------
+  function abrirModalPlanoContas(p) {
+    p = p || {};
+    var editar = !!p.id;
+
+    var grupos = {};
+    var dres   = {};
+    var nats   = {};
+    (planoContas || []).forEach(function (x) {
+      if (x.grupo)    grupos[x.grupo]    = true;
+      if (x.dre)      dres[x.dre]        = true;
+      if (x.natureza) nats[x.natureza]   = true;
+    });
+    var optsGrupo = [{ value: "", label: "—" }].concat(Object.keys(grupos).sort().map(function (g) { return { value: g, label: g }; }));
+    var optsDre   = [{ value: "", label: "—" }].concat(Object.keys(dres).sort().map(function (d) { return { value: d, label: d }; }));
+    var optsNat   = [{ value: "", label: "—" }].concat(Object.keys(nats).sort().map(function (n) { return { value: n, label: n }; }));
+
+    abrirModal({
+      titulo: editar ? "Editar conta" : "Nova conta",
+      fields: [
+        { name: "seq",          label: "Seq",                 type: "number", valor: p.seq, group: "Identificação" },
+        { name: "nivel",        label: "Nível (1 a 5)",       type: "number", valor: p.nivel, required: true, group: "Identificação" },
+        { name: "cod_conta",    label: "Código",              type: "text",   valor: p.cod_conta, required: true, group: "Identificação" },
+        { name: "numero_conta", label: "Nº da Conta (GRV)",   type: "text",   valor: p.numero_conta, group: "Identificação" },
+        { name: "descritivo",   label: "Descritivo",          type: "text",   valor: p.descritivo, required: true, group: "Identificação" },
+        { name: "grupo",        label: "Grupo",               type: "select", valor: p.grupo || "", options: optsGrupo, group: "Classificação" },
+        { name: "dre",          label: "DRE",                 type: "select", valor: p.dre || "",   options: optsDre,   group: "Classificação" },
+        { name: "natureza",     label: "Natureza (Fixo/Variável)", type: "select", valor: p.natureza || "", options: optsNat, group: "Classificação" },
+        { name: "rateio",       label: "Rateio?",             type: "select", valor: p.rateio || "Não",
+          options: [{ value: "Sim", label: "Sim" }, { value: "Não", label: "Não" }], group: "Classificação" }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          seq:          v.seq != null ? Number(v.seq) : null,
+          nivel:        Number(v.nivel),
+          cod_conta:    v.cod_conta,
+          numero_conta: v.numero_conta || null,
+          descritivo:   v.descritivo,
+          grupo:        v.grupo || null,
+          dre:          v.dre || null,
+          natureza:     v.natureza || null,
+          rateio:       v.rateio || "Não"
+        };
+        var q = editar
+          ? client.from("plano_contas").update(payload).eq("id", p.id)
+          : client.from("plano_contas").insert(Object.assign({ importacao_id: 1 }, payload));
+        q.then(function (r) {
+          if (r.error) { done(r.error.message); return; }
+          pcCarregado = false; carregarPlanoContasSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  // -- Importação XLSX do Plano de Contas ------------------------------------
+  function importarPlanoContasXlsx(arq) {
+    if (typeof window.XLSX === "undefined") {
+      alert("Biblioteca XLSX ainda carregando. Aguarde alguns segundos e tente de novo.");
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false, header: 1 });
+        if (!raw.length) { alert("Planilha vazia."); return; }
+
+        var headerRow = -1;
+        for (var i = 0; i < Math.min(raw.length, 10); i++) {
+          var row = raw[i] || [];
+          var hasCod = row.some(function (c) { return /c[oó]d.*conta/i.test(String(c || "")); });
+          if (hasCod) { headerRow = i; break; }
+        }
+        if (headerRow === -1) {
+          alert("Não foi possível encontrar o cabeçalho. A planilha precisa ter uma coluna chamada 'CÓD CONTA' (ou 'Cod Conta').");
+          return;
+        }
+
+        var cabs = raw[headerRow].map(function (c) { return String(c || "").trim(); });
+        var idx = {};
+        cabs.forEach(function (c, i) {
+          var n = c.toLowerCase().replace(/[^a-zà-ú0-9]+/gi, " ").trim();
+          if (/^seq/.test(n))                    idx.seq = i;
+          else if (/^n[ií]vel/.test(n))          idx.nivel = i;
+          else if (/c[oó]d.*conta/.test(n))      idx.cod_conta = i;
+          else if (/n.*da.*conta|n[uú]mero.*conta|n.*conta/.test(n)) idx.numero_conta = i;
+          else if (/descritivo|descri[cç][aã]o/.test(n)) idx.descritivo = i;
+          else if (/^grupo$/.test(n))            idx.grupo = i;
+          else if (/^dre$/.test(n))              idx.dre = i;
+          else if (/natureza/.test(n))           idx.natureza = i;
+          else if (/rateio/.test(n))             idx.rateio = i;
+        });
+
+        var faltando = ["cod_conta","descritivo"].filter(function (k) { return idx[k] === undefined; });
+        if (faltando.length) {
+          alert("Faltando colunas obrigatórias: " + faltando.join(", "));
+          return;
+        }
+
+        var linhas = [];
+        for (var r = headerRow + 1; r < raw.length; r++) {
+          var row = raw[r] || [];
+          if (!row.length) continue;
+          var cod = row[idx.cod_conta];
+          if (cod === null || cod === undefined || String(cod).trim() === "") continue;
+          linhas.push({
+            seq:          idx.seq          !== undefined && row[idx.seq]    !== null ? Number(row[idx.seq])    : null,
+            nivel:        idx.nivel        !== undefined && row[idx.nivel]  !== null ? Number(row[idx.nivel])  : null,
+            cod_conta:    String(cod).trim(),
+            numero_conta: idx.numero_conta !== undefined && row[idx.numero_conta] !== null ? String(row[idx.numero_conta]).trim() : null,
+            descritivo:   idx.descritivo   !== undefined && row[idx.descritivo] !== null ? String(row[idx.descritivo]).trim() : null,
+            grupo:        idx.grupo        !== undefined && row[idx.grupo]  !== null ? String(row[idx.grupo]).trim() : null,
+            dre:          idx.dre          !== undefined && row[idx.dre]    !== null ? String(row[idx.dre]).trim()   : null,
+            natureza:     idx.natureza     !== undefined && row[idx.natureza] !== null ? String(row[idx.natureza]).trim() : null,
+            rateio:       idx.rateio       !== undefined && row[idx.rateio] !== null ? String(row[idx.rateio]).trim() : "Não"
+          });
+        }
+        if (!linhas.length) { alert("Nenhuma linha de dados encontrada (depois do cabeçalho)."); return; }
+
+        if (!confirm("Importar " + linhas.length + " linha(s) do Plano de Contas?\n\nEstratégia: para cada linha, atualiza pelo (cod_conta + descritivo) se já existe; senão insere nova.\nAs contas que estão no banco mas NÃO na planilha permanecem inalteradas.")) return;
+
+        var existentes = {};
+        (planoContas || []).forEach(function (p) {
+          existentes[(p.cod_conta || "") + "||" + (p.descritivo || "")] = p;
+        });
+
+        var atualizados = 0, inseridos = 0, erros = 0;
+        var pendente = linhas.length;
+        function done() {
+          pendente--;
+          if (pendente === 0) {
+            alert("Importação concluída.\nAtualizados: " + atualizados + "\nInseridos: " + inseridos + "\nErros: " + erros);
+            pcCarregado = false; carregarPlanoContasSeNecessario();
+          }
+        }
+        linhas.forEach(function (lin) {
+          var key = (lin.cod_conta || "") + "||" + (lin.descritivo || "");
+          var ex  = existentes[key];
+          var payload = {
+            seq:          lin.seq,
+            nivel:        lin.nivel,
+            cod_conta:    lin.cod_conta,
+            numero_conta: lin.numero_conta,
+            descritivo:   lin.descritivo,
+            grupo:        lin.grupo,
+            dre:          lin.dre,
+            natureza:     lin.natureza,
+            rateio:       lin.rateio
+          };
+          var q = ex
+            ? client.from("plano_contas").update(payload).eq("id", ex.id)
+            : client.from("plano_contas").insert(Object.assign({ importacao_id: 1 }, payload));
+          q.then(function (r) {
+            if (r.error) erros++;
+            else if (ex) atualizados++;
+            else inseridos++;
+            done();
+          });
+        });
+      } catch (e) {
+        alert("Erro lendo arquivo: " + e.message);
+      }
+    };
+    reader.onerror = function () { alert("Falha ao ler arquivo."); };
+    reader.readAsArrayBuffer(arq);
   }
 
   // =========================================================================
@@ -1554,6 +1775,118 @@
         });
       });
     });
+  }
+
+  // -- CFOP: ações em massa (marcar/desmarcar todos os visíveis) ------------
+  function aplicarCfopMassa(novoValor) {
+    if (!cfopCarregado || !cfopLista.length) {
+      alert("Aguarde a tabela carregar.");
+      return;
+    }
+    var busca  = ((document.getElementById("cf-busca")||{}).value || "").trim().toLowerCase();
+    var filtro = ((document.getElementById("cf-filtro")||{}).value || "");
+    var visiveis = cfopLista.filter(function (c) {
+      if (filtro === "aplicaveis" && !c.aplicavel) return false;
+      if (filtro === "nao" && c.aplicavel) return false;
+      return matchBusca(busca, [c.cfop, c.cfop_formatado, c.descricao, c.grupo]);
+    });
+    var mudar = visiveis.filter(function (c) { return Boolean(c.aplicavel) !== Boolean(novoValor); });
+    if (!mudar.length) {
+      alert("Nenhum CFOP visível precisa de mudança (todos já estão " + (novoValor ? "marcados" : "desmarcados") + ").");
+      return;
+    }
+    var msg = (novoValor ? "Marcar como APLICÁVEL " : "Desmarcar (Não-aplicável) ") + mudar.length + " CFOP(s) visível(eis)?";
+    if (!confirm(msg)) return;
+
+    var ids = mudar.map(function (c) { return c.id; });
+    client.from("cfop").update({ aplicavel: novoValor }).in("id", ids).then(function (r) {
+      if (r.error) { alert("Erro ao atualizar em massa: " + r.error.message); return; }
+      cfopLista.forEach(function (c) { if (ids.indexOf(c.id) !== -1) c.aplicavel = novoValor; });
+      renderCfop();
+    });
+  }
+
+  // -- CFOP: importação XLSX (lista de aplicáveis) ---------------------------
+  function importarCfopXlsx(arq) {
+    if (typeof window.XLSX === "undefined") {
+      alert("Biblioteca XLSX ainda carregando. Aguarde alguns segundos e tente de novo.");
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var wb = window.XLSX.read(ev.target.result, { type: "array", cellDates: true });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var raw = window.XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false, header: 1 });
+        if (!raw.length) { alert("Planilha vazia."); return; }
+
+        var headerRow = -1;
+        for (var i = 0; i < Math.min(raw.length, 10); i++) {
+          var row = raw[i] || [];
+          var hasCfop = row.some(function (c) { return /^c[oó]digo$|cfop/i.test(String(c || "").trim()); });
+          if (hasCfop) { headerRow = i; break; }
+        }
+        if (headerRow === -1) {
+          alert("Não foi possível encontrar o cabeçalho. A planilha precisa ter uma coluna 'CFOP' ou 'Código'.");
+          return;
+        }
+
+        var cabs = raw[headerRow].map(function (c) { return String(c || "").trim().toLowerCase(); });
+        var idxCfop = -1, idxApl = -1;
+        cabs.forEach(function (c, i) {
+          if (/cfop|c[oó]digo/.test(c) && idxCfop === -1) idxCfop = i;
+          else if (/aplic[aá]vel|aplicavel|aplic/.test(c)) idxApl = i;
+        });
+        if (idxCfop === -1) { alert("Coluna 'CFOP' não encontrada."); return; }
+
+        var pares = [];
+        for (var r = headerRow + 1; r < raw.length; r++) {
+          var row = raw[r] || [];
+          var v = row[idxCfop];
+          if (v === null || v === undefined || String(v).trim() === "") continue;
+          var cfop = String(v).replace(/\D/g, "");
+          if (!cfop) continue;
+          var apl = true;
+          if (idxApl !== -1) {
+            var s = String(row[idxApl] || "").trim().toLowerCase();
+            apl = (s === "sim" || s === "true" || s === "1" || s === "x" || s === "s" || s === "yes");
+          }
+          pares.push({ cfop: cfop, aplicavel: apl });
+        }
+        if (!pares.length) { alert("Nenhum CFOP encontrado na planilha."); return; }
+
+        var dialog = "Importar " + pares.length + " linha(s) de CFOP?\n\n";
+        if (idxApl === -1) {
+          dialog += "Modo: TODOS os CFOPs listados ficarão marcados como APLICÁVEIS. Os demais permanecem como estão.\n";
+        } else {
+          dialog += "Modo: cada linha define explicitamente se o CFOP é aplicável (coluna Aplicável). Os CFOPs não listados permanecem como estão.\n";
+        }
+        if (!confirm(dialog)) return;
+
+        var atualizados = 0, naoEncontrados = 0, erros = 0;
+        var pendente = pares.length;
+        function done() {
+          pendente--;
+          if (pendente === 0) {
+            alert("Importação CFOP concluída.\nAtualizados: " + atualizados + "\nNão encontrados (cfop ausente do cadastro): " + naoEncontrados + "\nErros: " + erros);
+            cfopCarregado = false;
+            carregarCfopSeNecessario();
+          }
+        }
+        pares.forEach(function (par) {
+          client.from("cfop").update({ aplicavel: par.aplicavel }).eq("cfop", par.cfop).select("id").then(function (r) {
+            if (r.error) { erros++; done(); return; }
+            if (!r.data || !r.data.length) naoEncontrados++;
+            else atualizados++;
+            done();
+          });
+        });
+      } catch (e) {
+        alert("Erro lendo arquivo: " + e.message);
+      }
+    };
+    reader.onerror = function () { alert("Falha ao ler arquivo."); };
+    reader.readAsArrayBuffer(arq);
   }
 
   // =========================================================================

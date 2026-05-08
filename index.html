@@ -1355,11 +1355,11 @@
           <div class="page-header">
             <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
             <h1 class="page-title">Plano de Contas</h1>
-            <p class="page-sub">510 contas · 5 níveis hierárquicos</p>
+            <p class="page-sub">Cadastro de contas contábeis · 5 níveis hierárquicos</p>
           </div>
           <div class="card fat-card">
             <div class="toolbar">
-              <input class="input-search" type="text" id="pc-busca" placeholder="Buscar por código, descritivo ou grupo…" />
+              <input class="input-search" type="text" id="pc-busca" placeholder="Buscar por código, número, descritivo ou grupo…" />
               <select id="pc-grupo">
                 <option value="">Todos os grupos</option>
               </select>
@@ -1376,11 +1376,15 @@
               </select>
               <button class="btn-limpar" id="pc-btn-limpar" type="button">✕ Limpar</button>
               <span class="toolbar-label" id="pc-lbl"></span>
+              <span style="flex:1"></span>
+              <button class="btn-ouro" id="pc-btn-novo" type="button">+ Nova conta</button>
+              <button class="btn-limpar" id="pc-btn-import" type="button" title="Importar XLSX (Plano de Contas)">⤒ Importar XLSX</button>
+              <input type="file" id="pc-import-file" accept=".xlsx,.xls" hidden />
             </div>
             <div class="table-wrap">
               <table class="tabela">
-                <thead><tr><th>Seq</th><th>Nível</th><th>Código</th><th>Nº Conta</th><th>Descritivo</th><th>Grupo</th><th>DRE</th></tr></thead>
-                <tbody id="pc-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
+                <thead><tr><th>Seq</th><th>Nível</th><th>Código</th><th>Nº Conta</th><th>Descritivo</th><th>Grupo</th><th>DRE</th><th>Ações</th></tr></thead>
+                <tbody id="pc-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1409,6 +1413,11 @@
               <button class="btn-limpar" id="cf-btn-limpar" type="button">✕ Limpar</button>
               <button class="btn-limpar" id="cf-btn-export" type="button" title="Exportar XLSX">⤓ Exportar XLSX</button>
               <span class="toolbar-label" id="cf-lbl"></span>
+              <span style="flex:1"></span>
+              <button class="btn-limpar" id="cf-btn-marcar-todos" type="button" title="Marcar como aplicáveis todos os CFOPs visíveis (filtrados)">✓ Marcar visíveis</button>
+              <button class="btn-limpar" id="cf-btn-desmarcar-todos" type="button" title="Desmarcar (não-aplicáveis) todos os CFOPs visíveis (filtrados)">✗ Desmarcar visíveis</button>
+              <button class="btn-limpar" id="cf-btn-import" type="button" title="Importar XLSX com lista de CFOPs aplicáveis">⤒ Importar XLSX</button>
+              <input type="file" id="cf-import-file" accept=".xlsx,.xls" hidden />
             </div>
             <div class="table-wrap">
               <table class="tabela">
