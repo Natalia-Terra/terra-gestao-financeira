@@ -164,6 +164,10 @@
             <span id="topbar-nome">—</span>
             <span id="topbar-perfil" class="topbar-perfil-pill" title="Tipo de perfil">—</span>
           </div>
+          <button class="topbar-sino" id="topbar-sino" type="button" title="Alertas" aria-label="Alertas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="topbar-sino-badge" id="topbar-sino-badge" hidden>0</span>
+          </button>
           <button class="btn-sair" id="btn-sair" type="button" title="Sair">Sair</button>
         </div>
         <div class="topbar-data" id="topbar-data">—</div>
@@ -1278,6 +1282,16 @@
               <div class="config-card-title">Auditoria</div>
               <div class="config-card-desc">Histórico de alterações registradas pelas triggers — quem mudou o quê e quando</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_aud_alertas">
+              <div class="config-card-icon">🔔</div>
+              <div class="config-card-titulo">Alertas</div>
+              <div class="config-card-sub">Caixa de entrada de eventos importantes</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_aud_regras">
+              <div class="config-card-icon">⚙️</div>
+              <div class="config-card-titulo">Regras de Alerta</div>
+              <div class="config-card-sub">Configurar quando disparar alertas</div>
+            </button>
             <button class="config-card" type="button" data-subpage="cfg_usuarios">
               <div class="config-card-title">Usuários</div>
               <div class="config-card-desc">Cadastro, edição, ativação/desativação de usuários (admin)</div>
@@ -1678,6 +1692,67 @@
                   </tr>
                 </thead>
                 <tbody id="aud-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- E7: Alertas (caixa de entrada do usuário) -->
+        <section class="page" data-page="cfg_aud_alertas" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Alertas</h1>
+            <p class="page-sub">Caixa de entrada de alertas disparados por regras de auditoria</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <select id="ala-filtro">
+                <option value="nao_lidos">Não lidos</option>
+                <option value="todos">Todos</option>
+                <option value="lidos">Apenas lidos</option>
+              </select>
+              <select id="ala-severidade">
+                <option value="">Todas as severidades</option>
+                <option value="info">Info</option>
+                <option value="warn">Atenção</option>
+                <option value="critico">Crítico</option>
+              </select>
+              <button class="btn-limpar" id="ala-btn-marcar-todos" type="button">✓ Marcar todos como lidos</button>
+              <span class="toolbar-label" id="ala-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Quando</th><th>Severidade</th><th>Título</th><th>Mensagem</th><th>Ações</th></tr></thead>
+                <tbody id="ala-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- E7: Regras de Alerta -->
+        <section class="page" data-page="cfg_aud_regras" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">Regras de Alerta</h1>
+            <p class="page-sub">Configure quando o sistema deve disparar alertas (ex: alguém alterar salário, deletar compromisso > R$ 5k, etc)</p>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="alr-busca" placeholder="Buscar por nome, tabela…" />
+              <select id="alr-ativo">
+                <option value="">Todos</option>
+                <option value="ativo" selected>Apenas ativos</option>
+                <option value="inativo">Apenas inativos</option>
+              </select>
+              <button class="btn-limpar" id="alr-btn-limpar" type="button">✕ Limpar</button>
+              <span class="toolbar-label" id="alr-lbl"></span>
+              <span style="flex:1"></span>
+              <button class="btn-ouro" id="alr-btn-novo" type="button">+ Nova regra</button>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Nome</th><th>Tabela</th><th>Ação</th><th>Condição</th><th>Destinatário</th><th>Severidade</th><th>Ativa?</th><th>Ações</th></tr></thead>
+                <tbody id="alr-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>

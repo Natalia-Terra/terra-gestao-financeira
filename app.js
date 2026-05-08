@@ -507,6 +507,8 @@
     if (pageId === "programa_bonus_individual") carregarBonusIndividualSeNecessario();
     if (pageId === "rh_bonus_config") carregarConfigBonusSeNecessario();
     if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
+    if (pageId === "cfg_aud_alertas") carregarAlertasSeNecessario();
+    if (pageId === "cfg_aud_regras")  carregarRegrasAlertaSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_faturamento") carregarApropriacaoFaturamentoSeNecessario();
     if (pageId === "cust_direto_via_os") carregarCustoDiretoViaOsSeNecessario();
@@ -1109,6 +1111,8 @@
     "cfg_classif":       ["Configuração", "Classif. Faturamento"],
     "cfg_estoque":       ["Configuração", "Estoque"],
     "cfg_auditoria":     ["Configuração", "Auditoria"],
+    "cfg_aud_alertas":   ["Configuração", "Alertas"],
+    "cfg_aud_regras":    ["Configuração", "Regras de Alerta"],
     "cfg_usuarios":      ["Configuração", "Usuários"],
     "cfg_perfis":        ["Configuração", "Tipos de Perfil"],
     "cfg_diagnostico":   ["Configuração", "Diagnóstico"],
@@ -11852,5 +11856,377 @@
       '</tr>';
     }), 15, { msg: "Nenhuma OS bate com esse filtro.", icon: "📊" });
   }
+
+  // ===========================================================================
+  // E7 — ALERTAS DE AUDITORIA (sino + caixa de entrada + regras)
+  // ===========================================================================
+
+  var alertasNaoLidosCount = 0;
+  var ALERTAS_POLL_MS = 30000;
+  var alertasPollIv = null;
+
+  function atualizarBadgeSino(n) {
+    var b = document.getElementById("topbar-sino-badge");
+    if (!b) return;
+    if (!n || n <= 0) { b.textContent = "0"; b.hidden = true; }
+    else { b.textContent = n > 99 ? "99+" : String(n); b.hidden = false; }
+  }
+
+  function pollAlertasNaoLidos() {
+    var uid = (window._terraUser && window._terraUser.id) || null;
+    if (!uid) return;
+    client.from("auditoria_alertas")
+      .select("id", { count: "exact", head: true })
+      .eq("destinatario_user_id", uid)
+      .is("lido_em", null)
+      .then(function (r) {
+        if (r.error) return;
+        alertasNaoLidosCount = r.count || 0;
+        atualizarBadgeSino(alertasNaoLidosCount);
+      });
+  }
+
+  function iniciarPollingAlertas() {
+    if (alertasPollIv) return;
+    pollAlertasNaoLidos();
+    alertasPollIv = setInterval(pollAlertasNaoLidos, ALERTAS_POLL_MS);
+  }
+
+  (function bindSino() {
+    function bind() {
+      var s = document.getElementById("topbar-sino");
+      if (!s || s.dataset.bound) return;
+      s.dataset.bound = "1";
+      s.addEventListener("click", function () {
+        if (typeof navegarPara === "function") navegarPara("cfg_aud_alertas");
+        else if (typeof showPage === "function") showPage("cfg_aud_alertas");
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+    else setTimeout(bind, 100);
+  })();
+
+  var alertasLista = [];
+  var alertasCarregado = false;
+
+  function carregarAlertasSeNecessario() {
+    var uid = (window._terraUser && window._terraUser.id) || null;
+    var tbody = document.getElementById("ala-tbody");
+    if (!uid) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Não foi possível identificar o usuário.</td></tr>';
+      return;
+    }
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Carregando alertas…</td></tr>';
+
+    client.from("auditoria_alertas")
+      .select("*")
+      .eq("destinatario_user_id", uid)
+      .order("disparado_em", { ascending: false })
+      .limit(500)
+      .then(function (r) {
+        if (r.error) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+          return;
+        }
+        alertasLista = r.data || [];
+        alertasCarregado = true;
+        renderAlertas();
+      });
+
+    ["ala-filtro", "ala-severidade"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && !el.dataset.bound) { el.dataset.bound = "1"; el.addEventListener("change", renderAlertas); }
+    });
+    var btnTodos = document.getElementById("ala-btn-marcar-todos");
+    if (btnTodos && !btnTodos.dataset.bound) {
+      btnTodos.dataset.bound = "1";
+      btnTodos.addEventListener("click", marcarTodosAlertasComoLidos);
+    }
+  }
+
+  function renderAlertas() {
+    var tbody = document.getElementById("ala-tbody");
+    if (!tbody) return;
+    var f = ((document.getElementById("ala-filtro") || {}).value) || "nao_lidos";
+    var sev = ((document.getElementById("ala-severidade") || {}).value) || "";
+
+    var filtrados = (alertasLista || []).filter(function (a) {
+      if (f === "nao_lidos" && a.lido_em) return false;
+      if (f === "lidos" && !a.lido_em) return false;
+      if (sev && a.severidade !== sev) return false;
+      return true;
+    });
+
+    valText(document.getElementById("ala-lbl"), filtrados.length + " de " + alertasLista.length);
+
+    function badgeSev(s) {
+      var classe = s === "critico" ? "outras" : (s === "warn" ? "assist" : "solta");
+      return '<span class="badge-tipo ' + classe + '">' + escHtml(s) + '</span>';
+    }
+    function fmtTs(iso) {
+      if (!iso) return "—";
+      var s = String(iso);
+      return s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    }
+
+    preencherTbody(tbody, filtrados.map(function (a) {
+      var lidoCls = a.lido_em ? "" : ' style="background: var(--info-bg);"';
+      var actions = a.lido_em
+        ? '<button class="btn-limpar" data-ala-unread="' + a.id + '" title="Marcar como não lido">↩ Não lido</button>'
+        : '<button class="btn-limpar" data-ala-read="' + a.id + '" title="Marcar como lido">✓ Lido</button>';
+      if (a.auditoria_id) {
+        actions += ' <button class="btn-limpar" data-ala-detail="' + a.auditoria_id + '" title="Ver evento de auditoria">🔍 Detalhe</button>';
+      }
+      return '<tr' + lidoCls + '>' +
+        '<td class="mono">' + fmtTs(a.disparado_em) + '</td>' +
+        '<td>' + badgeSev(a.severidade) + '</td>' +
+        '<td><strong>' + escHtml(a.titulo) + '</strong></td>' +
+        '<td>' + escHtml(a.mensagem) + '</td>' +
+        '<td>' + actions + '</td>' +
+      '</tr>';
+    }), 5, { msg: "Nenhum alerta neste filtro.", icon: "🔔" });
+
+    tbody.querySelectorAll("[data-ala-read]").forEach(function (btn) {
+      btn.addEventListener("click", function () { marcarAlertaComoLido(Number(btn.getAttribute("data-ala-read")), true); });
+    });
+    tbody.querySelectorAll("[data-ala-unread]").forEach(function (btn) {
+      btn.addEventListener("click", function () { marcarAlertaComoLido(Number(btn.getAttribute("data-ala-unread")), false); });
+    });
+    tbody.querySelectorAll("[data-ala-detail]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var audId = Number(btn.getAttribute("data-ala-detail"));
+        client.from("auditoria").select("*").eq("id", audId).single().then(function (r) {
+          if (r.error) { alert("Erro: " + r.error.message); return; }
+          if (typeof abrirDetalheAuditoria === "function") abrirDetalheAuditoria(r.data);
+        });
+      });
+    });
+  }
+
+  function marcarAlertaComoLido(id, lido) {
+    var payload = lido ? { lido_em: new Date().toISOString() } : { lido_em: null };
+    client.from("auditoria_alertas").update(payload).eq("id", id).then(function (r) {
+      if (r.error) { try { toast("Erro: " + r.error.message, "erro"); } catch (e) {} return; }
+      var a = alertasLista.find(function (x) { return x.id === id; });
+      if (a) a.lido_em = lido ? new Date().toISOString() : null;
+      renderAlertas();
+      pollAlertasNaoLidos();
+    });
+  }
+
+  function marcarTodosAlertasComoLidos() {
+    var uid = (window._terraUser && window._terraUser.id) || null;
+    if (!uid) return;
+    if (!confirm("Marcar TODOS os alertas como lidos?")) return;
+    client.from("auditoria_alertas")
+      .update({ lido_em: new Date().toISOString() })
+      .eq("destinatario_user_id", uid)
+      .is("lido_em", null)
+      .then(function (r) {
+        if (r.error) { try { toast("Erro: " + r.error.message, "erro"); } catch (e) {} return; }
+        try { toast("Alertas marcados como lidos.", "ok"); } catch (e) {}
+        alertasCarregado = false;
+        carregarAlertasSeNecessario();
+        pollAlertasNaoLidos();
+      });
+  }
+
+  var regrasAlertaLista = [];
+  var regrasAlertaCarregado = false;
+
+  function carregarRegrasAlertaSeNecessario() {
+    var tbody = document.getElementById("alr-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio">Carregando regras…</td></tr>';
+
+    client.from("auditoria_regras").select("*").order("nome").then(function (r) {
+      if (r.error) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
+        return;
+      }
+      regrasAlertaLista = r.data || [];
+      regrasAlertaCarregado = true;
+      renderRegrasAlerta();
+    });
+
+    var b = document.getElementById("alr-busca");
+    var a = document.getElementById("alr-ativo");
+    var bl = document.getElementById("alr-btn-limpar");
+    var bn = document.getElementById("alr-btn-novo");
+    if (b && !b.dataset.bound) { b.dataset.bound = "1"; b.addEventListener("input", renderRegrasAlerta); }
+    if (a && !a.dataset.bound) { a.dataset.bound = "1"; a.addEventListener("change", renderRegrasAlerta); }
+    if (bl && !bl.dataset.bound) {
+      bl.dataset.bound = "1";
+      bl.addEventListener("click", function () { if (b) b.value = ""; if (a) a.value = "ativo"; renderRegrasAlerta(); });
+    }
+    if (bn && !bn.dataset.bound) {
+      bn.dataset.bound = "1";
+      bn.addEventListener("click", function () { abrirModalRegraAlerta(); });
+    }
+  }
+
+  function renderRegrasAlerta() {
+    var tbody = document.getElementById("alr-tbody");
+    if (!tbody) return;
+    var busca = ((document.getElementById("alr-busca")||{}).value || "").trim().toLowerCase();
+    var ativo = ((document.getElementById("alr-ativo")||{}).value || "ativo");
+
+    var filtradas = (regrasAlertaLista || []).filter(function (r) {
+      if (ativo === "ativo" && !r.ativo) return false;
+      if (ativo === "inativo" && r.ativo) return false;
+      if (busca && (r.nome || "").toLowerCase().indexOf(busca) === -1 && (r.tabela_alvo || "").toLowerCase().indexOf(busca) === -1) return false;
+      return true;
+    });
+
+    valText(document.getElementById("alr-lbl"), filtradas.length + " de " + regrasAlertaLista.length);
+
+    function condicaoText(r) {
+      if (!r.campo_valor || !r.operador_valor) return '<span class="muted">—</span>';
+      return '<code>' + escHtml(r.campo_valor) + ' ' + escHtml(r.operador_valor) + ' ' + (r.valor_referencia != null ? fmtBRL(r.valor_referencia) : "?") + '</code>';
+    }
+    function destText(r) {
+      if (r.destinatario_user_id) return '<span class="mono">user: ' + escHtml(String(r.destinatario_user_id).slice(0,8)) + '…</span>';
+      if (r.destinatario_perfil)  return '<span>perfil: <strong>' + escHtml(r.destinatario_perfil) + '</strong></span>';
+      return '<span class="muted">—</span>';
+    }
+    function sevBadge(s) {
+      var classe = s === "critico" ? "outras" : (s === "warn" ? "assist" : "solta");
+      return '<span class="badge-tipo ' + classe + '">' + escHtml(s) + '</span>';
+    }
+
+    preencherTbody(tbody, filtradas.map(function (r) {
+      return '<tr>' +
+        '<td><strong>' + escHtml(r.nome) + '</strong>' + (r.descricao ? '<br><span class="muted" style="font-size:11px;">' + escHtml(r.descricao) + '</span>' : '') + '</td>' +
+        '<td class="mono">' + escHtml(r.tabela_alvo) + '</td>' +
+        '<td class="mono">' + escHtml(r.acao_alvo) + '</td>' +
+        '<td>' + condicaoText(r) + '</td>' +
+        '<td>' + destText(r) + '</td>' +
+        '<td>' + sevBadge(r.severidade) + '</td>' +
+        '<td>' + (r.ativo ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
+        '<td>' +
+          '<button class="btn-limpar" data-alr-edit="' + r.id + '">✎ Editar</button> ' +
+          '<button class="btn-limpar" data-alr-toggle="' + r.id + '">' + (r.ativo ? '⏸ Desativar' : '▶ Ativar') + '</button> ' +
+          '<button class="btn-limpar" data-alr-del="' + r.id + '">🗑</button>' +
+        '</td>' +
+      '</tr>';
+    }), 8, { msg: "Nenhuma regra cadastrada. Crie a primeira pra começar a receber alertas.", icon: "⚙️" });
+
+    tbody.querySelectorAll("[data-alr-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-alr-edit"));
+        var r = regrasAlertaLista.find(function (x) { return x.id === id; });
+        if (r) abrirModalRegraAlerta(r);
+      });
+    });
+    tbody.querySelectorAll("[data-alr-toggle]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-alr-toggle"));
+        var r = regrasAlertaLista.find(function (x) { return x.id === id; });
+        if (!r) return;
+        client.from("auditoria_regras").update({ ativo: !r.ativo }).eq("id", id).then(function (res) {
+          if (res.error) { try { toast(res.error.message, "erro"); } catch (e) {} return; }
+          try { toast(r.ativo ? "Regra desativada." : "Regra ativada.", "ok"); } catch (e) {}
+          regrasAlertaCarregado = false;
+          carregarRegrasAlertaSeNecessario();
+        });
+      });
+    });
+    tbody.querySelectorAll("[data-alr-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-alr-del"));
+        if (!confirm("Excluir esta regra de alerta? Alertas antigos disparados por ela não serão removidos.")) return;
+        client.from("auditoria_regras").delete().eq("id", id).then(function (res) {
+          if (res.error) { try { toast(res.error.message, "erro"); } catch (e) {} return; }
+          try { toast("Regra excluída.", "ok"); } catch (e) {}
+          regrasAlertaCarregado = false;
+          carregarRegrasAlertaSeNecessario();
+        });
+      });
+    });
+  }
+
+  function abrirModalRegraAlerta(r) {
+    r = r || {};
+    var editar = !!r.id;
+    var tabelasComuns = ["*", "compromissos_financeiros", "saidas_outras", "entradas_outras", "folha_pagamento", "funcionarios", "orcamentos", "movimentos", "saldos_contas", "centros_custo", "perfis"];
+
+    abrirModal({
+      titulo: editar ? "Editar regra de alerta" : "Nova regra de alerta",
+      fields: [
+        { name: "nome",        label: "Nome da regra",            type: "text", valor: r.nome, required: true, group: "Identificação" },
+        { name: "descricao",   label: "Descrição (opcional)",     type: "textarea", valor: r.descricao || "", group: "Identificação" },
+        { name: "tabela_alvo", label: "Tabela monitorada",        type: "select", valor: r.tabela_alvo || "*", required: true,
+          options: tabelasComuns.map(function (t) { return { value: t, label: t === "*" ? "Qualquer tabela" : t }; }), group: "Quando disparar" },
+        { name: "acao_alvo",   label: "Ação que dispara",         type: "select", valor: r.acao_alvo || "*", required: true,
+          options: [
+            { value: "*",      label: "Qualquer ação" },
+            { value: "INSERT", label: "INSERT (criação)" },
+            { value: "UPDATE", label: "UPDATE (alteração)" },
+            { value: "DELETE", label: "DELETE (exclusão)" }
+          ], group: "Quando disparar" },
+        { name: "campo_valor",     label: "Campo numérico para condição (opcional, ex: valor, salario_base)", type: "text", valor: r.campo_valor || "", group: "Condição opcional" },
+        { name: "operador_valor",  label: "Operador",                 type: "select", valor: r.operador_valor || "",
+          options: [
+            { value: "",   label: "(sem condição — dispara sempre)" },
+            { value: ">",  label: "maior que" },
+            { value: ">=", label: "maior ou igual" },
+            { value: "<",  label: "menor que" },
+            { value: "<=", label: "menor ou igual" },
+            { value: "=",  label: "igual a" }
+          ], group: "Condição opcional" },
+        { name: "valor_referencia", label: "Valor de comparação (R$)", type: "number", valor: r.valor_referencia, group: "Condição opcional" },
+        { name: "destinatario_perfil", label: "Enviar para todos com perfil", type: "select", valor: r.destinatario_perfil || "master",
+          options: [
+            { value: "master",   label: "Master" },
+            { value: "admin",    label: "Admin" },
+            { value: "operador", label: "Operador" },
+            { value: "consulta", label: "Consulta" }
+          ], group: "Destinatário" },
+        { name: "severidade",  label: "Severidade",               type: "select", valor: r.severidade || "info",
+          options: [
+            { value: "info",    label: "Info (azul)" },
+            { value: "warn",    label: "Atenção (amarelo)" },
+            { value: "critico", label: "Crítico (vermelho)" }
+          ], group: "Apresentação" },
+        { name: "canal",       label: "Canal de notificação",     type: "select", valor: r.canal || "in_app",
+          options: [
+            { value: "in_app", label: "In-app (sino)" },
+            { value: "email",  label: "Email (precisa SMTP ativo)" },
+            { value: "both",   label: "Ambos" }
+          ], group: "Apresentação" },
+        { name: "ativo",       label: "Regra ativa?",             type: "select", valor: r.ativo === false ? "false" : "true",
+          options: [{ value: "true", label: "Sim" }, { value: "false", label: "Não" }], group: "Apresentação" }
+      ],
+      onSubmit: function (v, done) {
+        var payload = {
+          nome: v.nome,
+          descricao: v.descricao || null,
+          tabela_alvo: v.tabela_alvo,
+          acao_alvo: v.acao_alvo,
+          campo_valor: v.campo_valor || null,
+          operador_valor: v.operador_valor || null,
+          valor_referencia: v.valor_referencia != null ? Number(v.valor_referencia) : null,
+          destinatario_perfil: v.destinatario_perfil || null,
+          destinatario_user_id: null,
+          canal: v.canal || "in_app",
+          severidade: v.severidade || "info",
+          ativo: v.ativo === "true"
+        };
+        var q = editar
+          ? client.from("auditoria_regras").update(payload).eq("id", r.id)
+          : client.from("auditoria_regras").insert(payload);
+        q.then(function (res) {
+          if (res.error) { done(res.error.message); return; }
+          regrasAlertaCarregado = false;
+          carregarRegrasAlertaSeNecessario();
+          done(null);
+        });
+      }
+    });
+  }
+
+  setInterval(function () {
+    if (window._terraUser && !alertasPollIv) iniciarPollingAlertas();
+  }, 5000);
+
 
 })();

@@ -2264,3 +2264,39 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 .destaque-erro { color: var(--danger); font-weight: 700; }
 .destaque-warn { color: var(--warn); font-weight: 700; }
 .destaque-ok   { color: var(--success); font-weight: 700; }
+
+
+/* =========================================================
+   E7 — SINO de alertas na topbar + badge
+   ========================================================= */
+.topbar-sino {
+  position: relative;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text2);
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.topbar-sino:hover {
+  color: var(--ouro-esc);
+  background: var(--bg3);
+}
+.topbar-sino-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.4;
+}
