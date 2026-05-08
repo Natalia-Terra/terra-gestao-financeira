@@ -7119,17 +7119,102 @@
         var id = Number(btn.getAttribute("data-aud-detail"));
         client.from("auditoria").select("*").eq("id", id).single().then(function (r) {
           if (r.error) { alert("Erro: " + r.error.message); return; }
-          var d = r.data;
-          var antes  = d.dados_antes  ? JSON.stringify(d.dados_antes,  null, 2) : "(sem)";
-          var depois = d.dados_depois ? JSON.stringify(d.dados_depois, null, 2) : "(sem)";
-          alert(
-            "Tabela: " + d.tabela + "\nAção: " + d.acao + "\nRegistro: " + (d.registro_id || "—") +
-            "\nUsuário: " + (d.usuario_nome || "—") + "\nQuando: " + d.criado_em +
-            "\n\n=== Antes ===\n" + antes + "\n\n=== Depois ===\n" + depois
-          );
+          abrirDetalheAuditoria(r.data);
         });
       });
     });
+  }
+
+  // -- E7: detalhe rico de auditoria com diff + botão Reverter ---------------
+  function abrirDetalheAuditoria(d) {
+    var antes = d.dados_antes || {};
+    var depois = d.dados_depois || {};
+    var todos = {};
+    Object.keys(antes).forEach(function (k) { todos[k] = true; });
+    Object.keys(depois).forEach(function (k) { todos[k] = true; });
+
+    var linhas = Object.keys(todos).sort().map(function (k) {
+      var vA = antes[k];
+      var vD = depois[k];
+      var iguais = JSON.stringify(vA) === JSON.stringify(vD);
+      function fmt(v) {
+        if (v === null || v === undefined) return '<span class="muted">—</span>';
+        if (typeof v === "object") return '<code>' + escHtml(JSON.stringify(v)) + '</code>';
+        return escHtml(String(v));
+      }
+      var cls = iguais ? "" : "destaque-warn";
+      return '<tr>' +
+        '<td class="mono"><strong>' + escHtml(k) + '</strong></td>' +
+        '<td class="' + cls + '">' + fmt(vA) + '</td>' +
+        '<td class="' + cls + '">' + fmt(vD) + '</td>' +
+        '<td>' + (iguais ? '<span class="muted">=</span>' : '<span class="destaque-warn">≠</span>') + '</td>' +
+      '</tr>';
+    });
+
+    var info = '<div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; margin-bottom: 14px; font-size: 13px;">' +
+      '<div><strong>Tabela:</strong> <code>' + escHtml(d.tabela) + '</code></div>' +
+      '<div><strong>Ação:</strong> <code>' + escHtml(d.acao) + '</code></div>' +
+      '<div><strong>Registro:</strong> <code>' + escHtml(d.registro_id || "—") + '</code></div>' +
+      '<div><strong>Usuário:</strong> ' + escHtml(d.usuario_nome || "—") + '</div>' +
+      '<div style="grid-column: 1 / -1;"><strong>Quando:</strong> ' + escHtml(String(d.criado_em || "")) + '</div>' +
+    '</div>';
+
+    var tabela = linhas.length
+      ? '<table class="tabela"><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th><th>Δ</th></tr></thead><tbody>' + linhas.join("") + '</tbody></table>'
+      : '<p class="muted">Sem campos pra comparar.</p>';
+
+    // Botão Reverter — só pra DELETE recentes (até 24h)
+    var podeReverter = false;
+    if (d.acao === "DELETE" && d.dados_antes) {
+      try {
+        var horas = (Date.now() - new Date(d.criado_em).getTime()) / 3600000;
+        podeReverter = horas <= 24;
+      } catch (e) {}
+    }
+    var btnRev = "";
+    if (podeReverter) {
+      btnRev = '<div style="margin-top:14px; padding:12px; background: var(--warn-bg); border-left: 3px solid var(--warn); border-radius: 4px;">' +
+        '<p style="margin:0 0 8px; font-size:13px;"><strong>Esta acao foi um DELETE de menos de 24h.</strong> Voce pode reverter (re-inserir o registro com os mesmos dados).</p>' +
+        '<button class="btn-ouro" id="aud-btn-reverter-' + d.id + '" type="button">↶ Reverter (re-inserir registro)</button>' +
+      '</div>';
+    } else if (d.acao === "DELETE") {
+      btnRev = '<p class="muted" style="margin-top:14px; font-size:12px;">Reverter so esta disponivel para DELETEs feitos nas ultimas 24h.</p>';
+    }
+
+    abrirModalDetalhe("Auditoria — " + (d.tabela || "?") + " #" + (d.registro_id || d.id), info + tabela + btnRev);
+
+    // Wire-up do reverter
+    if (podeReverter) {
+      setTimeout(function () {
+        var btn = document.getElementById("aud-btn-reverter-" + d.id);
+        if (btn) {
+          btn.addEventListener("click", function () {
+            if (!confirm("Tem certeza que quer re-inserir este registro?\n\nTabela: " + d.tabela + "\nRegistro original: " + (d.registro_id || "—") + "\n\nO registro vai voltar exatamente como estava antes do DELETE.")) return;
+            btn.disabled = true;
+            btn.textContent = "Revertendo...";
+            // Remove campos de timestamps automaticos pra deixar o banco recriar
+            var payload = Object.assign({}, d.dados_antes);
+            delete payload.criado_em;
+            delete payload.atualizado_em;
+            client.from(d.tabela).insert(payload).then(function (r) {
+              if (r.error) {
+                btn.disabled = false;
+                btn.textContent = "↶ Reverter (re-inserir registro)";
+                try { toast("Erro ao reverter: " + r.error.message, "erro"); } catch (e) { alert("Erro: " + r.error.message); }
+                return;
+              }
+              try { toast("Registro re-inserido com sucesso.", "ok"); } catch (e) {}
+              // Recarrega auditoria
+              audCarregado = false;
+              carregarAuditoriaSeNecessario();
+              // Fecha modal
+              var ov = document.getElementById("modal-detalhe-overlay");
+              if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+            });
+          });
+        }
+      }, 50);
+    }
   }
 
   // =========================================================================
