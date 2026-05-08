@@ -1104,7 +1104,19 @@
 
   function preencherTbody(tbody, linhas, colspan, vazio) {
     if (!linhas.length) {
-      tbody.innerHTML = '<tr><td colspan="' + colspan + '" class="tbl-vazio">' + (vazio || "Nada bate com os filtros.") + '</td></tr>';
+      // 'vazio' pode ser string (compat) ou {msg, icon, cta}
+      var cfg = (vazio && typeof vazio === "object") ? vazio : { msg: vazio || "Nada bate com os filtros." };
+      var icon = cfg.icon || "📭";
+      var msg  = cfg.msg  || "Nada bate com os filtros.";
+      var cta  = cfg.cta  || "";
+      var html = '<tr><td colspan="' + colspan + '" class="tbl-vazio">' +
+        '<div class="empty-state">' +
+          '<div class="empty-icon">' + icon + '</div>' +
+          '<div class="empty-msg">' + msg + '</div>' +
+          (cta ? '<div class="empty-cta">' + cta + '</div>' : '') +
+        '</div>' +
+      '</td></tr>';
+      tbody.innerHTML = html;
       return;
     }
     tbody.innerHTML = linhas.join("");
@@ -3180,7 +3192,7 @@
         '<td>' + bAdm + '</td>' +
         '<td>' + bMod + '</td>' +
         '<td>' + bAtivo + '</td>' +
-        '<td><button class="btn-limpar" data-pt-edit="' + t.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-pt-edit="' + t.id + '">Editar</button> <button class="btn-limpar" data-pt-del="' + t.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-pt-edit]").forEach(function (b) {
@@ -3189,6 +3201,19 @@
         var t = perfisTiposLista.find(function (x) { return x.id === id; });
         if (t) abrirModalPerfilTipo(t);
       });
+    tbody.querySelectorAll("[data-pt-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-pt-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("perfis_tipos").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarPerfisTiposSeNecessario === "function") carregarPerfisTiposSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -3363,7 +3388,7 @@
         '<td>' + fmtData(f.data_admissao) + '</td>' +
         '<td>' + (f.data_demissao ? fmtData(f.data_demissao) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
         '<td class="num">' + fmtBRL(f.salario_base) + '</td>' +
-        '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button> <button class="btn-limpar" data-fn-del="' + f.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 9);
 
@@ -3373,6 +3398,19 @@
         var f = funcionariosLista.find(function (x) { return x.id === id; });
         if (f) abrirModalFuncionario(f);
       });
+    tbody.querySelectorAll("[data-fn-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-fn-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("funcionarios").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarFuncionariosSeNecessario === "function") carregarFuncionariosSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -3523,7 +3561,7 @@
         '<td class="num">' + fmtBRL(b.valor) + '</td>' +
         '<td>' + fmtData(b.data_inicio) + '</td>' +
         '<td>' + (b.data_fim ? fmtData(b.data_fim) : '<span class="badge-tipo solta">vigente</span>') + '</td>' +
-        '<td><button class="btn-limpar" data-bn-edit="' + b.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-bn-edit="' + b.id + '">Editar</button> <button class="btn-limpar" data-bn-del="' + b.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 7, "Nenhum benefício cadastrado.");
 
@@ -3533,6 +3571,19 @@
         var b = beneficiosLista.find(function (x) { return x.id === id; });
         if (b) abrirModalBeneficio(b);
       });
+    tbody.querySelectorAll("[data-bn-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-bn-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("beneficios").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarBeneficiosSeNecessario === "function") carregarBeneficiosSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -3612,7 +3663,7 @@
         '<td class="num">' + fmtBRL(p.irrf) + '</td>' +
         '<td class="num">' + fmtBRL(p.fgts) + '</td>' +
         '<td class="num destaque">' + fmtBRL(p.liquido) + '</td>' +
-        '<td><button class="btn-limpar" data-fl-edit="' + p.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-fl-edit="' + p.id + '">Editar</button> <button class="btn-limpar" data-fl-del="' + p.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 8, "Nenhuma folha lançada.");
 
@@ -3622,6 +3673,19 @@
         var p = folhaLista.find(function (x) { return x.id === id; });
         if (p) abrirModalFolha(p);
       });
+    tbody.querySelectorAll("[data-fl-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-fl-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("folha_pagamento").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarFolhaSeNecessario === "function") carregarFolhaSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -3720,7 +3784,7 @@
         '<td class="num">' + fmtBRL(i.valor) + '</td>' +
         '<td>' + (i.data_pagamento ? fmtData(i.data_pagamento) : '—') + '</td>' +
         '<td>' + st + '</td>' +
-        '<td><button class="btn-limpar" data-ir-edit="' + i.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-ir-edit="' + i.id + '">Editar</button> <button class="btn-limpar" data-ir-del="' + i.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 6, "Nenhum imposto lançado.");
 
@@ -3730,6 +3794,19 @@
         var i = impostosLista.find(function (x) { return x.id === id; });
         if (i) abrirModalImposto(i);
       });
+    tbody.querySelectorAll("[data-ir-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-ir-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("impostos_rh").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarImpostosSeNecessario === "function") carregarImpostosSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -5290,7 +5367,7 @@
         '<td>' + tagHtml + '</td>' +
         '<td>' + (c.ativo ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
         '<td class="num">' + fmtInt(contagens[c.id] || 0) + '</td>' +
-        '<td><button class="btn-limpar" data-cc-edit="' + c.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-cc-edit="' + c.id + '">Editar</button> <button class="btn-limpar" data-cc-del="' + c.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 7);
     tbody.querySelectorAll("[data-cc-edit]").forEach(function (btn) {
@@ -5299,6 +5376,19 @@
         var c = centrosCustoLista.find(function (x) { return x.id === id; });
         if (c) abrirModalCentroCusto(c);
       });
+    tbody.querySelectorAll("[data-cc-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-cc-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("centros_custo").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarCentrosSeNecessario === "function") carregarCentrosSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -5365,7 +5455,7 @@
         '<td><span class="badge-tipo ' + (r.tipo === 'desconto' || r.tipo === 'tributo' ? 'outras' : 'solta') + '">' + escHtml(r.tipo) + '</span></td>' +
         '<td class="mono">' + escHtml(r.conta_contabil || "—") + '</td>' +
         '<td>' + (r.ativa ? '<span class="badge-tipo solta">sim</span>' : '<span class="badge-tipo outras">não</span>') + '</td>' +
-        '<td><button class="btn-limpar" data-rb-edit="' + r.id + '">Editar</button></td>' +
+        '<td><button class="btn-limpar" data-rb-edit="' + r.id + '">Editar</button> <button class="btn-limpar" data-rb-del="' + r.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }), 6);
     tbody.querySelectorAll("[data-rb-edit]").forEach(function (btn) {
@@ -5374,6 +5464,19 @@
         var r = rubricasLista.find(function (x) { return x.id === id; });
         if (r) abrirModalRubrica(r);
       });
+    tbody.querySelectorAll("[data-rb-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-rb-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("rubricas").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarRubricasSeNecessario === "function") carregarRubricasSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -7089,7 +7192,7 @@
         '<td>' + escHtml(c.agencia || "—") + '</td>' +
         '<td>' + escHtml(c.conta || "—") + '</td>' +
         '<td>' + st + '</td>' +
-        '<td><button type="button" class="btn-acao" data-cb-edit="' + c.id + '">Editar</button></td>' +
+        '<td><button type="button" class="btn-acao" data-cb-edit="' + c.id + '">Editar</button> <button class="btn-limpar" data-cb-del="' + c.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-cb-edit]").forEach(function (b) {
@@ -7098,6 +7201,19 @@
         var c = contasBancariasLista.find(function (x) { return x.id === id; });
         if (c) abrirModalContaBancaria(c);
       });
+    tbody.querySelectorAll("[data-cb-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-cb-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("contas_bancarias").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarContasBancariasSeNecessario === "function") carregarContasBancariasSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -7240,7 +7356,7 @@
         '<td class="num ' + classeR + '">' + (s.saldo_final_realizado != null ? fmtBRL(s.saldo_final_realizado) : "—") + '</td>' +
         '<td class="num ' + classeP + '">' + (s.saldo_final_projetado != null ? fmtBRL(s.saldo_final_projetado) : "—") + '</td>' +
         '<td>' + escHtml(s.observacao || "") + '</td>' +
-        '<td><button type="button" class="btn-acao" data-sc-edit="' + s.id + '">Editar</button></td>' +
+        '<td><button type="button" class="btn-acao" data-sc-edit="' + s.id + '">Editar</button> <button class="btn-limpar" data-sc-del="' + s.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-sc-edit]").forEach(function (b) {
@@ -7249,6 +7365,19 @@
         var s = saldosContasLista.find(function (x) { return x.id === id; });
         if (s) abrirModalSaldoConta(s);
       });
+    tbody.querySelectorAll("[data-sc-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-sc-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("saldos_contas").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarSaldosMensaisSeNecessario === "function") carregarSaldosMensaisSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -7381,7 +7510,7 @@
         '<td class="num">' + fmtBRL(r.valor) + '</td>' +
         '<td>' + escHtml(r.recebido_em ? fmtData(r.recebido_em) : "—") + '</td>' +
         '<td><span class="' + classe + '">' + st + '</span></td>' +
-        '<td><button type="button" class="btn-acao" data-rp-edit="' + r.id + '">Editar</button></td>' +
+        '<td><button type="button" class="btn-acao" data-rp-edit="' + r.id + '">Editar</button> <button class="btn-limpar" data-rp-del="' + r.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-rp-edit]").forEach(function (b) {
@@ -7390,6 +7519,19 @@
         var rec = recebimentosPrevLista.find(function (x) { return x.id === id; });
         if (rec) abrirModalRecebPrev(rec);
       });
+    tbody.querySelectorAll("[data-rp-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-rp-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("recebimentos_previstos").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarRecebimentosPrevistosSeNecessario === "function") carregarRecebimentosPrevistosSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -8463,7 +8605,7 @@
         '<td class="num">' + fmtBRL(e.valor) + '</td>' +
         '<td>' + (e.recebido_em ? fmtData(e.recebido_em) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + st + '</td>' +
-        '<td><button class="btn-acao" data-eo-edit="' + e.id + '">Editar</button></td>' +
+        '<td><button class="btn-acao" data-eo-edit="' + e.id + '">Editar</button> <button class="btn-limpar" data-eo-del="' + e.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-eo-edit]").forEach(function (b) {
@@ -8472,6 +8614,19 @@
         var e = entradasOutrasLista.find(function (x) { return x.id === id; });
         if (e) abrirModalEntradaOutra(e);
       });
+    tbody.querySelectorAll("[data-eo-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-eo-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("entradas_outras").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarEntradasOutrasSeNecessario === "function") carregarEntradasOutrasSeNecessario();
+        });
+      });
+    });
     });
   }
 
@@ -8574,7 +8729,7 @@
         '<td class="num">' + fmtBRL(s.valor) + '</td>' +
         '<td>' + (s.pago_em ? fmtData(s.pago_em) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + st + '</td>' +
-        '<td><button class="btn-acao" data-so-edit="' + s.id + '">Editar</button></td>' +
+        '<td><button class="btn-acao" data-so-edit="' + s.id + '">Editar</button> <button class="btn-limpar" data-so-del="' + s.id + '" title="Excluir">🗑 Excluir</button></td>' +
       '</tr>';
     }).join("");
     tbody.querySelectorAll("[data-so-edit]").forEach(function (b) {
@@ -8583,6 +8738,19 @@
         var s = saidasOutrasLista.find(function (x) { return x.id === id; });
         if (s) abrirModalSaidaOutra(s);
       });
+    tbody.querySelectorAll("[data-so-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-so-del");
+        var rid = isNaN(Number(id)) ? id : Number(id);
+        if (!confirm("Excluir este registro? Essa ação não pode ser desfeita.")) return;
+        client.from("saidas_outras").delete().eq("id", rid).then(function (r) {
+          if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert("Erro ao excluir: " + r.error.message); } return; }
+          try { toast("Excluído.", "ok"); } catch (e) {}
+          if (typeof carregarSaidasOutrasSeNecessario === "function") carregarSaidasOutrasSeNecessario();
+        });
+      });
+    });
     });
   }
 
