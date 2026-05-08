@@ -1365,7 +1365,6 @@
 
   function preencherTbody(tbody, linhas, colspan, vazio) {
     if (!linhas.length) {
-      // 'vazio' pode ser string (compat) ou {msg, icon, cta}
       var cfg = (vazio && typeof vazio === "object") ? vazio : { msg: vazio || "Nada bate com os filtros." };
       var icon = cfg.icon || "📭";
       var msg  = cfg.msg  || "Nada bate com os filtros.";
@@ -1378,9 +1377,27 @@
         '</div>' +
       '</td></tr>';
       tbody.innerHTML = html;
+      try { _atualizarPageSubAuto(tbody, 0); } catch (e) {}
       return;
     }
     tbody.innerHTML = linhas.join("");
+    try { _atualizarPageSubAuto(tbody, linhas.length); } catch (e) {}
+  }
+
+  // -- Q1: atualizar subtitulo da pagina com contagem real -------------------
+  // Sempre que preencherTbody renderiza uma tabela, anexa "· N registros"
+  // ao final do page-sub original. Idempotente — guarda o texto original
+  // em dataset pra nao acumular sufixos.
+  function _atualizarPageSubAuto(tbody, n) {
+    if (!tbody) return;
+    var sec = tbody.closest && tbody.closest("section.page");
+    if (!sec) return;
+    if (sec.dataset.subAuto === "0") return; // opt-out via data-sub-auto="0"
+    var sub = sec.querySelector(".page-sub");
+    if (!sub) return;
+    if (!sub.dataset.original) sub.dataset.original = sub.textContent;
+    var label = (n === 1) ? "registro" : "registros";
+    sub.textContent = sub.dataset.original.replace(/\s*·\s*\d+\s+(registro|registros)\s*$/, "") + " · " + n + " " + label;
   }
 
   // =========================================================================
