@@ -361,7 +361,42 @@
     });
   }
 
+  // -- Self-healing: remove overlays orfaos (bug do Reset Completo) ---------
+  // Modais criados dinamicamente (mostrarMensagem/abrirModalDetalhe) podem
+  // ficar no DOM se um erro JS interromper o close. Como tem
+  // position:fixed; inset:0; z-index:50, eles bloqueiam interacao com toda
+  // a app — incluindo a tela de Reset Completo. Esta funcao roda antes de
+  // cada navegacao e limpa orfaos.
+  function limparOverlaysOrfaos() {
+    // Modais dinamicos: remover do DOM
+    ["modal-msg", "modal-detalhe-overlay"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.parentNode) {
+        try { el.parentNode.removeChild(el); } catch (e) {}
+      }
+    });
+    // Outros modais .modal-overlay: garantir [hidden]
+    document.querySelectorAll(".modal-overlay").forEach(function (el) {
+      if (el.id === "modal-overlay" || el.id === "modal-esqueci") {
+        // Sao os modais HTML estaticos — devem estar hidden quando nao em uso
+        if (!el.hidden) {
+          // Se a app esta tentando navegar e este modal esta aberto, fecha
+          el.hidden = true;
+        }
+      }
+    });
+  }
+
+  // Tecla ESC de emergencia — fecha qualquer overlay aberto
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") {
+      limparOverlaysOrfaos();
+    }
+  });
+
   function showPage(pageId) {
+    // Self-healing: limpa overlays orfaos antes de navegar (bug do Reset)
+    try { limparOverlaysOrfaos(); } catch (e) {}
     // Mostrar/esconder seções da main
     document.querySelectorAll("#shell .main .page").forEach(function (sec) {
       sec.hidden = sec.getAttribute("data-page") !== pageId;
@@ -9447,6 +9482,8 @@
 
   // --- Tela: Reset (Configuração > Reset) — só pra master ---
   function carregarResetSeNecessario() {
+    // Defensivo: limpa overlays antes de tentar render (bug critico)
+    try { limparOverlaysOrfaos(); } catch (e) {}
     if (!_permissoesMaster) {
       carregarPermissoesMaster().then(function () {
         if (_permissoesMaster.pode_limpar_base) renderReset();
