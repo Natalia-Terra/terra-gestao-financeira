@@ -846,6 +846,31 @@
   }
 
   // Modal customizado Terra (substitui alert nativo). Tipo: 'ok' | 'erro' | 'info'
+
+  // -- Toast (notificações leves no canto inferior direito) -------------------
+  function toast(msg, tipo, durMs) {
+    if (!msg) return;
+    var host = document.getElementById("toast-host");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "toast-host";
+      host.className = "toast-host";
+      document.body.appendChild(host);
+    }
+    var el = document.createElement("div");
+    el.className = "toast toast-" + (tipo || "ok");
+    el.innerHTML = '<span>' + escHtml(msg) + '</span><button type="button" class="toast-x" aria-label="Fechar">×</button>';
+    host.appendChild(el);
+    var dur = (typeof durMs === "number") ? durMs : 2600;
+    var t1 = setTimeout(function () { el.classList.add("toast-saindo"); }, dur - 180);
+    var t2 = setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, dur);
+    el.querySelector(".toast-x").addEventListener("click", function () {
+      clearTimeout(t1); clearTimeout(t2);
+      el.classList.add("toast-saindo");
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 180);
+    });
+  }
+
   function mostrarMensagem(titulo, mensagem, tipo, onOk) {
     tipo = tipo || "info";
     var existente = document.getElementById("modal-msg");
@@ -1493,6 +1518,12 @@
     });
 
     valText(document.getElementById("pc-lbl"), filtrados.length + " de " + planoContas.length);
+    // Subtítulo dinâmico: contagem real + níveis distintos
+    var pgSub = document.querySelector('section[data-page="cfg_plano"] .page-sub');
+    if (pgSub) {
+      var niveis = {}; planoContas.forEach(function (p) { if (p.nivel) niveis[p.nivel] = true; });
+      pgSub.textContent = planoContas.length + " contas · " + Object.keys(niveis).length + " níveis hierárquicos";
+    }
 
     preencherTbody(tbody, filtrados.map(function (p) {
       return '<tr>' +
@@ -1740,6 +1771,9 @@
     valText(document.getElementById("cf-m-tot"), fmtInt(cfopLista.length));
     valText(document.getElementById("cf-m-apl"), fmtInt(apl));
     valText(document.getElementById("cf-m-nao"), fmtInt(cfopLista.length - apl));
+    // Subtítulo dinâmico CFOP
+    var cfPgSub = document.querySelector('section[data-page="cfg_cfop"] .page-sub');
+    if (cfPgSub) cfPgSub.textContent = cfopLista.length + " códigos · " + apl + " marcados como aplicáveis à Terra";
     valText(document.getElementById("cf-lbl"), filtrados.length + " códigos");
 
     preencherTbody(tbody, filtrados.map(function (c) {
@@ -2830,6 +2864,7 @@
         return;
       }
       fecharModal();
+      try { toast((modalConfig && modalConfig.toastSucesso) || "Salvo com sucesso.", "ok"); } catch (e) {}
     });
   });
 

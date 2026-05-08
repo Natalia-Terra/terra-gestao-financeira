@@ -2052,3 +2052,99 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 }
 .tabela-mini tr:last-child th,
 .tabela-mini tr:last-child td { border-bottom: none; }
+
+
+/* =========================================================
+   TOAST (notificações de sucesso/erro flutuantes)
+   ========================================================= */
+.toast-host {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  min-width: 240px;
+  max-width: 380px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  border: 1px solid var(--borda2);
+  box-shadow: 0 6px 18px rgba(42,26,6,0.15);
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  animation: toast-in 220ms ease;
+}
+.toast.toast-ok    { border-left: 3px solid var(--success); background: var(--success-bg); }
+.toast.toast-erro  { border-left: 3px solid var(--danger);  background: var(--danger-bg);  color: var(--danger); }
+.toast.toast-warn  { border-left: 3px solid var(--warn);    background: var(--warn-bg);    }
+.toast.toast-info  { border-left: 3px solid var(--info);    background: var(--info-bg);    }
+.toast .toast-x {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font-size: 14px;
+  padding: 0 4px;
+  margin-left: auto;
+  opacity: .6;
+}
+.toast .toast-x:hover { opacity: 1; }
+.toast.toast-saindo { animation: toast-out 180ms ease forwards; }
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes toast-out {
+  to { transform: translateY(8px); opacity: 0; }
+}
+
+/* =========================================================
+   TABELAS LARGAS — scroll horizontal opt-in via classe extra
+   .table-wrap.table-wrap-x ativa overflow-x: auto.
+   Usar em DRE, Fluxo de Caixa, Lançamentos detalhados etc.
+   ========================================================= */
+.table-wrap.table-wrap-x {
+  overflow-x: auto;
+}
+.table-wrap.table-wrap-x .tabela {
+  min-width: max-content;  /* não comprime colunas; deixa o scroll horizontal trabalhar */
+}
+
+/* =========================================================
+   TOOLBAR — refinar quebra de linha em telas médias (<1280px)
+   ========================================================= */
+@media (max-width: 1280px) {
+  .toolbar {
+    gap: 8px;
+  }
+  .toolbar .input-search {
+    flex: 1 1 100%;        /* busca ocupa toda a primeira linha */
+  }
+}
+
+/* btn-secundario virou alias de btn-limpar (padronização) */
+.btn-secundario { 
+  padding: 6px 12px;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg2);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-secundario:hover {
+  color: var(--text);
+  background: var(--bg3);
+  border-color: var(--text3);
+}
