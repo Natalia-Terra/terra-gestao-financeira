@@ -3224,12 +3224,15 @@
       var tr = rr + oo;
       var res = tr - cc;
       var mrg = tr > 0 ? (res / tr * 100).toFixed(1).replace(".", ",") + "%" : "—";
+      var clsR = rr ? ' class="num linha-clicavel" data-dre-mes="' + i + '" data-dre-cat="receita" data-dre-ano="' + ano + '"' : ' class="num"';
+      var clsO = oo ? ' class="num linha-clicavel" data-dre-mes="' + i + '" data-dre-cat="outras" data-dre-ano="' + ano + '"' : ' class="num"';
+      var clsC = cc ? ' class="num linha-clicavel" data-dre-mes="' + i + '" data-dre-cat="custo" data-dre-ano="' + ano + '"' : ' class="num"';
       linhas.push(
         '<tr>' +
           '<td>' + nomeMes[i-1] + '/' + String(ano).slice(2) + '</td>' +
-          '<td class="num">' + (rr ? fmtBRL(rr) : '—') + '</td>' +
-          '<td class="num">' + (oo ? fmtBRL(oo) : '—') + '</td>' +
-          '<td class="num">' + (cc ? fmtBRL(cc) : '—') + '</td>' +
+          '<td' + clsR + '>' + (rr ? fmtBRL(rr) : '—') + '</td>' +
+          '<td' + clsO + '>' + (oo ? fmtBRL(oo) : '—') + '</td>' +
+          '<td' + clsC + '>' + (cc ? fmtBRL(cc) : '—') + '</td>' +
           '<td class="num ' + (res > 0 ? 'destaque' : '') + '">' + (tr || cc ? fmtBRL(res) : '—') + '</td>' +
           '<td class="num">' + mrg + '</td>' +
         '</tr>'
@@ -3237,13 +3240,71 @@
     }
     linhas.push(
       '<tr class="tot"><td><strong>Ano ' + ano + '</strong></td>' +
-      '<td class="num"><strong>' + fmtBRL(totR) + '</strong></td>' +
-      '<td class="num"><strong>' + fmtBRL(totO) + '</strong></td>' +
-      '<td class="num"><strong>' + fmtBRL(totC) + '</strong></td>' +
+      '<td class="num linha-clicavel" data-dre-mes="ano" data-dre-cat="receita" data-dre-ano="' + ano + '"><strong>' + fmtBRL(totR) + '</strong></td>' +
+      '<td class="num linha-clicavel" data-dre-mes="ano" data-dre-cat="outras" data-dre-ano="' + ano + '"><strong>' + fmtBRL(totO) + '</strong></td>' +
+      '<td class="num linha-clicavel" data-dre-mes="ano" data-dre-cat="custo" data-dre-ano="' + ano + '"><strong>' + fmtBRL(totC) + '</strong></td>' +
       '<td class="num destaque"><strong>' + fmtBRL(resultado) + '</strong></td>' +
       '<td class="num"><strong>' + margem + '</strong></td></tr>'
     );
-    document.getElementById("dre-tbody").innerHTML = linhas.join("");
+    var tbody = document.getElementById("dre-tbody");
+    tbody.innerHTML = linhas.join("");
+
+    // Wire-up: clicar em célula abre drill-down
+    tbody.querySelectorAll("[data-dre-cat]").forEach(function (cell) {
+      cell.addEventListener("click", function () {
+        var mesAttr = cell.getAttribute("data-dre-mes");
+        var cat     = cell.getAttribute("data-dre-cat");
+        var anoAttr = Number(cell.getAttribute("data-dre-ano"));
+        abrirDrillDre(anoAttr, mesAttr, cat);
+      });
+    });
+  }
+
+  // -- Drill-down DRE: split por subcategoria ---------------------------------
+  function abrirDrillDre(ano, mesAttr, categoria) {
+    var nomeMes = ["", "Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    var labelMes = mesAttr === "ano" ? ("Ano " + ano) : (nomeMes[Number(mesAttr)] + "/" + ano);
+    var labelCat = categoria === "receita" ? "Receita" : (categoria === "outras" ? "Outras Receitas" : "Custos");
+
+    // Filtrar receitas_custos pelo período + categoria
+    var lista = (rcLista || []).filter(function (r) {
+      if (Number(r.ano) !== ano) return false;
+      if (mesAttr !== "ano" && Number(r.mes) !== Number(mesAttr)) return false;
+      if (categoria === "receita") {
+        var sub = (r.subcategoria || "").toLowerCase();
+        return r.categoria === "receita" && sub.indexOf("outras") === -1;
+      } else if (categoria === "outras") {
+        var sub2 = (r.subcategoria || "").toLowerCase();
+        return r.categoria === "receita" && sub2.indexOf("outras") !== -1;
+      } else {
+        return r.categoria === "custo";
+      }
+    });
+
+    // Agrupar por subcategoria
+    var porSub = {};
+    lista.forEach(function (r) {
+      var key = r.subcategoria || "(sem subcategoria)";
+      porSub[key] = (porSub[key] || 0) + Number(r.valor || 0);
+    });
+    var subs = Object.keys(porSub).map(function (k) { return { sub: k, valor: porSub[k] }; });
+    subs.sort(function (a, b) { return b.valor - a.valor; });
+    var total = subs.reduce(function (a, s) { return a + s.valor; }, 0);
+
+    var linhasHtml;
+    if (!subs.length) {
+      linhasHtml = '<p class="muted">Sem registros pra este corte.</p>';
+    } else {
+      linhasHtml = '<table class="tabela"><thead><tr><th>Subcategoria</th><th class="num">Valor</th><th class="num">% do total</th></tr></thead><tbody>' +
+        subs.map(function (s) {
+          var pct = total > 0 ? ((s.valor / total) * 100).toFixed(1).replace(".", ",") + "%" : "—";
+          return '<tr><td>' + escHtml(s.sub) + '</td><td class="num">' + fmtBRL(s.valor) + '</td><td class="num">' + pct + '</td></tr>';
+        }).join("") +
+        '<tr class="tot"><td><strong>Total</strong></td><td class="num"><strong>' + fmtBRL(total) + '</strong></td><td class="num">100,0%</td></tr>' +
+        '</tbody></table>';
+    }
+
+    abrirModalDetalhe("DRE — " + labelCat + " — " + labelMes, linhasHtml);
   }
 
   // =========================================================================
