@@ -2668,14 +2668,20 @@
       nomeLegivel: "Receitas e Custos",
       alvo: "receitas_custos",
       colunas: {
-        "ano":           "ano",
-        "mes":           "mes",
-        "categoria":     "categoria",
-        "subcategoria":  "subcategoria",
-        "valor":         "valor"
+        "ano":            "ano",
+        "mes":            "mes",
+        "categoria":      "categoria",
+        "subcategoria":   "subcategoria",
+        "valor":          "valor",
+        "tipo produto":  "tipo_produto",
+        "tipo_produto":  "tipo_produto",
+        "tipo manual":   "tipo_produto",
+        "tipo":          "tipo_produto",
+        "area id":       "area_id",
+        "area_id":       "area_id"
       },
       obrigatorias: ["ano", "mes", "categoria", "valor"],
-      dicas: "Colunas esperadas: ano, mes, categoria (receita|custo), valor (obrigatórias); subcategoria (opcional)."
+      dicas: "Colunas esperadas: ano, mes, categoria (receita|custo), valor (obrigatórias); subcategoria (texto livre), tipo_produto (ex: Mobília Fixa/Solta/Serviço/Mercadoria), area_id (numero do organograma — consulte na tela Configuração > Organograma) — todas opcionais."
     },
     evolucao_pct: {
       nomeLegivel: "Evolução % (Planilha de Produção)",
@@ -3283,6 +3289,10 @@
     var labelMes = mesAttr === "ano" ? ("Ano " + ano) : (nomeMes[Number(mesAttr)] + "/" + ano);
     var labelCat = categoria === "receita" ? "Receita" : (categoria === "outras" ? "Outras Receitas" : "Custos");
 
+    // E6: ler a dimensão escolhida pelo usuário
+    var dimensao = ((document.getElementById("dre-dimensao")||{}).value) || "subcategoria";
+    var labelDim = ({ subcategoria: "Subcategoria", tipo_produto: "Tipo de Produto", area_id: "Área" })[dimensao] || dimensao;
+
     // Filtrar receitas_custos pelo período + categoria
     var lista = (rcLista || []).filter(function (r) {
       if (Number(r.ano) !== ano) return false;
@@ -3298,22 +3308,51 @@
       }
     });
 
-    // Agrupar por subcategoria
-    var porSub = {};
+    // Agrupar pela dimensão escolhida
+    var porKey = {};
     lista.forEach(function (r) {
-      var key = r.subcategoria || "(sem subcategoria)";
-      porSub[key] = (porSub[key] || 0) + Number(r.valor || 0);
+      var key;
+      if (dimensao === "tipo_produto") {
+        key = r.tipo_produto || "(sem tipo de produto)";
+      } else if (dimensao === "area_id") {
+        // Resolver area_id -> nome via cache de organograma se disponível
+        var areaId = r.area_id;
+        if (areaId == null) { key = "(sem área)"; }
+        else {
+          var nodo = (typeof orgNodos !== "undefined" && orgNodos) ? orgNodos.find(function (n) { return n.id === areaId; }) : null;
+          key = nodo ? (nodo.nome || nodo.label || ("Área #" + areaId)) : ("Área #" + areaId);
+        }
+      } else {
+        key = r.subcategoria || "(sem subcategoria)";
+      }
+      porKey[key] = (porKey[key] || 0) + Number(r.valor || 0);
     });
-    var subs = Object.keys(porSub).map(function (k) { return { sub: k, valor: porSub[k] }; });
-    subs.sort(function (a, b) { return b.valor - a.valor; });
-    var total = subs.reduce(function (a, s) { return a + s.valor; }, 0);
+    var grupos = Object.keys(porKey).map(function (k) { return { sub: k, valor: porKey[k] }; });
+    grupos.sort(function (a, b) { return b.valor - a.valor; });
+    var total = grupos.reduce(function (a, s) { return a + s.valor; }, 0);
+
+    var avisoDimensao = "";
+    if (dimensao !== "subcategoria") {
+      var preenchidos = lista.filter(function (r) {
+        if (dimensao === "tipo_produto") return r.tipo_produto != null && r.tipo_produto !== "";
+        if (dimensao === "area_id")      return r.area_id != null;
+        return true;
+      }).length;
+      var pct = lista.length > 0 ? Math.round(preenchidos / lista.length * 100) : 0;
+      if (pct < 100) {
+        avisoDimensao = '<div class="alert alert-warn" style="margin-bottom:12px; padding:8px 12px; background: var(--warn-bg); border-left:3px solid var(--warn); font-size:13px;">' +
+          '<strong>' + pct + '%</strong> dos registros têm <code>' + dimensao + '</code> preenchido. Os demais aparecem como "' +
+          (dimensao === "tipo_produto" ? "(sem tipo de produto)" : "(sem área)") + '". Para popular essa dimensão, use o import com a coluna apropriada.' +
+          '</div>';
+      }
+    }
 
     var linhasHtml;
-    if (!subs.length) {
+    if (!grupos.length) {
       linhasHtml = '<p class="muted">Sem registros pra este corte.</p>';
     } else {
-      linhasHtml = '<table class="tabela"><thead><tr><th>Subcategoria</th><th class="num">Valor</th><th class="num">% do total</th></tr></thead><tbody>' +
-        subs.map(function (s) {
+      linhasHtml = avisoDimensao + '<table class="tabela"><thead><tr><th>' + escHtml(labelDim) + '</th><th class="num">Valor</th><th class="num">% do total</th></tr></thead><tbody>' +
+        grupos.map(function (s) {
           var pct = total > 0 ? ((s.valor / total) * 100).toFixed(1).replace(".", ",") + "%" : "—";
           return '<tr><td>' + escHtml(s.sub) + '</td><td class="num">' + fmtBRL(s.valor) + '</td><td class="num">' + pct + '</td></tr>';
         }).join("") +
@@ -3321,7 +3360,7 @@
         '</tbody></table>';
     }
 
-    abrirModalDetalhe("DRE — " + labelCat + " — " + labelMes, linhasHtml);
+    abrirModalDetalhe("DRE — " + labelCat + " · " + labelMes + " · por " + labelDim, linhasHtml);
   }
 
   // =========================================================================
