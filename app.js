@@ -12518,4 +12518,278 @@
   }, 5000);
 
 
+  // ===========================================================================
+  // Onda H — Detector e gestor de duplicados de FUNCIONÁRIOS
+  // ===========================================================================
+
+  function abrirDetectorDuplicadosFuncionarios() {
+    var lista = funcionariosLista || [];
+    if (!lista.length) {
+      try { toast("Carregue a lista de funcionários antes (a tabela precisa estar carregada).", "warn"); } catch (e) {}
+      return;
+    }
+    // Agrupar por CPF (só os que têm CPF)
+    var byCpf = {};
+    lista.forEach(function (f) {
+      var cpf = (f.cpf || "").replace(/\D/g, "");
+      if (!cpf || cpf.length < 11) return;
+      if (!byCpf[cpf]) byCpf[cpf] = [];
+      byCpf[cpf].push(f);
+    });
+    var gruposDup = Object.keys(byCpf).filter(function (k) { return byCpf[k].length > 1; }).map(function (k) {
+      return { cpf: k, funcs: byCpf[k] };
+    });
+
+    if (!gruposDup.length) {
+      try { toast("Nenhuma duplicidade de CPF encontrada. 🎉", "ok"); } catch (e) {}
+      return;
+    }
+
+    // Construir HTML do modal
+    var html = '<div style="margin-bottom: 14px; padding: 10px 14px; background: var(--warn-bg); border-left: 3px solid var(--warn); border-radius: 4px;">' +
+      '<p style="margin:0; font-size:13px;"><strong>' + gruposDup.length + ' grupo(s) de CPF duplicado.</strong> Por grupo, escolha qual manter ATIVO. Os outros serão INATIVADOS (preserva histórico).</p>' +
+      '<button class="btn-ouro" id="dup-auto-todos" type="button" style="margin-top:8px;">⚡ Auto-resolver todos (mantém ATIVO de cada grupo, inativa duplicatas)</button>' +
+    '</div>';
+
+    gruposDup.forEach(function (g, i) {
+      html += '<div class="card fat-card" style="margin-bottom: 12px; padding: 14px;">' +
+        '<h3 style="margin: 0 0 10px; font-size: 14px;">CPF <code>' + escHtml(g.cpf) + '</code> · ' + g.funcs.length + ' cadastro(s)</h3>' +
+        '<table class="tabela"><thead><tr><th>Nome</th><th>Status</th><th>Cargo</th><th>Admissão</th><th>Demissão</th><th>Ações</th></tr></thead><tbody>';
+      g.funcs.forEach(function (f) {
+        var statusCls = f.status === "ATIVO" ? "solta" : "outras";
+        html += '<tr data-dup-row="' + f.id + '">' +
+          '<td><strong>' + escHtml(f.nome) + '</strong></td>' +
+          '<td><span class="badge-tipo ' + statusCls + '">' + escHtml(f.status || "?") + '</span></td>' +
+          '<td>' + escHtml(f.cargo || "—") + '</td>' +
+          '<td>' + escHtml(f.data_admissao || "—") + '</td>' +
+          '<td>' + escHtml(f.data_demissao || "—") + '</td>' +
+          '<td>' +
+            (f.status === "ATIVO"
+              ? '<button class="btn-limpar" data-dup-action="inativar" data-id="' + f.id + '">⏸ Inativar este</button>'
+              : '<button class="btn-limpar" data-dup-action="reativar" data-id="' + f.id + '">▶ Reativar este</button>'
+            ) +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    });
+
+    abrirModalDetalhe("Duplicados de CPF — funcionários", html);
+
+    setTimeout(function () {
+      // Wire-up auto-resolver
+      var btnAuto = document.getElementById("dup-auto-todos");
+      if (btnAuto) btnAuto.addEventListener("click", function () {
+        if (!confirm("Auto-resolver TODOS os " + gruposDup.length + " grupos?\n\nPara cada CPF: mantém ATIVO o primeiro (ou o mais recente se nenhum estiver ativo) e inativa os outros.")) return;
+        autoResolverDuplicadosFuncionarios(gruposDup);
+      });
+      // Wire-up por linha
+      document.querySelectorAll("[data-dup-action]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var id = Number(btn.getAttribute("data-id"));
+          var acao = btn.getAttribute("data-dup-action");
+          var novoStatus = acao === "inativar" ? "INATIVO" : "ATIVO";
+          client.from("funcionarios").update({ status: novoStatus }).eq("id", id).then(function (r) {
+            if (r.error) { try { toast(r.error.message, "erro"); } catch (e) {} return; }
+            try { toast(acao === "inativar" ? "Inativado." : "Reativado.", "ok"); } catch (e) {}
+            // Atualizar visualmente: badge + label do botão
+            var row = document.querySelector('[data-dup-row="' + id + '"]');
+            if (row) {
+              var badge = row.querySelector(".badge-tipo");
+              if (badge) {
+                badge.textContent = novoStatus;
+                badge.className = "badge-tipo " + (novoStatus === "ATIVO" ? "solta" : "outras");
+              }
+              btn.textContent = novoStatus === "ATIVO" ? "⏸ Inativar este" : "▶ Reativar este";
+              btn.setAttribute("data-dup-action", novoStatus === "ATIVO" ? "inativar" : "reativar");
+            }
+            // Atualizar cache local
+            (funcionariosLista || []).forEach(function (f) { if (f.id === id) f.status = novoStatus; });
+          });
+        });
+      });
+    }, 50);
+  }
+
+  function autoResolverDuplicadosFuncionarios(grupos) {
+    var idsParaInativar = [];
+    grupos.forEach(function (g) {
+      var ativos = g.funcs.filter(function (f) { return f.status === "ATIVO"; });
+      var manter;
+      if (ativos.length === 1) {
+        manter = ativos[0];
+      } else if (ativos.length > 1) {
+        // Múltiplos ativos — manter o de admissão mais recente; senão o id maior
+        manter = ativos.slice().sort(function (a, b) {
+          var dA = a.data_admissao || "";
+          var dB = b.data_admissao || "";
+          if (dA && dB) return dB.localeCompare(dA);
+          return b.id - a.id;
+        })[0];
+      } else {
+        // Nenhum ativo — manter o de id maior (mais recente)
+        manter = g.funcs.slice().sort(function (a, b) { return b.id - a.id; })[0];
+      }
+      g.funcs.forEach(function (f) {
+        if (f.id !== manter.id && f.status === "ATIVO") idsParaInativar.push(f.id);
+      });
+    });
+    if (!idsParaInativar.length) {
+      try { toast("Nada pra fazer — cada grupo já tem só 1 ATIVO ou nenhum.", "warn"); } catch (e) {}
+      return;
+    }
+    client.from("funcionarios").update({ status: "INATIVO" }).in("id", idsParaInativar).then(function (r) {
+      if (r.error) { try { toast(r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+      try { toast(idsParaInativar.length + " cadastro(s) inativado(s). 🎉", "ok"); } catch (e) {}
+      funcionariosCarregado = false;
+      carregarFuncionariosSeNecessario();
+      // Fechar modal
+      var ov = document.getElementById("modal-detalhe-overlay");
+      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    });
+  }
+
+  // Bind do botão "🔍 Duplicados" (idempotente, via showPage / dataset.bound)
+  (function () {
+    function bind() {
+      var b = document.getElementById("fn-btn-duplicados");
+      if (!b || b.dataset.bound) return;
+      b.dataset.bound = "1";
+      b.addEventListener("click", abrirDetectorDuplicadosFuncionarios);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+    else setTimeout(bind, 200);
+    // Re-bind em cada navegação (caso a section seja re-renderizada)
+    document.addEventListener("click", function () { setTimeout(bind, 50); });
+  })();
+
+  // ===========================================================================
+  // Q5 — Command Palette (Ctrl+K)
+  // ===========================================================================
+
+  var CMD_PALETTE_PAGES = [
+    { label: "Dashboard", page: "dashboard", grupo: "Dashboard" },
+    { label: "Programa de Bônus", page: "programa_bonus", grupo: "Dashboard" },
+    { label: "Bônus Individual", page: "programa_bonus_individual", grupo: "Dashboard" },
+    { label: "Por Apropriação", page: "apr_dashboard", grupo: "Receita" },
+    { label: "Por Faturamento", page: "apr_faturamento", grupo: "Receita" },
+    { label: "Saldo a Reconhecer", page: "saldo_reconhecer", grupo: "Receita" },
+    { label: "Vendas", page: "vendas", grupo: "Comercial" },
+    { label: "Gestão de Faturamento", page: "faturamento", grupo: "Comercial" },
+    { label: "Notas Fiscais", page: "notas", grupo: "Comercial" },
+    { label: "Dashboard de Faturamento", page: "dashboard_faturamento", grupo: "Comercial" },
+    { label: "Recebimentos", page: "recebimentos", grupo: "Financeiro" },
+    { label: "Compromissos / A pagar", page: "caixa_compromissos", grupo: "Financeiro" },
+    { label: "Entradas Avulsas", page: "entradas_outras", grupo: "Financeiro" },
+    { label: "Saídas Avulsas", page: "saidas_outras", grupo: "Financeiro" },
+    { label: "★ Margem por OS", page: "margem_os", grupo: "Custeio" },
+    { label: "Custo por OS", page: "custos_os", grupo: "Custeio" },
+    { label: "Custo Direto Via OS", page: "cust_direto_via_os", grupo: "Custeio" },
+    { label: "Custo Direto Lançamento", page: "cust_direto_lanc", grupo: "Custeio" },
+    { label: "Custo Indireto", page: "cust_indireto", grupo: "Custeio" },
+    { label: "Despesas", page: "despesas", grupo: "Custeio" },
+    { label: "Custo por Área", page: "cust_area", grupo: "Custeio" },
+    { label: "OSs excluídas", page: "apr_excluidas", grupo: "Custeio" },
+    { label: "Entregas pendentes", page: "entregas", grupo: "Custeio" },
+    { label: "Fluxo de Caixa 12m", page: "fluxo_visao", grupo: "Contabilidade Gerencial" },
+    { label: "Contas Bancárias", page: "fluxo_contas", grupo: "Contabilidade Gerencial" },
+    { label: "Saldos Mensais", page: "fluxo_saldos", grupo: "Contabilidade Gerencial" },
+    { label: "DRE", page: "dre", grupo: "Contabilidade Gerencial" },
+    { label: "Lançamentos", page: "movimentos", grupo: "Contabilidade Gerencial" },
+    { label: "Lançamentos de Caixa", page: "movimentos_caixa", grupo: "Contabilidade Gerencial" },
+    { label: "Funcionários", page: "rh_funcionarios", grupo: "RH" },
+    { label: "Benefícios", page: "rh_beneficios", grupo: "RH" },
+    { label: "Folha", page: "rh_folha", grupo: "RH" },
+    { label: "Impostos", page: "rh_impostos", grupo: "RH" },
+    { label: "Organograma", page: "rh_organograma", grupo: "RH" },
+    { label: "Medidas Disciplinares", page: "medidas_disciplinares", grupo: "RH" },
+    { label: "Avaliação de Desempenho", page: "avaliacao_desempenho", grupo: "RH" },
+    { label: "Bônus — Configuração", page: "rh_bonus_config", grupo: "RH" },
+    { label: "Configuração", page: "configuracao", grupo: "Configuração" },
+    { label: "Plano de Contas", page: "cfg_plano", grupo: "Configuração" },
+    { label: "CFOP", page: "cfg_cfop", grupo: "Configuração" },
+    { label: "Centros de Custo", page: "cfg_centros", grupo: "Configuração" },
+    { label: "Rubricas", page: "cfg_rubricas", grupo: "Configuração" },
+    { label: "Usuários", page: "cfg_usuarios", grupo: "Configuração" },
+    { label: "Tipos de Perfil", page: "cfg_perfis_tipos", grupo: "Configuração" },
+    { label: "Auditoria", page: "cfg_auditoria", grupo: "Configuração" },
+    { label: "Alertas (caixa de entrada)", page: "cfg_aud_alertas", grupo: "Configuração" },
+    { label: "Regras de Alerta", page: "cfg_aud_regras", grupo: "Configuração" },
+    { label: "Diagnóstico", page: "cfg_diag", grupo: "Configuração" },
+    { label: "Reset Completo", page: "cfg_reset", grupo: "Configuração" },
+    { label: "Parâmetros", page: "cfg_parametros", grupo: "Configuração" },
+    { label: "Importar", page: "importacoes", grupo: "Configuração" }
+  ];
+
+  function abrirCommandPalette() {
+    // Remove existente
+    var ex = document.getElementById("cmd-palette");
+    if (ex) { ex.remove(); return; }
+
+    var ov = document.createElement("div");
+    ov.id = "cmd-palette";
+    ov.className = "cmd-palette-overlay";
+    ov.innerHTML =
+      '<div class="cmd-palette-box">' +
+        '<input type="text" class="cmd-palette-input" id="cmd-palette-input" placeholder="🔍 Buscar tela ou ação… (Esc fecha)" autocomplete="off" />' +
+        '<ul class="cmd-palette-list" id="cmd-palette-list"></ul>' +
+        '<div class="cmd-palette-foot"><kbd>↑</kbd> <kbd>↓</kbd> navegar · <kbd>Enter</kbd> abrir · <kbd>Esc</kbd> fechar</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+
+    var input = document.getElementById("cmd-palette-input");
+    var list  = document.getElementById("cmd-palette-list");
+    var sel = 0;
+
+    function renderResultados() {
+      var q = (input.value || "").trim().toLowerCase();
+      var resultados = CMD_PALETTE_PAGES.filter(function (p) {
+        if (!q) return true;
+        return (p.label.toLowerCase().indexOf(q) !== -1) || (p.grupo.toLowerCase().indexOf(q) !== -1);
+      }).slice(0, 12);
+      if (sel >= resultados.length) sel = 0;
+      list.innerHTML = resultados.map(function (p, i) {
+        return '<li class="cmd-item' + (i === sel ? ' cmd-item-sel' : '') + '" data-page="' + p.page + '">' +
+          '<span class="cmd-grupo">' + escHtml(p.grupo) + '</span>' +
+          '<span class="cmd-label">' + escHtml(p.label) + '</span>' +
+        '</li>';
+      }).join("");
+      list.querySelectorAll(".cmd-item").forEach(function (li, i) {
+        li.addEventListener("click", function () { irPara(resultados[i].page); });
+      });
+      list.querySelectorAll = list.querySelectorAll; // no-op
+    }
+
+    function irPara(pageId) {
+      try { if (typeof showPage === "function") showPage(pageId); } catch (e) {}
+      ov.remove();
+    }
+
+    input.addEventListener("input", renderResultados);
+    input.addEventListener("keydown", function (e) {
+      var itens = list.querySelectorAll(".cmd-item");
+      if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(sel + 1, itens.length - 1); renderResultados(); input.focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(sel - 1, 0); renderResultados(); input.focus(); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        var pg = (list.querySelector(".cmd-item-sel") || itens[0] || {}).getAttribute && (list.querySelector(".cmd-item-sel") || itens[0]).getAttribute("data-page");
+        if (pg) irPara(pg);
+      }
+      else if (e.key === "Escape") { e.preventDefault(); ov.remove(); }
+    });
+
+    ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+
+    setTimeout(function () { input.focus(); renderResultados(); }, 0);
+  }
+
+  // Ctrl+K / Cmd+K — abre command palette
+  document.addEventListener("keydown", function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === "k" || ev.key === "K")) {
+      ev.preventDefault();
+      abrirCommandPalette();
+    }
+  });
+
+
 })();

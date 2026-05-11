@@ -2367,3 +2367,84 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   color: var(--text2);
 }
 .cf-toggle:disabled { opacity: 0.5; cursor: wait; }
+
+
+/* =========================================================
+   Q5 — COMMAND PALETTE (Ctrl+K)
+   ========================================================= */
+.cmd-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(42, 26, 6, 0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  animation: cmd-fade 100ms ease;
+}
+@keyframes cmd-fade { from { opacity: 0; } to { opacity: 1; } }
+.cmd-palette-box {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg2);
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 36px rgba(42,26,6,0.30);
+  overflow: hidden;
+}
+.cmd-palette-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  border: 0;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--borda);
+}
+.cmd-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.cmd-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13.5px;
+}
+.cmd-item:hover, .cmd-item-sel {
+  background: var(--bg3);
+}
+.cmd-item .cmd-grupo {
+  color: var(--text3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 130px;
+}
+.cmd-item .cmd-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.cmd-palette-foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--borda);
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg3);
+}
+.cmd-palette-foot kbd {
+  font-family: 'Courier New', monospace;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--borda2);
+  margin: 0 2px;
+}
