@@ -3984,17 +3984,57 @@
           banco: v.banco, agencia: v.agencia, conta: v.conta, pix: v.pix,
           observacoes: v.observacoes
         };
-        var q = editar
-          ? client.from("funcionarios").update(payload).eq("id", f.id)
-          : client.from("funcionarios").insert(payload);
+
+        // Onda E (item 8b): bloquear duplicidade de CPF ATIVO
+        function prosseguir() {
+          var q = editar
+            ? client.from("funcionarios").update(payload).eq("id", f.id)
+            : client.from("funcionarios").insert(payload);
+          q.then(function (r) {
+            if (r.error) { done(r.error.message); return; }
+            funcionariosCarregado = false;
+            try { folhaCustoCarregado = false; } catch (e) {}
+            try { bonCarregado = false; } catch (e) {}
+            carregarFuncionariosSeNecessario();
+            done(null);
+          });
+        }
+        var cpfLimpo = (v.cpf || "").replace(/\D/g, "");
+        if (cpfLimpo.length >= 11) {
+          // Procurar outro registro com mesmo CPF (excluindo o próprio em edição)
+          var qDup = client.from("funcionarios").select("id, nome, status").eq("cpf", v.cpf);
+          if (editar) qDup = qDup.neq("id", f.id);
+          qDup.then(function (rd) {
+            if (rd.error) { /* falha silenciosa: prossegue assumindo ok */ prosseguir(); return; }
+            var existentes = rd.data || [];
+            if (!existentes.length) { prosseguir(); return; }
+            var ativos = existentes.filter(function (x) { return x.status === "ATIVO"; });
+            if (ativos.length) {
+              done("CPF já cadastrado para o funcionário ATIVO \"" + ativos[0].nome + "\". Inative o cadastro anterior antes de criar um novo, ou edite o existente.");
+              return;
+            }
+            // Existe inativo — permitir mas avisar
+            if (!confirm("Existe um cadastro INATIVO com este CPF (" + existentes[0].nome + "). Continuar mesmo assim?")) {
+              done("Operação cancelada.");
+              return;
+            }
+            prosseguir();
+          });
+        } else {
+          prosseguir();
+        }
+        return; // Importante: o callback antigo abaixo é morto pra evitar duplo-save
+        // -- ANCORA: codigo antigo neutralizado, fluxo passa por prosseguir() acima --
+        /*
         q.then(function (r) {
           if (r.error) { done(r.error.message); return; }
           funcionariosCarregado = false;
-          folhaCustoCarregado = false;   // CC do func afeta Custo Indireto + por Área
-          bonCarregado = false;           // Bônus Individual usa lista de funcionarios
+          folhaCustoCarregado = false;
+          bonCarregado = false;
           carregarFuncionariosSeNecessario();
           done(null);
         });
+        */
       }
     });
   }
