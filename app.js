@@ -2134,35 +2134,42 @@
     valText(document.getElementById("cf-lbl"), filtrados.length + " códigos");
 
     preencherTbody(tbody, filtrados.map(function (c) {
-      var checked = c.aplicavel ? "checked" : "";
+      var ativo = !!c.aplicavel;
+      var btnTxt = ativo ? "✓ Aplicável" : "○ Não aplicável";
+      var btnCls = ativo ? "cf-toggle-on" : "cf-toggle-off";
       return '<tr>' +
         '<td class="mono">' + escHtml(c.cfop) + '</td>' +
         '<td class="mono">' + escHtml(c.cfop_formatado || "—") + '</td>' +
         '<td>' + escHtml(c.grupo || "—") + '</td>' +
         '<td>' + escHtml(c.descricao || "—") + '</td>' +
-        '<td class="num"><input type="checkbox" class="cf-chk" data-id="' + c.id + '" ' + checked + ' /></td>' +
+        '<td class="num"><button type="button" class="cf-toggle ' + btnCls + '" data-id="' + c.id + '">' + btnTxt + '</button></td>' +
       '</tr>';
     }), 5);
 
-    // Ligar toggles
-    tbody.querySelectorAll(".cf-chk").forEach(function (chk) {
-      chk.addEventListener("change", function () {
-        var id = Number(chk.getAttribute("data-id"));
-        var novo = chk.checked;
-        chk.disabled = true;
+    // Ligar toggles (clica e alterna)
+    tbody.querySelectorAll(".cf-toggle").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-id"));
+        var c = cfopLista.find(function (x) { return x.id === id; });
+        var novo = !c.aplicavel;
+        btn.disabled = true;
         client.from("cfop").update({ aplicavel: novo }).eq("id", id).then(function (r) {
-          chk.disabled = false;
+          btn.disabled = false;
           if (r.error) {
-            chk.checked = !novo;
-            alert("Erro ao atualizar CFOP: " + r.error.message);
+            try { toast("Erro ao atualizar CFOP: " + r.error.message, "erro"); } catch (e) { alert("Erro: " + r.error.message); }
             return;
           }
-          // Atualiza cache local e métricas
-          cfopLista.forEach(function (c) { if (c.id === id) c.aplicavel = novo; });
+          // Atualiza cache local e visual
+          cfopLista.forEach(function (x) { if (x.id === id) x.aplicavel = novo; });
+          btn.textContent = novo ? "✓ Aplicável" : "○ Não aplicável";
+          btn.className = "cf-toggle " + (novo ? "cf-toggle-on" : "cf-toggle-off");
           var apl = 0;
-          cfopLista.forEach(function (c) { if (c.aplicavel) apl++; });
+          cfopLista.forEach(function (x) { if (x.aplicavel) apl++; });
           valText(document.getElementById("cf-m-apl"), fmtInt(apl));
           valText(document.getElementById("cf-m-nao"), fmtInt(cfopLista.length - apl));
+          // Atualiza subtítulo dinâmico
+          var cfPgSub2 = document.querySelector('section[data-page="cfg_cfop"] .page-sub');
+          if (cfPgSub2) cfPgSub2.textContent = cfopLista.length + " códigos · " + apl + " marcados como aplicáveis à Terra";
         });
       });
     });

@@ -2336,3 +2336,34 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   outline: none;
 }
 .input-money-wrap input:focus { box-shadow: none !important; outline: none !important; }
+
+
+/* =========================================================
+   ONDA D — CFOP: botão toggle Aplicável / Não aplicável
+   ========================================================= */
+.cf-toggle {
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  min-width: 130px;
+}
+.cf-toggle-on {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success);
+}
+.cf-toggle-on:hover { filter: brightness(0.95); }
+.cf-toggle-off {
+  background: var(--bg3);
+  color: var(--text3);
+  border-color: var(--borda2);
+}
+.cf-toggle-off:hover {
+  background: var(--bg4);
+  color: var(--text2);
+}
+.cf-toggle:disabled { opacity: 0.5; cursor: wait; }
