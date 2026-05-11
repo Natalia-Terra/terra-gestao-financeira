@@ -2300,3 +2300,39 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   text-align: center;
   line-height: 1.4;
 }
+
+
+/* =========================================================
+   ONDA B — Máscara monetária (R$ + número alinhado)
+   ========================================================= */
+.input-money-wrap {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--borda2);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-money-wrap:focus-within {
+  border-color: var(--ouro);
+  box-shadow: 0 0 0 2px rgba(184,134,11,0.15);
+}
+.input-money-prefix {
+  padding: 8px 6px 8px 10px;
+  color: var(--text3);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--bg3);
+  border-right: 1px solid var(--borda);
+}
+.input-money-wrap input {
+  border: 0 !important;
+  background: transparent !important;
+  flex: 1;
+  padding: 8px 10px !important;
+  font-size: 13px;
+  outline: none;
+}
+.input-money-wrap input:focus { box-shadow: none !important; outline: none !important; }

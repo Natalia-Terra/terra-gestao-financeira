@@ -387,11 +387,25 @@
     });
   }
 
-  // Tecla ESC de emergencia — fecha qualquer overlay aberto
+  // Tecla ESC: fecha modal aberto OU volta pra tela anterior (breadcrumb)
   document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape") {
-      limparOverlaysOrfaos();
-    }
+    if (ev.key !== "Escape") return;
+    // 1) Se há algum modal-overlay visível, fechar (já existe limparOverlaysOrfaos)
+    var algumModal = Array.prototype.find.call(document.querySelectorAll(".modal-overlay"), function (m) { return !m.hidden; });
+    if (algumModal) { limparOverlaysOrfaos(); return; }
+    // 2) Senão, tentar navegar pra tela "pai" via breadcrumb
+    try {
+      var ativa = Array.prototype.find.call(document.querySelectorAll("section.page"), function (s) { return !s.hidden; });
+      var pageId = ativa ? ativa.getAttribute("data-page") : null;
+      var parts = (typeof BREADCRUMB_MAP !== "undefined" && BREADCRUMB_MAP[pageId]) ? BREADCRUMB_MAP[pageId] : null;
+      if (!parts || parts.length < 2) return;
+      // Procurar o "pai" no breadcrumb com data-goto correspondente
+      // Mapa rápido label → pageId base
+      var maiMap = { "Configuração": "configuracao", "Dashboard": "dashboard", "Comercial": "vendas", "Receita": "consolidado", "Financeiro": "fluxo_visao", "Custeio": "custos_os", "Contabilidade Gerencial": "fluxo_visao", "Dep. Pessoal e RH": "rh_funcionarios" };
+      var paiLabel = parts[0];
+      var paiPageId = maiMap[paiLabel];
+      if (paiPageId && typeof showPage === "function") showPage(paiPageId);
+    } catch (e) { /* silencioso */ }
   });
 
   // -- Busca em selects grandes (>50 opcoes) ---------------------------------
@@ -446,6 +460,53 @@
     });
   }
 
+
+  // -- Onda B: máscara monetária BR ------------------------------------------
+  // Auto-aplica em inputs type="number" cujo name/id sugere valor monetário.
+  // Adiciona step="0.01" (resolve bug do step=1 que bloqueava centavos) e
+  // wrapper com prefixo "R$ " antes do input. On-type opcional via formatação
+  // no blur (aceita "1234.56" e exibe "1.234,56" se o usuário sair do campo).
+  function ehInputValorMonetario(el) {
+    if (!el || el.tagName !== "INPUT") return false;
+    if (el.type !== "number" && el.type !== "text") return false;
+    if (el.dataset.monetario === "0") return false; // opt-out
+    var key = (el.name || el.id || "").toLowerCase();
+    // Lista de tokens que sugerem valor monetário
+    var tokens = ["valor","saldo","venda","custo","preco","preço","salario","salário","liquido","líquido","bruto","total","faturado","recebido","pagar","receber","ipi","icms","comissao","comissão","aluguel","desconto","reembolso","bonus","bônus","meta_valor"];
+    return tokens.some(function (t) { return key.indexOf(t) !== -1; });
+  }
+
+  function aplicarMascaraMonetaria(root) {
+    var scope = root || document;
+    scope.querySelectorAll("input").forEach(function (el) {
+      if (el.dataset.monetarioAplicado === "1") return;
+      if (!ehInputValorMonetario(el)) return;
+      el.dataset.monetarioAplicado = "1";
+
+      // Garantir step=0.01 (corrige o bug do step=1)
+      if (el.type === "number" && !el.step) el.step = "0.01";
+
+      // Wrapper com prefixo R$
+      var wrap = document.createElement("span");
+      wrap.className = "input-money-wrap";
+      el.parentNode.insertBefore(wrap, el);
+      var prefix = document.createElement("span");
+      prefix.className = "input-money-prefix";
+      prefix.textContent = "R$";
+      wrap.appendChild(prefix);
+      wrap.appendChild(el);
+
+      // Formatação on-blur (mantém type="number" pra usabilidade)
+      el.addEventListener("blur", function () {
+        if (!el.value) return;
+        var n = Number(el.value);
+        if (isNaN(n)) return;
+        // Arredondar pra 2 casas (centavos)
+        el.value = (Math.round(n * 100) / 100).toFixed(2);
+      });
+    });
+  }
+
   function showPage(pageId) {
     // Self-healing: limpa overlays orfaos antes de navegar (bug do Reset)
     try { limparOverlaysOrfaos(); } catch (e) {}
@@ -457,6 +518,8 @@
     setTimeout(function () { try { autoInjetarExportXlsx(); } catch (e) {} }, 100);
     // Auto-enhance selects grandes (>50 opcoes)
     setTimeout(function () { try { autoEnhanceLargeSelects(); } catch (e) {} }, 200);
+    // Auto-aplicar máscara monetária em inputs de valor
+    setTimeout(function () { try { aplicarMascaraMonetaria(); } catch (e) {} }, 250);
 
     // Atualiza a faixa 2 da topbar com o título da página atual
     var pagina = document.querySelector('#shell .main .page[data-page="' + pageId + '"]');
@@ -3125,6 +3188,8 @@
     modalSalvar.textContent = "Salvar";
     // Auto-enhance selects grandes dentro do modal apos render
     setTimeout(function () { try { autoEnhanceLargeSelects(modalFields); } catch (e) {} }, 50);
+    // Aplicar máscara monetária nos inputs do modal
+    setTimeout(function () { try { aplicarMascaraMonetaria(modalFields); } catch (e) {} }, 60);
     // Botão opcional "Salvar e adicionar próximo" (#10)
     var salvarProx = document.getElementById("modal-salvar-prox");
     if (config.salvarProximo) {
@@ -7914,7 +7979,6 @@
           valor: s && s.mes_ref ? String(s.mes_ref).slice(0,7) : "" },
         { name: "saldo_inicial",         label: "Saldo inicial (só 1º mês da conta)", type: "number", valor: s && s.saldo_inicial },
         { name: "saldo_final_realizado", label: "Saldo final realizado",              type: "number", valor: s && s.saldo_final_realizado },
-        { name: "saldo_final_projetado", label: "Saldo final projetado",              type: "number", valor: s && s.saldo_final_projetado },
         { name: "observacao",            label: "Observação",                          type: "textarea", valor: s && s.observacao }
       ],
       onSubmit: function (values, done) {
@@ -7923,7 +7987,7 @@
           mes_ref: values.mes_ref ? values.mes_ref + "-01" : null,
           saldo_inicial: values.saldo_inicial,
           saldo_final_realizado: values.saldo_final_realizado,
-          saldo_final_projetado: values.saldo_final_projetado,
+          // saldo_final_projetado fica calculado (não cadastrado manualmente)
           observacao: values.observacao
         };
         var q = ehNovo
