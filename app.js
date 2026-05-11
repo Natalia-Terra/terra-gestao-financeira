@@ -9408,6 +9408,36 @@
       var tabela = limparBtn.getAttribute("data-limpar");
       if (tabela && typeof limparTabela === "function") { limparTabela(tabela); return; }
     }
+
+    // DELEGATE DEFENSIVO: botões "+ Novo" — garante que SEMPRE funcionem
+    // mesmo se ativarPaginaOrcamentos() abortar (bug recorrente).
+    // Mapeia o ID do botão (ex: 'cc-btn-novo') pra função de modal correspondente.
+    var btnNovoEl = t.closest && t.closest("[id$='-btn-novo']");
+    if (btnNovoEl) {
+      var id = btnNovoEl.id;
+      var mapaModalNovo = {
+        "cc-btn-novo": typeof abrirModalCentroCusto    !== "undefined" ? abrirModalCentroCusto    : null,
+        "rb-btn-novo": typeof abrirModalRubrica        !== "undefined" ? abrirModalRubrica        : null,
+        "fn-btn-novo": typeof abrirModalFuncionario    !== "undefined" ? abrirModalFuncionario    : null,
+        "bn-btn-novo": typeof abrirModalBeneficio      !== "undefined" ? abrirModalBeneficio      : null,
+        "fl-btn-novo": typeof abrirModalFolha          !== "undefined" ? abrirModalFolha          : null,
+        "ir-btn-novo": typeof abrirModalImposto        !== "undefined" ? abrirModalImposto        : null,
+        "pc-btn-novo": typeof abrirModalPlanoContas    !== "undefined" ? abrirModalPlanoContas    : null,
+        "us-btn-novo": typeof abrirModalNovoUsuario    !== "undefined" ? abrirModalNovoUsuario    : null,
+        "pt-btn-novo": typeof abrirModalPerfilTipo     !== "undefined" ? function() { abrirModalPerfilTipo(null); } : null,
+        "cb-btn-novo": typeof abrirModalContaBancaria  !== "undefined" ? abrirModalContaBancaria  : null,
+        "sc-btn-novo": typeof abrirModalSaldoConta     !== "undefined" ? abrirModalSaldoConta     : null,
+        "eo-btn-novo": typeof abrirModalEntradaOutra   !== "undefined" ? abrirModalEntradaOutra   : null,
+        "so-btn-novo": typeof abrirModalSaidaOutra     !== "undefined" ? abrirModalSaidaOutra     : null,
+        "alr-btn-novo": typeof abrirModalRegraAlerta   !== "undefined" ? abrirModalRegraAlerta    : null
+      };
+      var fn = mapaModalNovo[id];
+      if (typeof fn === "function") {
+        ev.preventDefault();
+        try { fn(); } catch (e) { console.error("Erro ao abrir modal " + id + ":", e); }
+        return;
+      }
+    }
     // Drill-down de tabelas — qualquer <tr class="linha-clicavel" data-fid="...">
     var trBonus = t.closest("tr.linha-clicavel[data-fid]");
     if (trBonus) {
