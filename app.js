@@ -1871,29 +1871,46 @@
       if (grupo && p.grupo !== grupo) return false;
       if (nivel && String(p.nivel) !== nivel) return false;
       if (dre && p.dre !== dre) return false;
-      return matchBusca(busca, [p.cod_conta, p.descritivo, p.grupo, p.numero_conta, p.dre]);
+      return matchBusca(busca, [p.descritivo, p.grupo, p.numero_conta, p.dre]);
+    });
+
+    // Onda A: ordenar pelo numero_conta (hierárquico) e seq como fallback
+    filtrados.sort(function (a, b) {
+      var na = a.numero_conta || "";
+      var nb = b.numero_conta || "";
+      if (na && nb) return na.localeCompare(nb, "pt-BR", { numeric: true });
+      return (a.seq || 0) - (b.seq || 0);
     });
 
     valText(document.getElementById("pc-lbl"), filtrados.length + " de " + planoContas.length);
-    // Subtítulo dinâmico: contagem real + níveis distintos
     var pgSub = document.querySelector('section[data-page="cfg_plano"] .page-sub');
     if (pgSub) {
       var niveis = {}; planoContas.forEach(function (p) { if (p.nivel) niveis[p.nivel] = true; });
-      pgSub.textContent = planoContas.length + " contas · " + Object.keys(niveis).length + " níveis hierárquicos";
+      var ativos = planoContas.filter(function (p) { return p.ativo !== false; }).length;
+      pgSub.textContent = ativos + " contas ativas · " + Object.keys(niveis).length + " níveis hierárquicos";
     }
 
     preencherTbody(tbody, filtrados.map(function (p) {
-      return '<tr>' +
+      var inativa = p.ativo === false;
+      var rowStyle = inativa ? ' style="opacity: 0.55;"' : '';
+      var badgeAtivo = inativa
+        ? '<span class="badge-tipo outras">inativa</span>'
+        : '<span class="badge-tipo solta">ativa</span>';
+      var btnToggle = inativa
+        ? '<button class="btn-limpar" data-pc-reativar="' + p.id + '" title="Reativar">▶ Reativar</button> '
+        : '<button class="btn-limpar" data-pc-inativar="' + p.id + '" title="Inativar (preserva histórico, bloqueia novos lançamentos)">⏸ Inativar</button> ';
+      return '<tr' + rowStyle + '>' +
         '<td class="num">' + fmtInt(p.seq) + '</td>' +
         '<td class="num">' + fmtInt(p.nivel) + '</td>' +
-        '<td class="mono">' + escHtml(p.cod_conta) + '</td>' +
         '<td class="mono">' + escHtml(p.numero_conta || "—") + '</td>' +
         '<td>' + escHtml(p.descritivo) + '</td>' +
         '<td>' + escHtml(p.grupo || "—") + '</td>' +
         '<td>' + escHtml(p.dre || "—") + '</td>' +
+        '<td>' + badgeAtivo + '</td>' +
         '<td>' +
           '<button class="btn-limpar" data-pc-edit="' + p.id + '" title="Editar">✎ Editar</button> ' +
-          '<button class="btn-limpar" data-pc-del="' + p.id + '" title="Excluir">🗑 Excluir</button>' +
+          btnToggle +
+          '<button class="btn-limpar" data-pc-del="' + p.id + '" title="Excluir (somente sem lançamentos)">🗑 Excluir</button>' +
         '</td>' +
       '</tr>';
     }), 8);
@@ -1906,25 +1923,76 @@
         if (p) abrirModalPlanoContas(p);
       });
     });
-    // Wire-up: excluir
+    // Wire-up: inativar
+    tbody.querySelectorAll("[data-pc-inativar]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-pc-inativar"));
+        var p = planoContas.find(function (x) { return x.id === id; });
+        if (!p) return;
+        if (!confirm("Inativar a conta " + (p.numero_conta || p.descritivo) + "?\n\nA conta vai sumir dos selects de outras telas mas o histórico de lançamentos é preservado.")) return;
+        client.from("plano_contas").update({ ativo: false }).eq("id", id).then(function (r) {
+          if (r.error) { try { toast(r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+          try { toast("Conta inativada.", "ok"); } catch (e) {}
+          pcCarregado = false; carregarPlanoContasSeNecessario();
+        });
+      });
+    });
+    // Wire-up: reativar
+    tbody.querySelectorAll("[data-pc-reativar]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = Number(btn.getAttribute("data-pc-reativar"));
+        client.from("plano_contas").update({ ativo: true }).eq("id", id).then(function (r) {
+          if (r.error) { try { toast(r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+          try { toast("Conta reativada.", "ok"); } catch (e) {}
+          pcCarregado = false; carregarPlanoContasSeNecessario();
+        });
+      });
+    });
+    // Wire-up: excluir — bloqueado se há lançamentos
     tbody.querySelectorAll("[data-pc-del]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var id = Number(btn.getAttribute("data-pc-del"));
         var p = planoContas.find(function (x) { return x.id === id; });
         if (!p) return;
-        if (!confirm("Excluir conta " + (p.cod_conta || "?") + " - " + (p.descritivo || "") + "?\n\nEssa ação não pode ser desfeita.")) return;
-        client.from("plano_contas").delete().eq("id", id).then(function (r) {
-          if (r.error) { alert("Erro ao excluir: " + r.error.message); return; }
-          pcCarregado = false; carregarPlanoContasSeNecessario();
+        // Onda A: checar lançamentos antes
+        client.from("movimentos").select("id", { count: "exact", head: true }).eq("plano_contas_id", id).then(function (rChk) {
+          if (rChk.error) {
+            try { toast("Erro ao verificar lançamentos: " + rChk.error.message, "erro"); } catch (e) {}
+            return;
+          }
+          if (rChk.count && rChk.count > 0) {
+            alert("Esta conta tem " + rChk.count + " lançamento(s) vinculado(s). Use \"Inativar\" em vez de Excluir — preserva o histórico.");
+            return;
+          }
+          if (!confirm("Excluir conta " + (p.numero_conta || "?") + " - " + (p.descritivo || "") + "?\n\nEssa ação não pode ser desfeita.")) return;
+          client.from("plano_contas").delete().eq("id", id).then(function (r) {
+            if (r.error) { try { toast("Erro ao excluir: " + r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+            try { toast("Conta excluída.", "ok"); } catch (e) {}
+            pcCarregado = false; carregarPlanoContasSeNecessario();
+          });
         });
       });
     });
   }
 
   // -- CRUD: modal Novo/Editar conta -----------------------------------------
+  // Helper: máscara variável conforme nível
+  function _pcMascaraPorNivel(n) {
+    n = Number(n) || 5;
+    if (n <= 1) return { mascara: "NN", regex: /^\d{2}$/, hint: "2 dígitos (ex: 11)" };
+    if (n <= 2) return { mascara: "NN.NN", regex: /^\d{2}\.\d{2}$/, hint: "ex: 11.01" };
+    if (n <= 3) return { mascara: "NN.NN.NNN", regex: /^\d{2}\.\d{2}\.\d{3}$/, hint: "ex: 11.01.001" };
+    if (n <= 4) return { mascara: "NN.NN.NNN.NNN", regex: /^\d{2}\.\d{2}\.\d{3}\.\d{3}$/, hint: "ex: 11.01.001.001" };
+    return { mascara: "NN.NN.NNN.NNN.NNN", regex: /^\d{2}\.\d{2}\.\d{3}\.\d{3}\.\d{3}$/, hint: "ex: 11.01.001.001.001" };
+  }
+
   function abrirModalPlanoContas(p) {
     p = p || {};
     var editar = !!p.id;
+
+    // Onda A: perfil do usuário corrente decide o que pode editar
+    var perfilUser = (window._terraUserPerfilTipo || "").toLowerCase();
+    var soDescritivo = perfilUser === "operador";
 
     var grupos = {};
     var dres   = {};
@@ -1938,40 +2006,97 @@
     var optsDre   = [{ value: "", label: "—" }].concat(Object.keys(dres).sort().map(function (d) { return { value: d, label: d }; }));
     var optsNat   = [{ value: "", label: "—" }].concat(Object.keys(nats).sort().map(function (n) { return { value: n, label: n }; }));
 
+    // Próximo seq automático (max + 1)
+    var maxSeq = 0;
+    (planoContas || []).forEach(function (x) { if (x.seq && x.seq > maxSeq) maxSeq = x.seq; });
+    var seqAuto = editar ? p.seq : (maxSeq + 1);
+
+    var nivelInicial = p.nivel || 5;
+    var mInicial = _pcMascaraPorNivel(nivelInicial);
+
+    var campos = [
+      { name: "seq",          label: "Seq (gerado automaticamente)", type: "number", valor: seqAuto, group: "Identificação" },
+      { name: "nivel",        label: "Nível (1 a 5)",                type: "select", valor: String(nivelInicial), required: true, group: "Identificação",
+        options: [
+          { value: "1", label: "1 — Grupo (NN)" },
+          { value: "2", label: "2 — Subgrupo (NN.NN)" },
+          { value: "3", label: "3 — Conta (NN.NN.NNN)" },
+          { value: "4", label: "4 — Subconta (NN.NN.NNN.NNN)" },
+          { value: "5", label: "5 — Detalhe (NN.NN.NNN.NNN.NNN)" }
+        ]
+      },
+      { name: "numero_conta", label: "Nº da Conta — " + mInicial.hint, type: "text", valor: p.numero_conta, required: true, group: "Identificação" },
+      { name: "descritivo",   label: "Descritivo",                   type: "text",   valor: p.descritivo, required: true, group: "Identificação" },
+      { name: "grupo",        label: "Grupo",                        type: "select", valor: p.grupo || "", options: optsGrupo, group: "Classificação" },
+      { name: "dre",          label: "DRE",                          type: "select", valor: p.dre || "",   options: optsDre,   group: "Classificação" },
+      { name: "natureza",     label: "Natureza (Fixo/Variável)",     type: "select", valor: p.natureza || "", options: optsNat, group: "Classificação" },
+      { name: "rateio",       label: "Rateio?",                      type: "select", valor: p.rateio || "Não",
+        options: [{ value: "Sim", label: "Sim" }, { value: "Não", label: "Não" }], group: "Classificação" }
+    ];
+
     abrirModal({
-      titulo: editar ? "Editar conta" : "Nova conta",
-      fields: [
-        { name: "seq",          label: "Seq",                 type: "number", valor: p.seq, group: "Identificação" },
-        { name: "nivel",        label: "Nível (1 a 5)",       type: "number", valor: p.nivel, required: true, group: "Identificação" },
-        { name: "cod_conta",    label: "Código",              type: "text",   valor: p.cod_conta, required: true, group: "Identificação" },
-        { name: "numero_conta", label: "Nº da Conta (GRV)",   type: "text",   valor: p.numero_conta, group: "Identificação" },
-        { name: "descritivo",   label: "Descritivo",          type: "text",   valor: p.descritivo, required: true, group: "Identificação" },
-        { name: "grupo",        label: "Grupo",               type: "select", valor: p.grupo || "", options: optsGrupo, group: "Classificação" },
-        { name: "dre",          label: "DRE",                 type: "select", valor: p.dre || "",   options: optsDre,   group: "Classificação" },
-        { name: "natureza",     label: "Natureza (Fixo/Variável)", type: "select", valor: p.natureza || "", options: optsNat, group: "Classificação" },
-        { name: "rateio",       label: "Rateio?",             type: "select", valor: p.rateio || "Não",
-          options: [{ value: "Sim", label: "Sim" }, { value: "Não", label: "Não" }], group: "Classificação" }
-      ],
+      titulo: editar ? "Editar conta" + (soDescritivo ? " (apenas descritivo — seu perfil)" : "") : "Nova conta",
+      fields: campos,
       onSubmit: function (v, done) {
-        var payload = {
-          seq:          v.seq != null ? Number(v.seq) : null,
-          nivel:        Number(v.nivel),
-          cod_conta:    v.cod_conta,
-          numero_conta: v.numero_conta || null,
-          descritivo:   v.descritivo,
-          grupo:        v.grupo || null,
-          dre:          v.dre || null,
-          natureza:     v.natureza || null,
-          rateio:       v.rateio || "Não"
-        };
-        var q = editar
-          ? client.from("plano_contas").update(payload).eq("id", p.id)
-          : client.from("plano_contas").insert(Object.assign({ importacao_id: 1 }, payload));
-        q.then(function (r) {
-          if (r.error) { done(r.error.message); return; }
-          pcCarregado = false; carregarPlanoContasSeNecessario();
-          done(null);
-        });
+        // Onda A: validar máscara conforme nível
+        var nivel = Number(v.nivel);
+        var m = _pcMascaraPorNivel(nivel);
+        var numero = (v.numero_conta || "").trim();
+        if (!m.regex.test(numero)) {
+          done("Formato do Nº da Conta inválido para nível " + nivel + ". Esperado: " + m.mascara + " (" + m.hint + ")");
+          return;
+        }
+
+        // Se for operador, mandar só descritivo (preserva o resto)
+        var payload;
+        if (soDescritivo && editar) {
+          payload = { descritivo: v.descritivo };
+        } else {
+          payload = {
+            seq:          v.seq != null ? Number(v.seq) : (editar ? p.seq : null),
+            nivel:        nivel,
+            numero_conta: numero,
+            descritivo:   v.descritivo,
+            grupo:        v.grupo || null,
+            dre:          v.dre || null,
+            natureza:     v.natureza || null,
+            rateio:       v.rateio || "Não"
+          };
+        }
+
+        // Onda A: bloquear duplicidade de numero_conta antes do save
+        function prosseguirSave() {
+          var q = editar
+            ? client.from("plano_contas").update(payload).eq("id", p.id)
+            : client.from("plano_contas").insert(Object.assign({ importacao_id: 1, cod_conta: null }, payload));
+          q.then(function (r) {
+            if (r.error) {
+              // Mensagem amigável pra constraint de unique
+              if (String(r.error.message || "").indexOf("idx_plano_contas_numero_unique_ativo") !== -1) {
+                done("Já existe outra conta ATIVA com este Nº (" + numero + "). Use outro número ou inative a conta existente antes.");
+              } else {
+                done(r.error.message);
+              }
+              return;
+            }
+            pcCarregado = false; carregarPlanoContasSeNecessario();
+            done(null);
+          });
+        }
+        // Pré-checar duplicidade (UX melhor que erro do banco)
+        if (numero && (!editar || numero !== p.numero_conta)) {
+          var qDup = client.from("plano_contas").select("id, descritivo").eq("numero_conta", numero).eq("ativo", true);
+          if (editar) qDup = qDup.neq("id", p.id);
+          qDup.then(function (rDup) {
+            if (!rDup.error && rDup.data && rDup.data.length) {
+              done("Já existe conta ATIVA com Nº " + numero + ": \"" + rDup.data[0].descritivo + "\". Use outro número ou inative a existente.");
+              return;
+            }
+            prosseguirSave();
+          });
+        } else {
+          prosseguirSave();
+        }
       }
     });
   }
