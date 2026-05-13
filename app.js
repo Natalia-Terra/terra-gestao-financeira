@@ -572,6 +572,7 @@
     if (pageId === "cfg_auditoria")  carregarAuditoriaSeNecessario();
     if (pageId === "cfg_aud_alertas") carregarAlertasSeNecessario();
     if (pageId === "cfg_aud_regras")  carregarRegrasAlertaSeNecessario();
+    if (pageId === "cfg_backups")     carregarBackupsSeNecessario();
     if (pageId === "apr_dashboard")   carregarApropriacaoSeNecessario();
     if (pageId === "apr_faturamento") carregarApropriacaoFaturamentoSeNecessario();
     if (pageId === "cust_direto_via_os") carregarCustoDiretoViaOsSeNecessario();
@@ -1176,6 +1177,7 @@
     "cfg_auditoria":     ["Configuração", "Auditoria"],
     "cfg_aud_alertas":   ["Configuração", "Alertas"],
     "cfg_aud_regras":    ["Configuração", "Regras de Alerta"],
+    "cfg_backups":       ["Configuração", "Backups"],
     "cfg_usuarios":      ["Configuração", "Usuários"],
     "cfg_perfis":        ["Configuração", "Tipos de Perfil"],
     "cfg_diagnostico":   ["Configuração", "Diagnóstico"],
@@ -12790,6 +12792,131 @@
       abrirCommandPalette();
     }
   });
+
+
+  // ===========================================================================
+  // M5 — BACKUPS (snapshots JSON do banco)
+  // ===========================================================================
+
+  var backupsLista = [];
+  var backupsCarregado = false;
+
+  function carregarBackupsSeNecessario() {
+    var tbody = document.getElementById("bk-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio">Carregando histórico…</td></tr>';
+    client.from("backups_historico").select("*").order("iniciado_em", { ascending: false }).limit(200).then(function (r) {
+      if (r.error) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+        return;
+      }
+      backupsLista = r.data || [];
+      backupsCarregado = true;
+      renderBackups();
+    });
+
+    var btn = document.getElementById("bk-btn-gerar");
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", gerarBackupAgora);
+    }
+  }
+
+  function renderBackups() {
+    var tbody = document.getElementById("bk-tbody");
+    if (!tbody) return;
+
+    // KPIs
+    var sucessos = backupsLista.filter(function (b) { return b.status === "sucesso"; });
+    var ultimo = sucessos[0];
+    var totalSize = sucessos.reduce(function (a, b) { return a + Number(b.tamanho_bytes || 0); }, 0);
+    var tamMedio = sucessos.length ? Math.round(totalSize / sucessos.length) : 0;
+    valText(document.getElementById("bk-m-qtd"), fmtInt(backupsLista.length));
+    if (ultimo) {
+      var iso = String(ultimo.iniciado_em || "");
+      valText(document.getElementById("bk-m-ultimo"), iso.slice(8,10) + "/" + iso.slice(5,7) + " " + iso.slice(11,16));
+      valText(document.getElementById("bk-m-ultimo-sub"), "tipo: " + ultimo.tipo);
+    } else {
+      valText(document.getElementById("bk-m-ultimo"), "—");
+      valText(document.getElementById("bk-m-ultimo-sub"), "nenhum backup gerado ainda");
+    }
+    valText(document.getElementById("bk-m-tam"), tamMedio ? fmtBytes(tamMedio) : "—");
+
+    function badgeStatus(s) {
+      if (s === "sucesso") return '<span class="badge-tipo solta">sucesso</span>';
+      if (s === "erro")    return '<span class="badge-tipo outras">erro</span>';
+      return '<span class="badge-tipo assist">' + escHtml(s) + '</span>';
+    }
+    function fmtTs(iso) {
+      if (!iso) return "—";
+      var s = String(iso);
+      return s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    }
+
+    preencherTbody(tbody, backupsLista.map(function (b) {
+      var dur = b.duracao_ms ? Math.round(b.duracao_ms/1000) + "s" : "—";
+      return '<tr>' +
+        '<td class="mono">' + fmtTs(b.iniciado_em) + '</td>' +
+        '<td>' + escHtml(b.tipo) + '</td>' +
+        '<td>' + badgeStatus(b.status) + (b.erro ? '<br><span class="muted" style="font-size:11px;">' + escHtml(b.erro) + '</span>' : '') + '</td>' +
+        '<td class="num">' + fmtInt(b.total_tabelas) + '</td>' +
+        '<td class="num">' + fmtInt(b.total_linhas) + '</td>' +
+        '<td class="num">' + (b.tamanho_bytes ? fmtBytes(b.tamanho_bytes) : "—") + '</td>' +
+        '<td>' + dur + '</td>' +
+        '<td>—</td>' +
+      '</tr>';
+    }), 8, { msg: "Nenhum backup gerado ainda. Clique em \"Gerar backup agora\" pra criar o primeiro.", icon: "💾" });
+  }
+
+  function fmtBytes(b) {
+    if (!b) return "—";
+    if (b < 1024) return b + " B";
+    if (b < 1024*1024) return (b/1024).toFixed(1).replace(".", ",") + " KB";
+    if (b < 1024*1024*1024) return (b/(1024*1024)).toFixed(1).replace(".", ",") + " MB";
+    return (b/(1024*1024*1024)).toFixed(2).replace(".", ",") + " GB";
+  }
+
+  function gerarBackupAgora() {
+    var btn = document.getElementById("bk-btn-gerar");
+    var st  = document.getElementById("bk-status");
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = "⏳ Gerando snapshot (pode levar 10-30s)…"; st.style.color = "var(--text2)"; }
+
+    var t0 = Date.now();
+    client.rpc("fn_gerar_dump_json", { p_tipo: "manual" }).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (r.error) {
+        if (st) { st.textContent = "❌ " + r.error.message; st.style.color = "var(--danger)"; }
+        try { toast("Erro ao gerar backup: " + r.error.message, "erro"); } catch (e) {}
+        return;
+      }
+      var dump = r.data;
+      var meta = (dump && dump.metadata) || {};
+      // Download como arquivo
+      try {
+        var blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        var ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        a.href = url;
+        a.download = "terra-backup-" + ts + ".json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        if (st) { st.textContent = "Backup gerado, mas falhou ao iniciar download: " + e.message; st.style.color = "var(--warn)"; }
+        return;
+      }
+      var secs = Math.round((Date.now() - t0) / 1000);
+      if (st) {
+        st.textContent = "✓ Backup gerado em " + secs + "s — " + (meta.total_linhas || 0) + " linhas de " + (meta.total_tabelas || 0) + " tabelas. Arquivo salvo na sua pasta de Downloads.";
+        st.style.color = "var(--success)";
+      }
+      try { toast("✓ Backup baixado!", "ok"); } catch (e) {}
+      backupsCarregado = false;
+      carregarBackupsSeNecessario();
+    });
+  }
 
 
 })();

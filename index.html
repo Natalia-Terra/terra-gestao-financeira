@@ -1298,6 +1298,11 @@
               <div class="config-card-titulo">Regras de Alerta</div>
               <div class="config-card-sub">Configurar quando disparar alertas</div>
             </button>
+            <button class="config-card" type="button" data-subpage="cfg_backups">
+              <div class="config-card-icon">💾</div>
+              <div class="config-card-titulo">Backups</div>
+              <div class="config-card-sub">Snapshots JSON do banco — segurança contra perda de dados</div>
+            </button>
             <button class="config-card" type="button" data-subpage="cfg_usuarios">
               <div class="config-card-title">Usuários</div>
               <div class="config-card-desc">Cadastro, edição, ativação/desativação de usuários (admin)</div>
@@ -1759,6 +1764,40 @@
               <table class="tabela">
                 <thead><tr><th>Nome</th><th>Tabela</th><th>Ação</th><th>Condição</th><th>Destinatário</th><th>Severidade</th><th>Ativa?</th><th>Ações</th></tr></thead>
                 <tbody id="alr-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- M5: Backups (snapshots JSON) -->
+        <section class="page" data-page="cfg_backups" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">← Configuração</button>
+            <h1 class="page-title">💾 Backups</h1>
+            <p class="page-sub">Snapshots completos do banco em JSON — gere quando quiser, baixe pro seu computador, restaure se precisar</p>
+          </div>
+
+          <div class="grid-metrics" id="bk-kpis">
+            <div class="metric-card"><div class="metric-label">Backups gerados</div><div class="metric-value" id="bk-m-qtd">—</div><div class="metric-sub">total no histórico</div></div>
+            <div class="metric-card"><div class="metric-label">Último backup</div><div class="metric-value" id="bk-m-ultimo" style="font-size: 16px;">—</div><div class="metric-sub" id="bk-m-ultimo-sub">data e tipo</div></div>
+            <div class="metric-card"><div class="metric-label">Tamanho médio</div><div class="metric-value" id="bk-m-tam">—</div><div class="metric-sub">por snapshot</div></div>
+          </div>
+
+          <div class="card fat-card" style="margin-bottom: 16px; padding: 16px 18px;">
+            <h3 style="margin: 0 0 8px; font-size: 14px;">⚡ Gerar backup agora</h3>
+            <p style="margin: 0 0 12px; font-size: 13px; color: var(--text2);">
+              Cria um snapshot JSON completo das 52 tabelas do banco. O arquivo é gerado server-side e baixado direto pro seu computador — recomendado <strong>antes de qualquer operação de risco</strong> (reset, import grande, mudança estrutural).
+            </p>
+            <button class="btn-ouro" id="bk-btn-gerar" type="button">💾 Gerar backup e baixar agora</button>
+            <span class="toolbar-label" id="bk-status" style="margin-left: 12px;"></span>
+          </div>
+
+          <div class="card fat-card">
+            <h3 style="margin: 0 0 8px; font-size: 14px;">Histórico de backups</h3>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Quando</th><th>Tipo</th><th>Status</th><th>Tabelas</th><th class="num">Linhas</th><th class="num">Tamanho</th><th>Duração</th><th>Usuário</th></tr></thead>
+                <tbody id="bk-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
