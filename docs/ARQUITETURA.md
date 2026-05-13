@@ -2,7 +2,7 @@
 
 ## Stack
 
-- **Frontend:** SPA monolítica vanilla JS (sem framework), arquivos `index.html` + `app.js` + `styles.css`. Supabase JS SDK v2 via CDN. SheetJS pra importação de Excel.
+- **Frontend:** SPA vanilla JS (sem framework), `index.html` + 8 módulos em `js/` + `styles.css`. Supabase JS SDK v2 via CDN. SheetJS pra importação de Excel.
 - **Backend:** Supabase (PostgreSQL + Auth + Storage + Edge Functions)
 - **Deploy:** Vercel (Hobby plan) com webhook GitHub → Vercel
 - **Domínio:** terra-gestao-financeira.vercel.app
@@ -85,7 +85,15 @@
 ```
 terra-gestao-financeira/
 ├── index.html             ← SPA shell + 40+ sections
-├── app.js                 ← lógica completa (~6500 linhas)
+├── js/                    ← lógica em 8 módulos (M1 — 2026-05-13)
+│   ├── 01-boot-e-comum.js          ← bootstrap, login, navegação, dashboard, vendas
+│   ├── 02-financeiro-basico.js     ← despesas, lançamentos, custo OS, plano contas, CFOP
+│   ├── 03-imports-rh.js            ← imports, modal genérico, DRE, usuários, funcionários
+│   ├── 04-apropriacao-folha.js     ← apropriação, evolução, NFs ricas, folha mensal
+│   ├── 05-bonus-caixa.js           ← programa bônus, auditoria, caixa, compromissos
+│   ├── 06-bancos-fluxo.js          ← contas bancárias, saldos, fluxo preditivo, custeio
+│   ├── 07-saidas-dash-rico.js      ← saídas, saldo a reconhecer, dashboards ricos, RH
+│   └── 08-extensoes-bonus-backup.js ← overrides, KPIs, margem OS, alertas, cmd palette, backups
 ├── styles.css             ← design system
 ├── config.js              ← credenciais Supabase (NÃO commitar)
 ├── config.example.js      ← template de config
