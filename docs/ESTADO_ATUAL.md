@@ -1,7 +1,7 @@
 # Estado Atual do Sistema — Terra Conttemporânea
 
-**Atualizado em:** 2026-05-07 (noite, fim da sessão)
-**Source-of-truth:** este arquivo + `HANDOFF_2026-05-07.md` no GitHub. Memória local do Claude é cache temporário.
+**Atualizado em:** 2026-05-13 (sessão de refator M1 + M5 backup)
+**Source-of-truth:** este arquivo + `HANDOFF_2026-05-13.md` no GitHub. Memória local do Claude é cache temporário.
 
 ## Produção
 
@@ -12,7 +12,7 @@
 
 ## Banco
 
-**Estado da base em 07/05 fim do dia: ZERADA via SQL** (TRUNCATE direto bypassando o check da função `fn_reset_base_completo` por causa do bug crítico — ver `HANDOFF_2026-05-07.md` Seção 4).
+**Estado da base:** zerada via SQL em 07/05 — pronta pra cargas iniciais. Bug do Reset Completo CORRIGIDO em 08/05 (commit `8084118` — delegate global + self-healing de overlays órfãos).
 
 - Tabelas de movimento/dados de negócio: **0 registros** (esvaziadas explicitamente)
 - Tabelas de cadastro **preservadas**: plano_contas (510 itens), cfop, perfis, perfis_tipos, centros_custo, funcionarios, organograma, rubricas, classif_faturamento, listas (naturezas/tipos), parametros_sistema
@@ -30,9 +30,9 @@
 
 ## Frontend
 
-Estrutura SPA monolítica:
+Estrutura SPA (refatorada em 13/05 — antes era 1 arquivo de 12.922 linhas):
 - `index.html` — shell + 53 sections
-- `app.js` — IIFE única, ~10.500 linhas após pacote auth de 07/05
+- `js/01..08.js` — lógica em 8 módulos por domínio (M1 refator, commit `cbdb9c7`)
 - `styles.css` — design system Terra (paleta marrom/ouro, fonte Quattrocento)
 - `redefinir-senha.html` — página standalone de reset (criada em 07/05)
 - `config.js` — credenciais Supabase (NÃO commitar)
@@ -49,6 +49,12 @@ Estrutura SPA monolítica:
 
 - Tabelas com separadores mais sutis: `--borda` 0.20→0.10, `--borda2` 0.40→0.22
 - `.tabela td/th` com `border-right/left = 0` (zero linha vertical entre colunas)
+
+
+### Adicionados em 13/05 (sessão M5 + M1)
+
+- **M5 — Backup automatizado:** tela em Configuração > 💾 Backups. Botão "Gerar backup agora" devolve JSON com snapshot de 52 tabelas (via RPC `fn_gerar_dump_json`). Histórico paginado. Migration `m5_backup_bucket_e_historico` + `m5_fn_gerar_dump_json`.
+- **M1 — Refator app.js:** divisão em 8 módulos sob `/js/`. Edits cirúrgicos ficaram MUITO mais baratos em token. Ordem dos scripts no index.html é fixa (overrides e duplicações dependem disso).
 
 ## Perfis ativos hoje
 

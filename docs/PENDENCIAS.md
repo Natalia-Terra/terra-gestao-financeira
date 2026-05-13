@@ -1,24 +1,21 @@
 # Pendências — Terra Conttemporânea
 
-**Atualizado:** 2026-05-07 (noite, fim de sessão pós-pacote de auth)
+**Atualizado:** 2026-05-13 (sessão M5 + M1)
+## ✅ Concluído em 13/05
+
+- **M5 — Backup automatizado** (commit `3207732`) — tela + RPC `fn_gerar_dump_json` + histórico
+- **M1 — Refator app.js em 8 módulos** (commit `cbdb9c7`) — `/js/01..08.js`, ordem fixa, IIFE removida
 
 ## 🚨 BUGS CRÍTICOS
 
-### Bug #1 — Reset Completo travado (CRÍTICO)
+### ~~Bug #1 — Reset Completo travado~~ ✅ RESOLVIDO
 
-**Sintoma:** input "Digite RESET" e botão "Executar Reset Completo" não aceitam interação. Reproduzido em **Chrome+Edge** e em **2 usuários** (Juliana + Natália). NÃO é cache local.
+Corrigido em 08/05 (commit `8084118`). Solução: função `limparOverlaysOrfaos()` chamada no boot + a cada `showPage()` + handler ESC global que remove `.modal-overlay:not([hidden])` sem `data-terra-vivo`. Também: delegate global pros botões "+ Novo" pra resistir a falha de listener.
 
-**Hipótese de causa:** elemento `.modal-overlay` órfão no DOM sem o atributo `hidden`, criado por `mostrarMensagem()` (app.js linha ~822) ou `abrirModalDetalhe()` (linha 7805) e não removido por algum erro JS. Como `[hidden] !important` só se aplica quando o atributo existe, esse overlay invisível com `z-index: 50` cobre a app inteira e bloqueia cliques.
-
-**Solução defensiva proposta:** self-healing no boot — `querySelectorAll('.modal-overlay:not([hidden])')` e remover órfãos sem flag `data-terra-vivo`. Ou, melhor: trocar a abordagem dos modais dinâmicos para SEMPRE incluir `hidden` como atributo padrão e SEMPRE remover ao fechar.
-
-**Workaround atual:** base zerada via SQL pela Juliana. Não bloqueia testes do dia.
-
-**Detalhamento completo:** ver `HANDOFF_2026-05-07.md` Seção 4.
 
 ### Bug #2 — Coluna "Email" da tela Usuários vazia
 
-A tabela `auth.users` tem o email mas a Edge Function `gerenciar-usuarios` não retorna o mapeamento `id → email` quando lista. A variável `emailsByUserId` no `app.js` fica sempre vazia.
+A tabela `auth.users` tem o email mas a Edge Function `gerenciar-usuarios` não retorna o mapeamento `id → email` quando lista. A variável `emailsByUserId` (em `js/03-imports-rh.js`) fica sempre vazia.
 
 **Fix:** ajustar a Edge Function pra incluir o email no payload. Cosmético — não bloqueia operação.
 
