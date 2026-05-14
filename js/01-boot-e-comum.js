@@ -329,8 +329,15 @@ function entrarModoShell(user) {
     carregarDashboard(user);
     // M19 — carrega permissões master e aplica restrições na UI
     if (typeof carregarPermissoesMaster === "function") carregarPermissoesMaster();
-    // Só redireciona pra dashboard no primeiro carregamento
-    showPage("dashboard");
+    // Onda I.b — restaurar última página visitada (ou dashboard se primeira vez)
+    var ultima = null;
+    try { ultima = localStorage.getItem("terra:ultimaPagina"); } catch(e){}
+    // Verificar que a página existe no DOM antes de navegar (proteção contra páginas removidas)
+    if (ultima && document.querySelector('#shell .main .page[data-page="' + ultima + '"]')) {
+      showPage(ultima);
+    } else {
+      showPage("dashboard");
+    }
   }
 }
 
@@ -520,6 +527,8 @@ function aplicarMascaraMonetaria(root) {
 function showPage(pageId) {
   // Self-healing: limpa overlays orfaos antes de navegar (bug do Reset)
   try { limparOverlaysOrfaos(); } catch (e) {}
+  // Onda I.b — persistir última página
+  try { if (pageId && pageId !== "dashboard") localStorage.setItem("terra:ultimaPagina", pageId); } catch(e){}
   // Mostrar/esconder seções da main
   document.querySelectorAll("#shell .main .page").forEach(function (sec) {
     sec.hidden = sec.getAttribute("data-page") !== pageId;

@@ -650,10 +650,18 @@ function renderReset() {
   if (inp) {
     inp.value = "";
     inp.addEventListener("input", function () {
+      console.warn("[DIAG-RESET] input mudou pra", JSON.stringify(inp.value), "btnExec=", btnExec);
       btnExec.disabled = inp.value.trim() !== "RESET";
+      console.warn("[DIAG-RESET] btnExec.disabled agora =", btnExec.disabled);
     });
-  }
-  if (btnExec) btnExec.addEventListener("click", executarReset);
+  } else { console.warn("[DIAG-RESET] inp NÃO encontrado!"); }
+  if (btnExec) {
+    btnExec.addEventListener("click", function (ev) {
+      console.warn("[DIAG-RESET] click no executar disparou", ev);
+      try { executarReset(); console.warn("[DIAG-RESET] executarReset retornou"); }
+      catch (e) { console.error("[DIAG-RESET] erro em executarReset:", e); }
+    });
+  } else { console.warn("[DIAG-RESET] btnExec NÃO encontrado!"); }
   if (btnCanc) btnCanc.addEventListener("click", function () {
     if (inp) inp.value = "";
     btnExec.disabled = true;

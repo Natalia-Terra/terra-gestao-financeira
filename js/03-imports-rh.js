@@ -515,10 +515,18 @@ function renderUsuarios() {
   }), 7, "Nenhum usuário.");
 
   tbody.querySelectorAll("[data-us-edit]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
+    btn.addEventListener("click", function (ev) {
+      console.warn("[DIAG] click data-us-edit disparou", { id: btn.getAttribute("data-us-edit"), ev: ev });
       var id = btn.getAttribute("data-us-edit");
       var u = usuariosLista.find(function (x) { return x.id === id; });
-      if (u) abrirModalUsuario(u);
+      console.warn("[DIAG] usuario encontrado?", !!u, "usuariosLista.length=", usuariosLista.length);
+      if (u) {
+        console.warn("[DIAG] chamando abrirModalUsuario", u.nome);
+        try { abrirModalUsuario(u); console.warn("[DIAG] abrirModalUsuario retornou OK"); }
+        catch (e) { console.error("[DIAG] erro em abrirModalUsuario:", e); }
+      } else {
+        console.warn("[DIAG] usuario NÃO achado pra id", id);
+      }
     });
   });
   tbody.querySelectorAll("[data-us-desativar]").forEach(function (btn) {
