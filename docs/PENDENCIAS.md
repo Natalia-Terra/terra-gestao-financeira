@@ -4,7 +4,8 @@
 ## ✅ Concluído em 13/05
 
 - **M5 — Backup automatizado** (commit `3207732`) — tela + RPC `fn_gerar_dump_json` + histórico
-- **M1 — Refator app.js em 8 módulos** (commit `cbdb9c7`) — `/js/01..08.js`, ordem fixa, IIFE removida
+- **M1 — Refator app.js em 8 módulos** (commits `cbdb9c7` → revertido `c43f76b` → v2 `c4e11e8`) — `/js/01..08.js`, ordem fixa, IIFE removida. **Bug do boot na v1 corrigido na v2** (returns top-level → flag `_terraBootOK`).
+- **M5 fase 2 — Backup automático diário** (migration `m5_fase2_pg_cron_backup_diario`) — pg_cron rodando às 03h Brasília via `fn_gerar_dump_automatico()`
 
 ## 🚨 BUGS CRÍTICOS
 
