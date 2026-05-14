@@ -878,6 +878,34 @@ function carregarKpisDashboard() {
       elOs.textContent = fmtInt(atrasadas.length);
     });
   }
+
+  // Saúde do backup: data do último backup automático bem-sucedido.
+  // Verde se < 36h, amarelo se < 72h, vermelho se mais antigo ou nenhum.
+  var elBkp = document.getElementById("kpi-backup");
+  var elBkpSub = document.getElementById("kpi-backup-sub");
+  if (elBkp) {
+    client.from("backups_historico")
+      .select("iniciado_em, tipo, total_linhas")
+      .eq("tipo", "automatico")
+      .eq("status", "sucesso")
+      .order("iniciado_em", { ascending: false })
+      .limit(1)
+      .then(function (r) {
+        if (r.error || !r.data || !r.data.length) {
+          elBkp.textContent = "Nunca";
+          elBkp.style.color = "var(--danger)";
+          if (elBkpSub) elBkpSub.textContent = "configure o cron diário às 03h";
+          return;
+        }
+        var ult = r.data[0];
+        var horas = (Date.now() - new Date(ult.iniciado_em).getTime()) / 3600000;
+        elBkp.textContent = fmtTempoRelativo(ult.iniciado_em);
+        if (horas < 36)      elBkp.style.color = "var(--success)";
+        else if (horas < 72) elBkp.style.color = "var(--warn)";
+        else                 elBkp.style.color = "var(--danger)";
+        if (elBkpSub) elBkpSub.textContent = fmtInt(ult.total_linhas || 0) + " linhas salvas";
+      });
+  }
 }
 
 
