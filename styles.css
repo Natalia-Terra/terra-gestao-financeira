@@ -2448,3 +2448,38 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   border: 1px solid var(--borda2);
   margin: 0 2px;
 }
+
+
+/* === Onda I.b — botões compactos só com ícone (tabela Usuários e afins) === */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--borda2);
+  background: var(--bg-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.btn-icon:hover {
+  background: var(--bg-3);
+  border-color: var(--accent);
+}
+.btn-icon:disabled { opacity: 0.5; cursor: wait; }
+.btn-icon-acao {
+  background: var(--success-bg, #d4edda);
+  border-color: var(--success);
+  color: var(--success);
+}
+td.acoes-compact {
+  white-space: nowrap;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-start;
+}

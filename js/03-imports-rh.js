@@ -497,8 +497,8 @@ function renderUsuarios() {
       : '<span class="muted">nunca</span>';
     var emailTxt = emailsByUserId[u.id] || '<span class="muted">—</span>';
     var btnAtivar = u.ativo === false
-      ? '<button type="button" class="btn-acao" data-us-reativar="' + escHtml(u.id) + '" title="Reativar usuário">Reativar</button>'
-      : '<button type="button" class="btn-limpar" data-us-desativar="' + escHtml(u.id) + '" title="Desativar usuário">Desativar</button>';
+      ? '<button type="button" class="btn-icon btn-icon-acao" data-us-reativar="' + escHtml(u.id) + '" title="Reativar usuário">↻</button>'
+      : '<button type="button" class="btn-icon" data-us-desativar="' + escHtml(u.id) + '" title="Desativar usuário">✖</button>';
     return '<tr>' +
       '<td><strong>' + escHtml(u.nome) + '</strong></td>' +
       '<td>' + emailTxt + '</td>' +
@@ -506,9 +506,9 @@ function renderUsuarios() {
       '<td>' + st + '</td>' +
       '<td>' + senhaTempBadge + '</td>' +
       '<td>' + ultimo + '</td>' +
-      '<td>' +
-        '<button class="btn-limpar" data-us-resetsenha="' + escHtml(u.id) + '" style="margin-right:4px" title="Disparar email pra usuário trocar a senha">🔑 Resetar senha</button>' +
-        '<button class="btn-limpar" data-us-edit="' + escHtml(u.id) + '" style="margin-right:4px">Editar</button>' +
+      '<td class="acoes-compact">' +
+        '<button class="btn-icon" data-us-edit="' + escHtml(u.id) + '" title="Editar usuário">✏️</button>' +
+        '<button class="btn-icon" data-us-resetsenha="' + escHtml(u.id) + '" title="Disparar email pra trocar senha">🔑</button>' +
         btnAtivar +
       '</td>' +
     '</tr>';
