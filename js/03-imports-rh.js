@@ -443,8 +443,10 @@ function carregarUsuariosSeNecessario() {
     .select("id, nome, perfil, senha_temporaria, criado_em, ultimo_acesso, ativo")
     .order("nome", { ascending: true });
   var qTipos  = client.from("perfis_tipos").select("*").order("ordem");
-  Promise.all([qPerfis, qTipos]).then(function (rs) {
-    var rP = rs[0], rT = rs[1];
+  // M27 — Bug #2 fix: buscar emails via RPC (antes dependia de Edge Function bugada)
+  var qEmails = client.rpc("fn_listar_emails_perfis");
+  Promise.all([qPerfis, qTipos, qEmails]).then(function (rs) {
+    var rP = rs[0], rT = rs[1], rE = rs[2];
     if (rP.error) {
       document.getElementById("us-tbody").innerHTML = '<tr><td colspan="7" class="tbl-vazio erro">Erro: ' + rP.error.message + '</td></tr>';
       return;
@@ -452,6 +454,11 @@ function carregarUsuariosSeNecessario() {
     usuariosLista = rP.data || [];
     perfisTiposLista = (rT && rT.data) || [];
     perfisTiposCarregado = true;
+    // Indexar emails por id (silencia erro caso o usuário não seja admin)
+    emailsByUserId = {};
+    if (rE && !rE.error && Array.isArray(rE.data)) {
+      rE.data.forEach(function (row) { emailsByUserId[row.id] = row.email || ""; });
+    }
     usuariosCarregado = true;
     renderUsuarios();
   });
