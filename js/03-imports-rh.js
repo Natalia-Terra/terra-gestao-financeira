@@ -505,6 +505,7 @@ function renderUsuarios() {
       '<td>' + senhaTempBadge + '</td>' +
       '<td>' + ultimo + '</td>' +
       '<td>' +
+        '<button class="btn-limpar" data-us-resetsenha="' + escHtml(u.id) + '" style="margin-right:4px" title="Disparar email pra usuário trocar a senha">🔑 Resetar senha</button>' +
         '<button class="btn-limpar" data-us-edit="' + escHtml(u.id) + '" style="margin-right:4px">Editar</button>' +
         btnAtivar +
       '</td>' +
@@ -531,6 +532,30 @@ function renderUsuarios() {
     btn.addEventListener("click", function () {
       var id = btn.getAttribute("data-us-reativar");
       chamarGerenciarUsuarios({ acao: "reativar", user_id: id }, "Usuário reativado.");
+    });
+  });
+  // M27 — Resetar senha: dispara email de reset usando o email do user (carregado via fn_listar_emails_perfis)
+  tbody.querySelectorAll("[data-us-resetsenha]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-us-resetsenha");
+      var u = usuariosLista.find(function (x) { return x.id === id; });
+      var email = emailsByUserId[id];
+      if (!u || !email) {
+        try { toast("Email do usuário não encontrado.", "erro"); } catch(e) { alert("Email não encontrado."); }
+        return;
+      }
+      if (!confirm("Disparar email de reset de senha pra " + u.nome + " (" + email + ")?\n\nEle vai receber um link válido por 1 hora pra criar nova senha.")) return;
+      btn.disabled = true; btn.textContent = "Enviando…";
+      client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/redefinir-senha.html"
+      }).then(function (r) {
+        btn.disabled = false; btn.textContent = "🔑 Resetar senha";
+        if (r && r.error) {
+          try { toast("Falha: " + r.error.message, "erro"); } catch(e) { alert("Falha: " + r.error.message); }
+          return;
+        }
+        try { toast("✓ Email enviado pra " + email, "ok"); } catch(e) { alert("Email enviado!"); }
+      });
     });
   });
 }
