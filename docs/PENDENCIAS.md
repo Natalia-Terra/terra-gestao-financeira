@@ -1,11 +1,17 @@
 # Pendências — Terra Conttemporânea
 
-**Atualizado:** 2026-05-13 (sessão M5 + M1)
+**Atualizado:** 2026-05-14 (continuação UX + investigação ativa de 2 bugs)
 ## ✅ Concluído em 13/05
 
 - **M5 — Backup automatizado** (commit `3207732`) — tela + RPC `fn_gerar_dump_json` + histórico
 - **M1 — Refator app.js em 8 módulos** (commits `cbdb9c7` → revertido `c43f76b` → v2 `c4e11e8`) — `/js/01..08.js`, ordem fixa, IIFE removida. **Bug do boot na v1 corrigido na v2** (returns top-level → flag `_terraBootOK`).
 - **M5 fase 2 — Backup automático diário** (migration `m5_fase2_pg_cron_backup_diario`) — pg_cron rodando às 03h Brasília via `fn_gerar_dump_automatico()`
+- **Bug #2 — Coluna Email da tela Usuários** (commit `25ba720` + migration `m27_fn_listar_emails_perfis`) — RPC com SECURITY DEFINER substitui Edge Function bugada
+- **Botão 🔑 Resetar senha** na linha do usuário (commit `f88bc44`) — usa endpoint público `client.auth.resetPasswordForEmail`
+- **Onda I — Tempos relativos** (commit `fd00346`) — "há 5 min", "ontem", "há 3 dias" em Usuários, Backups, Auditoria, Alertas
+- **KPI 💾 Backup automático no Dashboard** (commit `9ecf8e6`) — verde/amarelo/vermelho conforme tempo desde último backup
+- **Coluna Ações compacta + ícones** (commit `c6efcf3`) — ✏️ Editar, 🔑 Reset, ↻/✖ Ativar/Desativar (4 ícones cabem sem scroll horizontal)
+- **Persistência de última página** (commit `025382b`) — Atualizar a aba (F5) mantém a tela atual, não volta pro Dashboard
 
 ## 🚨 BUGS CRÍTICOS
 
@@ -19,6 +25,23 @@ Corrigido em 08/05 (commit `8084118`). Solução: função `limparOverlaysOrfaos
 A tabela `auth.users` tem o email mas a Edge Function `gerenciar-usuarios` não retorna o mapeamento `id → email` quando lista. A variável `emailsByUserId` (em `js/03-imports-rh.js`) fica sempre vazia.
 
 **Fix:** ajustar a Edge Function pra incluir o email no payload. Cosmético — não bloqueia operação.
+
+
+
+## 🔍 Em investigação ativa (14/05)
+
+### Bug — Editar na tela Usuários não dispara o modal
+
+Juliana reporta que ao clicar no ícone ✏️ Editar de um usuário, nada acontece. Diagnóstico `console.warn` instalado no handler (commit `025382b`). Próximo passo: pegar logs do console e investigar.
+
+Possíveis causas a verificar:
+- Algum overlay órfão interceptando clicks
+- `usuariosLista` vazia no momento do click (race condition)
+- Erro silencioso em `abrirModalUsuario`
+
+### Bug — Reset Completo não funciona
+
+Juliana reporta. Mesmo após o fix anterior (8084118, `limparOverlaysOrfaos`). Diagnóstico instalado no input "Digite RESET" e no botão "Executar Reset Completo". Aguardando logs.
 
 ## 📋 Pendências de configuração no Supabase (responsabilidade da Juliana)
 
