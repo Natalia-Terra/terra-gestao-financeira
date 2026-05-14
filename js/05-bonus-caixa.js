@@ -1059,7 +1059,8 @@ function renderAuditoria() {
     var d = s.slice(0,10).split("-");
     var t = s.slice(11,16);
     if (d.length !== 3) return iso;
-    return d[2] + "/" + d[1] + "/" + d[0] + " " + t;
+    var dataCompleta = d[2] + "/" + d[1] + "/" + d[0] + " " + t;
+    return '<span title="' + dataCompleta + '">' + fmtTempoRelativo(iso) + '</span>';
   }
 
   preencherTbody(tbody, filtrados.slice(0, 500).map(function (e) {

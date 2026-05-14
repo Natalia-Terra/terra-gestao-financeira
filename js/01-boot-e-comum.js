@@ -1092,6 +1092,29 @@ function fmtData(iso) {
   if (partes.length !== 3) return iso;
   return partes[2] + "/" + partes[1] + "/" + partes[0];
 }
+
+// Onda I — Humaniza tempos: "agora", "há 5 min", "há 3 h", "ontem", "há 2 dias", "há 3 sem", "há 4 meses", "há 2 anos"
+// Para datas futuras: "em 5 min", "amanhã", "em 3 dias"
+function fmtTempoRelativo(iso) {
+  if (!iso) return "—";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  var diff = (Date.now() - d.getTime()) / 1000; // segundos; positivo = passado
+  var abs = Math.abs(diff);
+  var prefixo = diff >= 0 ? "há " : "em ";
+  // Casos especiais
+  if (abs < 45) return diff >= 0 ? "agora" : "agora";
+  if (abs < 90) return prefixo + "1 min";
+  if (abs < 3600) return prefixo + Math.round(abs / 60) + " min";
+  if (abs < 5400) return prefixo + "1 h";
+  if (abs < 86400) return prefixo + Math.round(abs / 3600) + " h";
+  if (abs < 129600) return diff >= 0 ? "ontem" : "amanhã";
+  if (abs < 2592000) return prefixo + Math.round(abs / 86400) + " dias";
+  if (abs < 5184000) return prefixo + "1 mês";
+  if (abs < 31536000) return prefixo + Math.round(abs / 2592000) + " meses";
+  if (abs < 63072000) return prefixo + "1 ano";
+  return prefixo + Math.round(abs / 31536000) + " anos";
+}
 function escHtml(s) {
   if (s === null || s === undefined) return "";
   return String(s).replace(/[&<>"']/g, function (c) {

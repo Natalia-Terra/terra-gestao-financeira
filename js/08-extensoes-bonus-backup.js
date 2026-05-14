@@ -1148,7 +1148,8 @@ function renderAlertas() {
   function fmtTs(iso) {
     if (!iso) return "—";
     var s = String(iso);
-    return s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    var dataCompleta = s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    return '<span title="' + dataCompleta + '">' + fmtTempoRelativo(iso) + '</span>';
   }
 
   preencherTbody(tbody, filtrados.map(function (a) {
@@ -1724,8 +1725,8 @@ function renderBackups() {
   valText(document.getElementById("bk-m-qtd"), fmtInt(backupsLista.length));
   if (ultimo) {
     var iso = String(ultimo.iniciado_em || "");
-    valText(document.getElementById("bk-m-ultimo"), iso.slice(8,10) + "/" + iso.slice(5,7) + " " + iso.slice(11,16));
-    valText(document.getElementById("bk-m-ultimo-sub"), "tipo: " + ultimo.tipo);
+    valText(document.getElementById("bk-m-ultimo"), fmtTempoRelativo(iso));
+    valText(document.getElementById("bk-m-ultimo-sub"), iso.slice(8,10) + "/" + iso.slice(5,7) + " " + iso.slice(11,16) + " · " + ultimo.tipo);
   } else {
     valText(document.getElementById("bk-m-ultimo"), "—");
     valText(document.getElementById("bk-m-ultimo-sub"), "nenhum backup gerado ainda");
@@ -1740,7 +1741,8 @@ function renderBackups() {
   function fmtTs(iso) {
     if (!iso) return "—";
     var s = String(iso);
-    return s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    var dataCompleta = s.slice(8,10) + "/" + s.slice(5,7) + "/" + s.slice(0,4) + " " + s.slice(11,16);
+    return '<span title="' + dataCompleta + '">' + fmtTempoRelativo(iso) + '</span>';
   }
 
   preencherTbody(tbody, backupsLista.map(function (b) {

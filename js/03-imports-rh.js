@@ -492,7 +492,9 @@ function renderUsuarios() {
       ? '<span class="tag tag-warn">Inativo</span>'
       : '<span class="tag tag-ok">Ativo</span>';
     var senhaTempBadge = u.senha_temporaria ? '<span class="tag tag-warn">sim</span>' : '<span class="muted">—</span>';
-    var ultimo = u.ultimo_acesso ? fmtData(u.ultimo_acesso) : '<span class="muted">nunca</span>';
+    var ultimo = u.ultimo_acesso
+      ? '<span title="' + fmtData(u.ultimo_acesso) + '">' + fmtTempoRelativo(u.ultimo_acesso) + '</span>'
+      : '<span class="muted">nunca</span>';
     var emailTxt = emailsByUserId[u.id] || '<span class="muted">—</span>';
     var btnAtivar = u.ativo === false
       ? '<button type="button" class="btn-acao" data-us-reativar="' + escHtml(u.id) + '" title="Reativar usuário">Reativar</button>'
