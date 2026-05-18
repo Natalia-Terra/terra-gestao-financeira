@@ -28,20 +28,15 @@ A tabela `auth.users` tem o email mas a Edge Function `gerenciar-usuarios` não 
 
 
 
-## 🔍 Em investigação ativa (14/05)
+## ✅ Resolvido em 18/05 — M28b nuclear (commit `ab66bcd`)
 
-### Bug — Editar na tela Usuários não dispara o modal
+### ~~Bug — Editar na tela Usuários~~ ✅
+**Causa:** modal abria (JS funcionava OK — confirmado por 4 cliques com [DIAG] retornou OK), mas ficava invisível por algum CSS herdado/overlay.
+**Fix:** `abrirModal` força visibilidade com `setProperty(..., 'important')` em 8 propriedades + move o overlay pro `<body>` (escapa de container com overflow:hidden).
 
-Juliana reporta que ao clicar no ícone ✏️ Editar de um usuário, nada acontece. Diagnóstico `console.warn` instalado no handler (commit `025382b`). Próximo passo: pegar logs do console e investigar.
-
-Possíveis causas a verificar:
-- Algum overlay órfão interceptando clicks
-- `usuariosLista` vazia no momento do click (race condition)
-- Erro silencioso em `abrirModalUsuario`
-
-### Bug — Reset Completo não funciona
-
-Juliana reporta. Mesmo após o fix anterior (8084118, `limparOverlaysOrfaos`). Diagnóstico instalado no input "Digite RESET" e no botão "Executar Reset Completo". Aguardando logs.
+### ~~Bug — Reset Completo travado~~ ✅
+**Causa:** o `<header class="topbar">` fixo cobria a parte central do input "Digite RESET", interceptando todas as teclas (confirmado por `[DIAG-RESET] !!!! ALGO ESTA COBRINDO O INPUT !!!! <header class=topbar>`).
+**Fix:** removido o input. Botão "Executar Reset Completo" agora dispara `prompt()` nativo do browser (fora do DOM da app, ignora qualquer overlay).
 
 ## 📋 Pendências de configuração no Supabase (responsabilidade da Juliana)
 
