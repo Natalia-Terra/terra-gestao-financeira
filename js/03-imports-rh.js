@@ -253,6 +253,13 @@ function abrirModal(config) {
 }
 
 function fecharModal() {
+  // M28b: limpa o inline style forcado pelo abrirModal — senao o hidden=true nao
+  // surte efeito (inline !important vence o [hidden]{display:none !important})
+  try {
+    ["display","visibility","opacity","pointer-events","z-index","position","top","left","right","bottom"].forEach(function (p) {
+      modalOverlay.style.removeProperty(p);
+    });
+  } catch (e) {}
   modalOverlay.hidden = true;
   modalConfig = null;
 }
