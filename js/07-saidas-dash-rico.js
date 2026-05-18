@@ -647,21 +647,72 @@ function renderReset() {
   var inp = document.getElementById("reset-input-confirma");
   var btnExec = document.getElementById("reset-btn-executar");
   var btnCanc = document.getElementById("reset-btn-cancelar");
+  // M28 fix: input que nao aceita digitacao — defensivo, remove disabled/readonly
+  // e escuta em 3 eventos (input, keyup, change) ao inves de so input.
+  function checarReset() {
+    if (!inp || !btnExec) return;
+    var val = String(inp.value || "").trim();
+    btnExec.disabled = val !== "RESET";
+    console.warn("[DIAG-RESET] checar:", JSON.stringify(val), "disabled=", btnExec.disabled);
+  }
   if (inp) {
     inp.value = "";
-    inp.addEventListener("input", function () {
-      console.warn("[DIAG-RESET] input mudou pra", JSON.stringify(inp.value), "btnExec=", btnExec);
-      btnExec.disabled = inp.value.trim() !== "RESET";
-      console.warn("[DIAG-RESET] btnExec.disabled agora =", btnExec.disabled);
-    });
-  } else { console.warn("[DIAG-RESET] inp NÃO encontrado!"); }
+    inp.disabled = false;
+    inp.readOnly = false;
+    inp.style.removeProperty("pointer-events");
+    inp.removeAttribute("disabled");
+    inp.removeAttribute("readonly");
+    inp.addEventListener("input",  checarReset);
+    inp.addEventListener("keyup",  checarReset);
+    inp.addEventListener("change", checarReset);
+    inp.addEventListener("focus",  function () { console.warn("[DIAG-RESET] input focado, value atual:", JSON.stringify(inp.value)); });
+    // Diagnostico: verifica se algo esta cobrindo o input
+    setTimeout(function () {
+      try {
+        var r = inp.getBoundingClientRect();
+        var x = r.left + r.width / 2, y = r.top + r.height / 2;
+        var elNoTopo = document.elementFromPoint(x, y);
+        console.warn("[DIAG-RESET] elemento sobre o input:", elNoTopo ? (elNoTopo.tagName + "#" + elNoTopo.id + "." + elNoTopo.className) : null, "input esperado=INPUT#reset-input-confirma");
+        if (elNoTopo && elNoTopo !== inp) {
+          console.error("[DIAG-RESET] !!!! ALGO ESTA COBRINDO O INPUT !!!!", elNoTopo);
+        }
+      } catch (e) {}
+    }, 100);
+  } else { console.warn("[DIAG-RESET] inp NAO encontrado!"); }
   if (btnExec) {
     btnExec.addEventListener("click", function (ev) {
       console.warn("[DIAG-RESET] click no executar disparou", ev);
       try { executarReset(); console.warn("[DIAG-RESET] executarReset retornou"); }
       catch (e) { console.error("[DIAG-RESET] erro em executarReset:", e); }
     });
-  } else { console.warn("[DIAG-RESET] btnExec NÃO encontrado!"); }
+  } else { console.warn("[DIAG-RESET] btnExec NAO encontrado!"); }
+  // M28 escape hatch: botao secundario "Forcar habilitar" pra caso o input nao
+  // aceite digitacao por algum motivo (overlay, foco roubado, etc). Aparece
+  // depois de 2s SE o input ainda estiver vazio.
+  setTimeout(function () {
+    if (!inp || !btnExec) return;
+    if (String(inp.value || "").trim() === "RESET") return;
+    var jaTem = document.getElementById("reset-btn-forcar");
+    if (jaTem) return;
+    var btnForcar = document.createElement("button");
+    btnForcar.id = "reset-btn-forcar";
+    btnForcar.type = "button";
+    btnForcar.className = "btn-limpar";
+    btnForcar.style.marginLeft = "8px";
+    btnForcar.title = "Se o campo nao aceita digitacao, use este botao";
+    btnForcar.textContent = "🔓 Liberar (campo travado?)";
+    btnForcar.addEventListener("click", function () {
+      var resposta = prompt("Bypass do campo travado.\nDigite RESET aqui para confirmar:");
+      if (resposta && resposta.trim().toUpperCase() === "RESET") {
+        if (inp) inp.value = "RESET";
+        btnExec.disabled = false;
+        try { toast && toast("Campo liberado. Clique em Executar.", "ok"); } catch (e) {}
+      } else {
+        try { toast && toast("Cancelado.", "info"); } catch (e) {}
+      }
+    });
+    if (btnExec.parentNode) btnExec.parentNode.appendChild(btnForcar);
+  }, 2000);
   if (btnCanc) btnCanc.addEventListener("click", function () {
     if (inp) inp.value = "";
     btnExec.disabled = true;

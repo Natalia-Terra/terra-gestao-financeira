@@ -204,6 +204,38 @@ function abrirModal(config) {
     salvarProx.hidden = true;
   }
   modalOverlay.hidden = false;
+  // M28 fix: força visibilidade defensiva — bug onde modal "abria" mas ficava
+  // invisível (display:none ou opacity:0 herdado de estado anterior).
+  try {
+    modalOverlay.removeAttribute("hidden");
+    modalOverlay.style.removeProperty("display");
+    modalOverlay.style.removeProperty("visibility");
+    modalOverlay.style.removeProperty("opacity");
+    modalOverlay.style.removeProperty("pointer-events");
+  } catch (e) {}
+  // M28 diagnóstico: loga estado real do modal 50ms após abertura
+  setTimeout(function () {
+    try {
+      var cs = getComputedStyle(modalOverlay);
+      var r = modalOverlay.getBoundingClientRect();
+      console.warn("[DIAG-MODAL] estado pos-abrir:", {
+        hidden: modalOverlay.hidden,
+        display: cs.display,
+        visibility: cs.visibility,
+        opacity: cs.opacity,
+        zIndex: cs.zIndex,
+        position: cs.position,
+        width: r.width,
+        height: r.height,
+        top: r.top,
+        left: r.left,
+        inDOM: !!modalOverlay.isConnected,
+        parentTag: modalOverlay.parentNode && modalOverlay.parentNode.tagName,
+        temContent: !!modalOverlay.querySelector(".modal-content"),
+        contentDisplay: modalOverlay.querySelector(".modal-content") ? getComputedStyle(modalOverlay.querySelector(".modal-content")).display : "N/A"
+      });
+    } catch (e) { console.error("[DIAG-MODAL] erro:", e); }
+  }, 50);
   setTimeout(function () {
     var first = modalFields.querySelector("input, select, textarea");
     if (first) first.focus();
