@@ -808,13 +808,15 @@ function carregarKpisDashboard() {
   var hojeIso = hoje.toISOString().slice(0,10);
 
   // Caixa hoje: soma do último saldo de cada conta bancária
+  // M30: schema real usa conta_id (nao conta_bancaria_id) e saldo_final_realizado
+  // (nao saldo_final). Antes essa query disparava 400 no boot.
   var elCaixa = document.getElementById("kpi-caixa-hoje");
   if (elCaixa) {
-    client.from("saldos_contas").select("conta_bancaria_id, saldo_final, mes_ref").order("mes_ref", { ascending: false }).then(function (r) {
+    client.from("saldos_contas").select("conta_id, saldo_final_realizado, mes_ref").order("mes_ref", { ascending: false }).then(function (r) {
       if (r.error) { elCaixa.textContent = "—"; return; }
       var byConta = {};
       (r.data || []).forEach(function (s) {
-        if (!(s.conta_bancaria_id in byConta)) byConta[s.conta_bancaria_id] = Number(s.saldo_final || 0);
+        if (!(s.conta_id in byConta)) byConta[s.conta_id] = Number(s.saldo_final_realizado || 0);
       });
       var soma = 0;
       Object.keys(byConta).forEach(function (k) { soma += byConta[k]; });
@@ -866,16 +868,18 @@ function carregarKpisDashboard() {
     });
   }
 
-  // OSs em atraso: ordens_servico com prazo_entrega < hoje e status != 'Entregue'
+  // OSs em aberto: ordens_servico sem status final (Entregue/Concluida/Cancelada)
+  // M30: tabela nao tem coluna prazo_entrega entao nao da pra calcular "em atraso".
+  // Mudei pra "em aberto" usando so o status (antes essa query disparava 400 no boot).
   var elOs = document.getElementById("kpi-os-atraso");
   if (elOs) {
-    client.from("ordens_servico").select("id, status, prazo_entrega").lt("prazo_entrega", hojeIso).then(function (r) {
+    client.from("ordens_servico").select("id, status").then(function (r) {
       if (r.error) { elOs.textContent = "—"; return; }
-      var atrasadas = (r.data || []).filter(function (os) {
+      var abertas = (r.data || []).filter(function (os) {
         var s = (os.status || "").toLowerCase();
         return s !== "entregue" && s !== "concluida" && s !== "concluída" && s !== "cancelada";
       });
-      elOs.textContent = fmtInt(atrasadas.length);
+      elOs.textContent = fmtInt(abertas.length);
     });
   }
 
