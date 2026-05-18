@@ -204,15 +204,25 @@ function abrirModal(config) {
     salvarProx.hidden = true;
   }
   modalOverlay.hidden = false;
-  // M28 fix: força visibilidade defensiva — bug onde modal "abria" mas ficava
-  // invisível (display:none ou opacity:0 herdado de estado anterior).
+  // M28b NUCLEAR: força tudo com !important pra vencer qualquer CSS que esteja
+  // escondendo. Tambem move pro <body> caso algum container tenha overflow:hidden.
   try {
     modalOverlay.removeAttribute("hidden");
-    modalOverlay.style.removeProperty("display");
-    modalOverlay.style.removeProperty("visibility");
-    modalOverlay.style.removeProperty("opacity");
-    modalOverlay.style.removeProperty("pointer-events");
-  } catch (e) {}
+    modalOverlay.style.setProperty("display",        "flex",    "important");
+    modalOverlay.style.setProperty("visibility",     "visible", "important");
+    modalOverlay.style.setProperty("opacity",        "1",       "important");
+    modalOverlay.style.setProperty("pointer-events", "auto",    "important");
+    modalOverlay.style.setProperty("z-index",        "99999",   "important");
+    modalOverlay.style.setProperty("position",       "fixed",   "important");
+    modalOverlay.style.setProperty("top",            "0",       "important");
+    modalOverlay.style.setProperty("left",           "0",       "important");
+    modalOverlay.style.setProperty("right",          "0",       "important");
+    modalOverlay.style.setProperty("bottom",         "0",       "important");
+    // Move pro <body> se nao estiver direto nele (escapar de container com overflow:hidden)
+    if (modalOverlay.parentNode !== document.body) {
+      document.body.appendChild(modalOverlay);
+    }
+  } catch (e) { console.error("[M28b] erro forcando visibilidade:", e); }
   // M28 diagnóstico: loga estado real do modal 50ms após abertura
   setTimeout(function () {
     try {

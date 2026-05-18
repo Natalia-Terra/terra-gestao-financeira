@@ -635,90 +635,36 @@ function renderReset() {
     '</div>' +
     '<div class="card fat-card" style="margin-top:16px;">' +
       '<h3 style="color: var(--danger); margin-bottom: 8px;">Confirmação dupla obrigatória</h3>' +
-      '<p>Pra confirmar o reset, digite <code style="background:var(--danger-bg); color: var(--danger); padding: 2px 8px; border-radius: 4px; font-weight: bold;">RESET</code> no campo abaixo (em maiúsculas, sem espaços):</p>' +
-      '<input type="text" id="reset-input-confirma" class="input-search" placeholder="Digite RESET" style="max-width: 240px; margin-bottom: 12px;" />' +
-      '<div>' +
-        '<button id="reset-btn-executar" type="button" class="btn-perigo" disabled>Executar Reset Completo</button> ' +
+      '<p>Clique no botão abaixo. Vai abrir uma caixa do navegador pedindo que você digite <code style="background:var(--danger-bg); color: var(--danger); padding: 2px 8px; border-radius: 4px; font-weight: bold;">RESET</code> em maiúsculas pra confirmar.</p>' +
+      '<div style="margin-top: 12px;">' +
+        '<button id="reset-btn-executar" type="button" class="btn-perigo">Executar Reset Completo</button> ' +
         '<button id="reset-btn-cancelar" type="button" class="btn-limpar">Cancelar</button>' +
       '</div>' +
       '<div id="reset-status" class="status" hidden role="status" aria-live="polite" style="margin-top: 12px;"></div>' +
     '</div>';
 
-  var inp = document.getElementById("reset-input-confirma");
   var btnExec = document.getElementById("reset-btn-executar");
   var btnCanc = document.getElementById("reset-btn-cancelar");
-  // M28 fix: input que nao aceita digitacao — defensivo, remove disabled/readonly
-  // e escuta em 3 eventos (input, keyup, change) ao inves de so input.
-  function checarReset() {
-    if (!inp || !btnExec) return;
-    var val = String(inp.value || "").trim();
-    btnExec.disabled = val !== "RESET";
-    console.warn("[DIAG-RESET] checar:", JSON.stringify(val), "disabled=", btnExec.disabled);
-  }
-  if (inp) {
-    inp.value = "";
-    inp.disabled = false;
-    inp.readOnly = false;
-    inp.style.removeProperty("pointer-events");
-    inp.removeAttribute("disabled");
-    inp.removeAttribute("readonly");
-    inp.addEventListener("input",  checarReset);
-    inp.addEventListener("keyup",  checarReset);
-    inp.addEventListener("change", checarReset);
-    inp.addEventListener("focus",  function () { console.warn("[DIAG-RESET] input focado, value atual:", JSON.stringify(inp.value)); });
-    // Diagnostico: verifica se algo esta cobrindo o input
-    setTimeout(function () {
-      try {
-        var r = inp.getBoundingClientRect();
-        var x = r.left + r.width / 2, y = r.top + r.height / 2;
-        var elNoTopo = document.elementFromPoint(x, y);
-        console.warn("[DIAG-RESET] elemento sobre o input:", elNoTopo ? (elNoTopo.tagName + "#" + elNoTopo.id + "." + elNoTopo.className) : null, "input esperado=INPUT#reset-input-confirma");
-        if (elNoTopo && elNoTopo !== inp) {
-          console.error("[DIAG-RESET] !!!! ALGO ESTA COBRINDO O INPUT !!!!", elNoTopo);
-        }
-      } catch (e) {}
-    }, 100);
-  } else { console.warn("[DIAG-RESET] inp NAO encontrado!"); }
+  // M28b: prompt() direto, sem depender de input que pode estar coberto pelo header
   if (btnExec) {
-    btnExec.addEventListener("click", function (ev) {
-      console.warn("[DIAG-RESET] click no executar disparou", ev);
-      try { executarReset(); console.warn("[DIAG-RESET] executarReset retornou"); }
-      catch (e) { console.error("[DIAG-RESET] erro em executarReset:", e); }
-    });
-  } else { console.warn("[DIAG-RESET] btnExec NAO encontrado!"); }
-  // M28 escape hatch: botao secundario "Forcar habilitar" pra caso o input nao
-  // aceite digitacao por algum motivo (overlay, foco roubado, etc). Aparece
-  // depois de 2s SE o input ainda estiver vazio.
-  setTimeout(function () {
-    if (!inp || !btnExec) return;
-    if (String(inp.value || "").trim() === "RESET") return;
-    var jaTem = document.getElementById("reset-btn-forcar");
-    if (jaTem) return;
-    var btnForcar = document.createElement("button");
-    btnForcar.id = "reset-btn-forcar";
-    btnForcar.type = "button";
-    btnForcar.className = "btn-limpar";
-    btnForcar.style.marginLeft = "8px";
-    btnForcar.title = "Se o campo nao aceita digitacao, use este botao";
-    btnForcar.textContent = "🔓 Liberar (campo travado?)";
-    btnForcar.addEventListener("click", function () {
-      var resposta = prompt("Bypass do campo travado.\nDigite RESET aqui para confirmar:");
-      if (resposta && resposta.trim().toUpperCase() === "RESET") {
-        if (inp) inp.value = "RESET";
-        btnExec.disabled = false;
-        try { toast && toast("Campo liberado. Clique em Executar.", "ok"); } catch (e) {}
-      } else {
-        try { toast && toast("Cancelado.", "info"); } catch (e) {}
+    btnExec.addEventListener("click", function () {
+      console.warn("[M28b-RESET] click no executar disparou");
+      var resp = prompt("⚠️ AÇÃO IRREVERSÍVEL — vai apagar TODOS os dados de negócio.\n\nPra confirmar, digite RESET em MAIÚSCULAS:");
+      if (resp === null) { console.warn("[M28b-RESET] cancelado pelo usuario"); return; }
+      if (resp.trim().toUpperCase() !== "RESET") {
+        try { toast("Texto incorreto. Reset cancelado.", "erro"); } catch (e) { alert("Texto incorreto. Reset cancelado."); }
+        return;
       }
+      try { executarReset(); } catch (e) { console.error("[M28b-RESET] erro:", e); }
     });
-    if (btnExec.parentNode) btnExec.parentNode.appendChild(btnForcar);
-  }, 2000);
-  if (btnCanc) btnCanc.addEventListener("click", function () {
-    if (inp) inp.value = "";
-    btnExec.disabled = true;
-    var st = document.getElementById("reset-status");
-    if (st) { st.hidden = true; st.textContent = ""; }
-  });
+  }
+  if (btnCanc) {
+    btnCanc.addEventListener("click", function () {
+      var st = document.getElementById("reset-status");
+      if (st) { st.hidden = true; st.textContent = ""; }
+      try { toast("Operação cancelada.", "info"); } catch (e) {}
+    });
+  }
 }
 
 function executarReset() {
