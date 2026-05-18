@@ -1248,6 +1248,7 @@ function renderCentros() {
       var c = centrosCustoLista.find(function (x) { return x.id === id; });
       if (c) abrirModalCentroCusto(c);
     });
+  });
   tbody.querySelectorAll("[data-cc-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1260,7 +1261,6 @@ function renderCentros() {
         if (typeof carregarCentrosSeNecessario === "function") carregarCentrosSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1336,6 +1336,7 @@ function renderRubricas() {
       var r = rubricasLista.find(function (x) { return x.id === id; });
       if (r) abrirModalRubrica(r);
     });
+  });
   tbody.querySelectorAll("[data-rb-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1348,7 +1349,6 @@ function renderRubricas() {
         if (typeof carregarRubricasSeNecessario === "function") carregarRubricasSeNecessario();
       });
     });
-  });
   });
 }
 

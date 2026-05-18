@@ -1620,6 +1620,7 @@ function renderContasBancarias() {
       var c = contasBancariasLista.find(function (x) { return x.id === id; });
       if (c) abrirModalContaBancaria(c);
     });
+  });
   tbody.querySelectorAll("[data-cb-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1632,6 +1633,5 @@ function renderContasBancarias() {
         if (typeof carregarContasBancariasSeNecessario === "function") carregarContasBancariasSeNecessario();
       });
     });
-  });
   });
 }

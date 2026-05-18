@@ -159,6 +159,7 @@ function renderSaldosContas() {
       var s = saldosContasLista.find(function (x) { return x.id === id; });
       if (s) abrirModalSaldoConta(s);
     });
+  });
   tbody.querySelectorAll("[data-sc-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -171,7 +172,6 @@ function renderSaldosContas() {
         if (typeof carregarSaldosMensaisSeNecessario === "function") carregarSaldosMensaisSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -312,6 +312,7 @@ function renderRecebimentosPrev() {
       var rec = recebimentosPrevLista.find(function (x) { return x.id === id; });
       if (rec) abrirModalRecebPrev(rec);
     });
+  });
   tbody.querySelectorAll("[data-rp-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -324,7 +325,6 @@ function renderRecebimentosPrev() {
         if (typeof carregarRecebimentosPrevistosSeNecessario === "function") carregarRecebimentosPrevistosSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1479,6 +1479,7 @@ function renderEntradasOutras() {
       var e = entradasOutrasLista.find(function (x) { return x.id === id; });
       if (e) abrirModalEntradaOutra(e);
     });
+  });
   tbody.querySelectorAll("[data-eo-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1491,7 +1492,6 @@ function renderEntradasOutras() {
         if (typeof carregarEntradasOutrasSeNecessario === "function") carregarEntradasOutrasSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1603,6 +1603,7 @@ function renderSaidasOutras() {
       var s = saidasOutrasLista.find(function (x) { return x.id === id; });
       if (s) abrirModalSaidaOutra(s);
     });
+  });
   tbody.querySelectorAll("[data-so-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1615,6 +1616,5 @@ function renderSaidasOutras() {
         if (typeof carregarSaidasOutrasSeNecessario === "function") carregarSaidasOutrasSeNecessario();
       });
     });
-  });
   });
 }

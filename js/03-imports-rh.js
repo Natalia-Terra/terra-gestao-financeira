@@ -765,6 +765,7 @@ function renderPerfisTipos() {
       var t = perfisTiposLista.find(function (x) { return x.id === id; });
       if (t) abrirModalPerfilTipo(t);
     });
+  });
   tbody.querySelectorAll("[data-pt-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -777,7 +778,6 @@ function renderPerfisTipos() {
         if (typeof carregarPerfisTiposSeNecessario === "function") carregarPerfisTiposSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -962,6 +962,7 @@ function renderFuncionarios() {
       var f = funcionariosLista.find(function (x) { return x.id === id; });
       if (f) abrirModalFuncionario(f);
     });
+  });
   tbody.querySelectorAll("[data-fn-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -974,7 +975,6 @@ function renderFuncionarios() {
         if (typeof carregarFuncionariosSeNecessario === "function") carregarFuncionariosSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1175,6 +1175,7 @@ function renderBeneficios() {
       var b = beneficiosLista.find(function (x) { return x.id === id; });
       if (b) abrirModalBeneficio(b);
     });
+  });
   tbody.querySelectorAll("[data-bn-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1187,7 +1188,6 @@ function renderBeneficios() {
         if (typeof carregarBeneficiosSeNecessario === "function") carregarBeneficiosSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1277,6 +1277,7 @@ function renderFolha() {
       var p = folhaLista.find(function (x) { return x.id === id; });
       if (p) abrirModalFolha(p);
     });
+  });
   tbody.querySelectorAll("[data-fl-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1289,7 +1290,6 @@ function renderFolha() {
         if (typeof carregarFolhaSeNecessario === "function") carregarFolhaSeNecessario();
       });
     });
-  });
   });
 }
 
@@ -1398,6 +1398,7 @@ function renderImpostos() {
       var i = impostosLista.find(function (x) { return x.id === id; });
       if (i) abrirModalImposto(i);
     });
+  });
   tbody.querySelectorAll("[data-ir-del]").forEach(function (btn) {
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -1410,7 +1411,6 @@ function renderImpostos() {
         if (typeof carregarImpostosSeNecessario === "function") carregarImpostosSeNecessario();
       });
     });
-  });
   });
 }
 
