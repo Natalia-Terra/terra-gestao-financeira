@@ -580,6 +580,7 @@ function showPage(pageId) {
   if (pageId === "cfg_perfis_tipos") carregarPerfisTiposSeNecessario();
   if (pageId === "dre")            carregarDreSeNecessario();
   if (pageId === "rh_funcionarios") carregarFuncionariosSeNecessario();
+  if (pageId === "rh_cargos")       carregarCargosSeNecessario();
   if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
   if (pageId === "rh_folha")        carregarFolhaSeNecessario();
   if (pageId === "rh_impostos")     carregarImpostosSeNecessario();

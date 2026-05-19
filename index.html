@@ -274,6 +274,7 @@
             <div class="sb-group-items">
               <button class="sb-sub" data-page="rh_organograma" type="button">Organograma</button>
               <button class="sb-sub" data-page="rh_funcionarios" type="button">Funcionários</button>
+              <button class="sb-sub" data-page="rh_cargos" type="button">Cargos</button>
               <button class="sb-sub" data-page="rh_beneficios" type="button">Benefícios</button>
               <button class="sb-sub" data-page="rh_folha" type="button">Folha de Pagamento</button>
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
@@ -1055,6 +1056,35 @@
               <table class="tabela">
                 <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Centro de Custo</th><th>Posição (organograma)</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
                 <tbody id="fn-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Cargos -->
+        <section class="page" data-page="rh_cargos" hidden>
+          <div class="page-header"><h1 class="page-title">Cargos</h1><p class="page-sub">Descritivo de cargo · missão, responsabilidades, competências e subordinação</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="cg-m-tot">—</div><div class="metric-sub">cargos cadastrados</div></div>
+            <div class="metric-card"><div class="metric-label">Ativos</div><div class="metric-value" id="cg-m-ativos">—</div><div class="metric-sub">disponíveis para vínculo</div></div>
+            <div class="metric-card"><div class="metric-label">Vinculados</div><div class="metric-value" id="cg-m-vinc">—</div><div class="metric-sub">com pelo menos 1 funcionário</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="cg-busca" placeholder="Buscar por nome ou departamento…" />
+              <select id="cg-status" title="Status">
+                <option value="ativos">Ativos</option>
+                <option value="inativos">Inativos</option>
+                <option value="">Todos</option>
+              </select>
+              <select id="cg-dep" title="Departamento"><option value="">Todos os departamentos</option></select>
+              <button class="btn-ouro" id="cg-btn-novo" type="button">+ Novo cargo</button>
+              <span class="toolbar-label" id="cg-lbl"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Cargo</th><th>Departamento</th><th>Superior imediato</th><th class="num">Pessoas no cargo</th><th>Status</th><th></th></tr></thead>
+                <tbody id="cg-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>

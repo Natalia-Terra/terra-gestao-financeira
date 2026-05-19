@@ -827,6 +827,9 @@ function abrirModalPerfilTipo(t) {
 var funcionariosLista = [];
 var funcionariosCarregado = false;
 var organogramaLista = [];
+var cargosLista = [];
+var cargosCarregado = false;
+var funcionarioDependentesCache = {};
 var organogramaCarregado = false;
 var organogramaPathCache = {};
 
@@ -867,6 +870,7 @@ function carregarFuncionariosSeNecessario() {
     });
   }
   carregarOrganogramaParaSelectSeNecessario(popularSelectsFuncionarios);
+  if (!cargosCarregado) { try { carregarCargosSeNecessario(); } catch (e) {} }
   client.from("funcionarios").select("*").order("nome", { ascending: true }).then(function (r) {
     if (r.error) {
       document.getElementById("fn-tbody").innerHTML = '<tr><td colspan="9" class="tbl-vazio erro">Erro: ' + r.error.message + '</td></tr>';
@@ -952,7 +956,7 @@ function renderFuncionarios() {
       '<td>' + fmtData(f.data_admissao) + '</td>' +
       '<td>' + (f.data_demissao ? fmtData(f.data_demissao) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
       '<td class="num">' + fmtBRL(f.salario_base) + '</td>' +
-      '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button> <button class="btn-limpar" data-fn-del="' + f.id + '" title="Excluir">🗑 Excluir</button></td>' +
+      '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button> <button class="btn-limpar" data-fn-ficha="' + f.id + '" title="Baixar Ficha Funcional (PDF)">📋 Ficha</button> <button class="btn-limpar" data-fn-deps="' + f.id + '" title="Dependentes">👨‍👩‍👧 Deps</button> <button class="btn-limpar" data-fn-del="' + f.id + '" title="Excluir">🗑 Excluir</button></td>' +
     '</tr>';
   }), 9);
 
@@ -961,6 +965,20 @@ function renderFuncionarios() {
       var id = Number(btn.getAttribute("data-fn-edit"));
       var f = funcionariosLista.find(function (x) { return x.id === id; });
       if (f) abrirModalFuncionario(f);
+    });
+  });
+  tbody.querySelectorAll("[data-fn-ficha]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-fn-ficha"));
+      var f = funcionariosLista.find(function (x) { return x.id === id; });
+      if (f) gerarFichaFuncionarioPDF(f);
+    });
+  });
+  tbody.querySelectorAll("[data-fn-deps]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-fn-deps"));
+      var f = funcionariosLista.find(function (x) { return x.id === id; });
+      if (f) abrirGerenciadorDependentes(f);
     });
   });
   tbody.querySelectorAll("[data-fn-del]").forEach(function (btn) {
@@ -1012,7 +1030,8 @@ function abrirModalFuncionario(f) {
 
       // ===== Trabalho
       { group: "Trabalho",       name: "status",               label: "Status",                                type: "select", valor: f.status || "ATIVO", options: ["ATIVO","INATIVO","AFASTADO"], required: true },
-      { group: "Trabalho",       name: "cargo",                label: "Função / Cargo",                        type: "text",   valor: f.cargo },
+      { group: "Trabalho",       name: "cargo_id",             label: "Cargo (descritivo)",                    type: "select", valor: f.cargo_id || "", options: [{value:"",label:"— (usar texto livre abaixo)"}].concat((cargosLista||[]).filter(function(c){return c.ativo;}).sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"");}).map(function(c){return {value:c.id,label:c.nome + (c.departamento?" — "+c.departamento:"")};})) },
+      { group: "Trabalho",       name: "cargo",                label: "Função / Cargo (texto livre — legado)", type: "text",   valor: f.cargo },
       { group: "Trabalho",       name: "cbo",                  label: "CBO",                                   type: "text",   valor: f.cbo },
       { group: "Trabalho",       name: "salario_base",         label: "Salário base (R$)",                     type: "number", valor: f.salario_base },
       { group: "Trabalho",       name: "centro_custo_id",      label: "Centro de Custo",                       type: "select", valor: f.centro_custo_id || "", options: opcoesCc },
@@ -1035,6 +1054,26 @@ function abrirModalFuncionario(f) {
       { group: "Documentos",     name: "e_social",             label: "E-Social",                              type: "text",   valor: f.e_social },
       { group: "Documentos",     name: "livro",                label: "Livro",                                 type: "text",   valor: f.livro },
 
+      // ===== Identidade complementar (novo na Onda A)
+      { group: "Identidade complementar", name: "sexo",          label: "Sexo",                    type: "select", valor: f.sexo || "", options: [{value:"",label:"—"},{value:"Masculino",label:"Masculino"},{value:"Feminino",label:"Feminino"},{value:"Outro",label:"Outro"}] },
+      { group: "Identidade complementar", name: "estado_civil",  label: "Estado civil",            type: "select", valor: f.estado_civil || "", options: [{value:"",label:"—"},{value:"Solteiro(a)",label:"Solteiro(a)"},{value:"Casado(a)",label:"Casado(a)"},{value:"União estável",label:"União estável"},{value:"Divorciado(a)",label:"Divorciado(a)"},{value:"Viúvo(a)",label:"Viúvo(a)"}] },
+      { group: "Identidade complementar", name: "escolaridade",  label: "Escolaridade",            type: "select", valor: f.escolaridade || "", options: [{value:"",label:"—"},{value:"Fundamental incompleto",label:"Fundamental incompleto"},{value:"Fundamental completo",label:"Fundamental completo"},{value:"Médio incompleto",label:"Médio incompleto"},{value:"Médio completo",label:"Médio completo"},{value:"Superior incompleto",label:"Superior incompleto"},{value:"Superior completo",label:"Superior completo"},{value:"Pós-graduação",label:"Pós-graduação"}] },
+      { group: "Identidade complementar", name: "nacionalidade", label: "Nacionalidade",           type: "text",   valor: f.nacionalidade || "Brasileira" },
+      { group: "Identidade complementar", name: "naturalidade",  label: "Naturalidade (cidade/UF)",type: "text",   valor: f.naturalidade },
+      { group: "Identidade complementar", name: "nome_mae",      label: "Nome da mãe",             type: "text",   valor: f.nome_mae },
+      { group: "Identidade complementar", name: "nome_pai",      label: "Nome do pai",             type: "text",   valor: f.nome_pai },
+      { group: "Identidade complementar", name: "raca_cor",      label: "Raça/Cor",                type: "select", valor: f.raca_cor || "", options: [{value:"",label:"—"},{value:"Branca",label:"Branca"},{value:"Preta",label:"Preta"},{value:"Parda",label:"Parda"},{value:"Amarela",label:"Amarela"},{value:"Indígena",label:"Indígena"},{value:"Não informado",label:"Não informado"}] },
+      { group: "Identidade complementar", name: "deficiencia",   label: "Deficiência (PcD)",       type: "text",   valor: f.deficiencia },
+      { group: "Identidade complementar", name: "foto_url",      label: "URL da foto (rede ou link)", type: "text", valor: f.foto_url },
+
+      // ===== Contato de emergência (novo)
+      { group: "Contato de emergência",   name: "contato_emergencia_nome",        label: "Nome",        type: "text", valor: f.contato_emergencia_nome },
+      { group: "Contato de emergência",   name: "contato_emergencia_parentesco",  label: "Parentesco",  type: "text", valor: f.contato_emergencia_parentesco },
+      { group: "Contato de emergência",   name: "contato_emergencia_telefone",   label: "Telefone",    type: "text", valor: f.contato_emergencia_telefone },
+
+      // ===== Vínculos legais adicionais
+      { group: "Documentos",     name: "matricula_fgts",       label: "Matrícula FGTS (GFD)",                  type: "text",   valor: f.matricula_fgts },
+
       // ===== Bancário e observações
       { group: "Bancário e observações", name: "banco",       label: "Banco",        type: "text", valor: f.banco },
       { group: "Bancário e observações", name: "agencia",     label: "Agência",      type: "text", valor: f.agencia },
@@ -1047,6 +1086,15 @@ function abrirModalFuncionario(f) {
         nome: v.nome,
         centro_custo_id: v.centro_custo_id ? Number(v.centro_custo_id) : null,
         organograma_id:  v.organograma_id  ? Number(v.organograma_id)  : null,
+        cargo_id:        v.cargo_id        ? Number(v.cargo_id)        : null,
+        matricula_fgts: v.matricula_fgts, foto_url: v.foto_url,
+        escolaridade: v.escolaridade, estado_civil: v.estado_civil,
+        nacionalidade: v.nacionalidade, naturalidade: v.naturalidade,
+        nome_mae: v.nome_mae, nome_pai: v.nome_pai,
+        sexo: v.sexo, raca_cor: v.raca_cor, deficiencia: v.deficiencia,
+        contato_emergencia_nome: v.contato_emergencia_nome,
+        contato_emergencia_parentesco: v.contato_emergencia_parentesco,
+        contato_emergencia_telefone: v.contato_emergencia_telefone,
         status: v.status, cargo: v.cargo, cbo: v.cbo,
         salario_base: v.salario_base || 0,
         data_admissao: v.data_admissao, data_demissao: v.data_demissao,
@@ -1742,3 +1790,517 @@ function calcOsAno(o, idxEvol, ano) {
   });
   return { residual: residual, meses: resultado };
 }
+
+// =========================================================================
+// ONDA A — CARGOS (descritivo), DEPENDENTES, FICHA FUNCIONAL PDF
+// Adicionado em 2026-05-19. Pacote único da Onda A.
+// =========================================================================
+
+function carregarCargosSeNecessario(cb) {
+  if (cargosCarregado) { if (cb) cb(); return; }
+  client.from("cargos").select("*").order("nome", { ascending: true }).then(function (r) {
+    if (r.error) {
+      var tb = document.getElementById("cg-tbody");
+      if (tb) tb.innerHTML = '<tr><td colspan="6" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+      return;
+    }
+    cargosLista = r.data || [];
+    cargosCarregado = true;
+    popularSelectCargosDep();
+    if (document.querySelector('[data-page="rh_cargos"]:not([hidden])')) renderCargos();
+    if (cb) cb();
+  });
+}
+
+function getCargoById(id) {
+  if (!id) return null;
+  return (cargosLista || []).find(function (c) { return c.id === Number(id); });
+}
+
+function buildCargoSuperiorChain(cargoId) {
+  var nomes = [];
+  var visitados = {};
+  var atual = getCargoById(cargoId);
+  var n = 0;
+  while (atual && !visitados[atual.id] && n < 4) {
+    nomes.push(atual.nome);
+    visitados[atual.id] = true;
+    atual = atual.superior_id ? getCargoById(atual.superior_id) : null;
+    n++;
+  }
+  return nomes.join(" > ");
+}
+
+function popularSelectCargosDep() {
+  var selDep = document.getElementById("cg-dep");
+  if (!selDep) return;
+  var deps = {};
+  (cargosLista || []).forEach(function (c) { if (c.departamento) deps[c.departamento] = true; });
+  var ks = Object.keys(deps).sort();
+  var atual = selDep.value;
+  selDep.innerHTML = '<option value="">Todos os departamentos</option>' +
+    ks.map(function (k) { return '<option value="' + escHtml(k) + '">' + escHtml(k) + '</option>'; }).join("");
+  if (atual && ks.indexOf(atual) !== -1) selDep.value = atual;
+}
+
+function renderCargos() {
+  var tbody = document.getElementById("cg-tbody");
+  if (!tbody) return;
+  var busca  = (document.getElementById("cg-busca").value || "").trim().toLowerCase();
+  var status = document.getElementById("cg-status").value;
+  var dep    = document.getElementById("cg-dep").value;
+
+  var contagemPorCargo = {};
+  (funcionariosLista || []).forEach(function (f) {
+    if (f.cargo_id) contagemPorCargo[f.cargo_id] = (contagemPorCargo[f.cargo_id] || 0) + 1;
+  });
+
+  var filtrados = (cargosLista || []).filter(function (c) {
+    if (status === "ativos" && !c.ativo) return false;
+    if (status === "inativos" && c.ativo) return false;
+    if (dep && (c.departamento || "") !== dep) return false;
+    return matchBusca(busca, [c.nome, c.departamento]);
+  });
+
+  var ativos = (cargosLista || []).filter(function (c) { return c.ativo; });
+  var vinculados = Object.keys(contagemPorCargo).length;
+  valText(document.getElementById("cg-m-tot"), fmtInt((cargosLista || []).length));
+  valText(document.getElementById("cg-m-ativos"), fmtInt(ativos.length));
+  valText(document.getElementById("cg-m-vinc"), fmtInt(vinculados));
+  valText(document.getElementById("cg-lbl"), filtrados.length + " de " + (cargosLista || []).length);
+
+  preencherTbody(tbody, filtrados.map(function (c) {
+    var sup = c.superior_id ? getCargoById(c.superior_id) : null;
+    var qtd = contagemPorCargo[c.id] || 0;
+    return '<tr>' +
+      '<td><strong>' + escHtml(c.nome) + '</strong></td>' +
+      '<td>' + escHtml(c.departamento || "—") + '</td>' +
+      '<td>' + escHtml(sup ? sup.nome : "—") + '</td>' +
+      '<td class="num">' + fmtInt(qtd) + '</td>' +
+      '<td>' + (c.ativo ? '<span class="badge-tipo solta">ativo</span>' : '<span class="badge-tipo">inativo</span>') + '</td>' +
+      '<td><button class="btn-limpar" data-cg-edit="' + c.id + '">Editar</button> <button class="btn-limpar" data-cg-del="' + c.id + '" title="Excluir">🗑 Excluir</button></td>' +
+    '</tr>';
+  }), 6);
+
+  tbody.querySelectorAll("[data-cg-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-cg-edit"));
+      var c = (cargosLista || []).find(function (x) { return x.id === id; });
+      if (c) abrirModalCargo(c);
+    });
+  });
+  tbody.querySelectorAll("[data-cg-del]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var id = Number(btn.getAttribute("data-cg-del"));
+      var c = (cargosLista || []).find(function (x) { return x.id === id; });
+      var qtd = contagemPorCargo[id] || 0;
+      if (qtd > 0) {
+        alert("Nao e possivel excluir: " + qtd + " funcionario(s) ainda usam esse cargo. Reatribua antes ou inative o cargo.");
+        return;
+      }
+      if (!confirm("Excluir o cargo \"" + (c ? c.nome : "") + "\"? Essa acao nao pode ser desfeita.")) return;
+      client.from("cargos").delete().eq("id", id).then(function (r) {
+        if (r.error) { try { toast("Erro: " + r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+        try { toast("Cargo excluido.", "ok"); } catch (e) {}
+        cargosCarregado = false;
+        carregarCargosSeNecessario();
+      });
+    });
+  });
+}
+
+function abrirModalCargo(c) {
+  c = c || {};
+  var editar = !!c.id;
+  var opcSuperior = [{ value: "", label: "— (sem superior)" }].concat(
+    (cargosLista || []).filter(function (x) { return x.id !== c.id && x.ativo; })
+      .sort(function (a, b) { return (a.nome || "").localeCompare(b.nome || ""); })
+      .map(function (x) { return { value: x.id, label: x.nome + (x.departamento ? " — " + x.departamento : "") }; })
+  );
+
+  abrirModal({
+    titulo: editar ? "Editar cargo" : "Novo cargo",
+    fields: [
+      { group: "Identificacao", name: "nome",           label: "Titulo do cargo",            type: "text", valor: c.nome, required: true },
+      { group: "Identificacao", name: "departamento",   label: "Departamento",               type: "text", valor: c.departamento },
+      { group: "Identificacao", name: "superior_id",    label: "Cargo do superior imediato", type: "select", valor: c.superior_id || "", options: opcSuperior },
+      { group: "Identificacao", name: "ativo",          label: "Status",                     type: "select", valor: c.ativo === false ? "0" : "1", options: [{value:"1",label:"Ativo"},{value:"0",label:"Inativo"}] },
+      { group: "Descritivo",    name: "missao",            label: "Missao do cargo",           type: "textarea", valor: c.missao },
+      { group: "Descritivo",    name: "responsabilidades", label: "Principais responsabilidades", type: "textarea", valor: c.responsabilidades },
+      { group: "Descritivo",    name: "competencias",      label: "Competencias",              type: "textarea", valor: c.competencias },
+      { group: "Descritivo",    name: "consideracoes",     label: "Consideracoes importantes", type: "textarea", valor: c.consideracoes }
+    ],
+    onSubmit: function (v, done) {
+      var payload = {
+        nome: v.nome,
+        departamento: v.departamento || null,
+        superior_id: v.superior_id ? Number(v.superior_id) : null,
+        ativo: v.ativo === "1" || v.ativo === 1 || v.ativo === true,
+        missao: v.missao || null,
+        responsabilidades: v.responsabilidades || null,
+        competencias: v.competencias || null,
+        consideracoes: v.consideracoes || null
+      };
+      var q = editar
+        ? client.from("cargos").update(payload).eq("id", c.id)
+        : client.from("cargos").insert(payload);
+      q.then(function (r) {
+        if (r.error) { done(r.error.message); return; }
+        cargosCarregado = false;
+        funcionariosCarregado = false;
+        carregarCargosSeNecessario(function () {
+          if (document.querySelector('[data-page="rh_cargos"]:not([hidden])')) renderCargos();
+        });
+        done(null);
+      });
+    }
+  });
+}
+
+function abrirGerenciadorDependentes(f) {
+  var titulo = "Dependentes — " + (f.nome || "");
+  client.from("funcionarios_dependentes").select("*").eq("funcionario_id", f.id).order("nome", { ascending: true }).then(function (r) {
+    var lista = (r && r.data) || [];
+    funcionarioDependentesCache[f.id] = lista;
+    var html = '<div style="margin-bottom:12px">';
+    if (!lista.length) {
+      html += '<div class="tbl-vazio">Nenhum dependente cadastrado.</div>';
+    } else {
+      html += '<table class="tabela"><thead><tr><th>Nome</th><th>Parentesco</th><th>Nascimento</th><th>CPF</th><th>IR</th><th>SF</th><th></th></tr></thead><tbody>';
+      lista.forEach(function (d) {
+        html += '<tr>' +
+          '<td>' + escHtml(d.nome) + '</td>' +
+          '<td>' + escHtml(d.parentesco || "—") + '</td>' +
+          '<td>' + fmtData(d.data_nascimento) + '</td>' +
+          '<td class="mono">' + escHtml(d.cpf || "—") + '</td>' +
+          '<td>' + (d.dependente_ir ? "OK" : "—") + '</td>' +
+          '<td>' + (d.dependente_sf ? "OK" : "—") + '</td>' +
+          '<td><button class="btn-limpar" data-dep-del="' + d.id + '">🗑</button></td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    abrirModal({
+      titulo: titulo,
+      fields: [
+        { name: "_lista", label: "", type: "text", valor: "" }
+      ],
+      onSubmit: function (v, done) {
+        if (!v.nome) { done(null); return; }
+        var payload = {
+          funcionario_id: f.id,
+          nome: v.nome,
+          parentesco: v.parentesco || null,
+          data_nascimento: v.data_nascimento || null,
+          cpf: v.cpf || null,
+          dependente_ir: v.dependente_ir === "1",
+          dependente_sf: v.dependente_sf === "1",
+          observacoes: v.observacoes || null
+        };
+        client.from("funcionarios_dependentes").insert(payload).then(function (r2) {
+          if (r2.error) { done(r2.error.message); return; }
+          fecharModal();
+          setTimeout(function () { abrirGerenciadorDependentes(f); }, 80);
+        });
+      }
+    });
+
+    setTimeout(function () {
+      var fieldsEl = document.getElementById("modal-fields");
+      if (!fieldsEl) return;
+      fieldsEl.innerHTML =
+        '<fieldset class="form-section"><legend>Lista atual</legend>' + html + '</fieldset>' +
+        '<fieldset class="form-section"><legend>Adicionar novo dependente</legend>' +
+          '<div class="form-field"><label for="mf-nome">Nome</label><input id="mf-nome" name="nome" type="text" /></div>' +
+          '<div class="form-field"><label for="mf-parentesco">Parentesco</label>' +
+            '<select id="mf-parentesco" name="parentesco">' +
+              '<option value="">—</option>' +
+              ['Conjuge','Companheiro(a)','Filho(a)','Enteado(a)','Pai','Mae','Irmao(a)','Tutelado(a)','Outro'].map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('') +
+            '</select></div>' +
+          '<div class="form-field"><label for="mf-data_nascimento">Data de nascimento</label><input id="mf-data_nascimento" name="data_nascimento" type="date" /></div>' +
+          '<div class="form-field"><label for="mf-cpf">CPF</label><input id="mf-cpf" name="cpf" type="text" /></div>' +
+          '<div class="form-field"><label for="mf-dependente_ir">Abate IR?</label><select id="mf-dependente_ir" name="dependente_ir"><option value="0">Nao</option><option value="1">Sim</option></select></div>' +
+          '<div class="form-field"><label for="mf-dependente_sf">Salario-familia?</label><select id="mf-dependente_sf" name="dependente_sf"><option value="0">Nao</option><option value="1">Sim</option></select></div>' +
+          '<div class="form-field form-field-wide"><label for="mf-observacoes">Observacoes</label><textarea id="mf-observacoes" name="observacoes" rows="2"></textarea></div>' +
+        '</fieldset>';
+
+      fieldsEl.querySelectorAll("[data-dep-del]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var id = Number(btn.getAttribute("data-dep-del"));
+          if (!confirm("Excluir esse dependente?")) return;
+          client.from("funcionarios_dependentes").delete().eq("id", id).then(function (r3) {
+            if (r3.error) { alert("Erro: " + r3.error.message); return; }
+            fecharModal();
+            setTimeout(function () { abrirGerenciadorDependentes(f); }, 80);
+          });
+        });
+      });
+    }, 60);
+  });
+}
+
+function gerarFichaFuncionarioPDF(f) {
+  if (!f || !f.id) return;
+  var jspdfNS = window.jspdf || window.jsPDF;
+  if (!jspdfNS) { alert("Biblioteca de PDF nao carregada."); return; }
+  var jsPDF = jspdfNS.jsPDF || jspdfNS;
+
+  Promise.all([
+    client.from("funcionarios_dependentes").select("*").eq("funcionario_id", f.id),
+    client.from("beneficios").select("*").eq("funcionario_id", f.id).is("data_fim", null),
+    client.from("medidas_disciplinares").select("*").eq("funcionario_id", f.id).order("data", { ascending: false }),
+    client.from("avaliacao_desempenho").select("*").eq("funcionario_id", f.id).order("data_avaliacao", { ascending: false })
+  ]).then(function (rs) {
+    var deps  = (rs[0] && rs[0].data) || [];
+    var bens  = (rs[1] && rs[1].data) || [];
+    var meds  = (rs[2] && rs[2].data) || [];
+    var avals = (rs[3] && rs[3].data) || [];
+
+    var doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    var pageW = 210, pageH = 297;
+    var margin = 12;
+    var y = margin;
+
+    var marromEscuro = [78, 52, 34];
+    var marromMedio  = [139, 102, 73];
+
+    function escTxt(s) { return (s == null ? "" : String(s)); }
+    function fmtBRLnum(v) { try { return fmtBRL(v); } catch (e) { return "R$ " + Number(v||0).toFixed(2); } }
+    function fmtDataTxt(d) { try { return d ? fmtData(d) : "—"; } catch (e) { return d || "—"; } }
+    function quebraPagina(neededMm) { if (y + neededMm > pageH - margin) { doc.addPage(); y = margin; } }
+
+    function tituloSecao(txt) {
+      quebraPagina(12);
+      doc.setFillColor(marromMedio[0], marromMedio[1], marromMedio[2]);
+      doc.rect(margin, y, pageW - 2 * margin, 6, "F");
+      doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+      doc.text(txt.toUpperCase(), margin + 2, y + 4.2);
+      y += 8;
+      doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
+    }
+
+    function camposEm2Colunas(pares) {
+      var colW = (pageW - 2 * margin - 4) / 2;
+      var colX = [margin, margin + colW + 4];
+      var col0Y = y, col1Y = y;
+      pares.forEach(function (par, idx) {
+        var col = idx % 2;
+        var x = colX[col];
+        var curY = (col === 0) ? col0Y : col1Y;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(110, 80, 60);
+        doc.text(par[0], x, curY);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(30, 30, 30);
+        var v = escTxt(par[1]) || "—";
+        var lines = doc.splitTextToSize(v, colW - 1);
+        doc.text(lines, x, curY + 3.2);
+        var nh = 3.2 + lines.length * 3.4 + 1;
+        if (col === 0) col0Y = curY + nh; else col1Y = curY + nh;
+      });
+      y = Math.max(col0Y, col1Y) + 1;
+    }
+
+    doc.setFillColor(marromEscuro[0], marromEscuro[1], marromEscuro[2]);
+    doc.rect(0, 0, pageW, 24, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+    doc.text("FICHA FUNCIONAL", margin, 11);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("Terra Conttemporanea — Marcenaria de Alto Padrao", margin, 17);
+    doc.setFontSize(8);
+    doc.text("Emitida em " + new Date().toLocaleDateString("pt-BR"), pageW - margin, 11, { align: "right" });
+    doc.text("Art. 41 CLT — uso interno e legal", pageW - margin, 17, { align: "right" });
+    y = 30;
+
+    doc.setTextColor(marromEscuro[0], marromEscuro[1], marromEscuro[2]);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+    doc.text(escTxt(f.nome).toUpperCase(), margin, y);
+    y += 5;
+    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+    var cargoTxt = "";
+    if (f.cargo_id) {
+      var cg = getCargoById(f.cargo_id);
+      cargoTxt = cg ? cg.nome + (cg.departamento ? " · " + cg.departamento : "") : "";
+    }
+    if (!cargoTxt) cargoTxt = f.cargo || "";
+    var statusTxt = f.data_demissao ? "Desligado em " + fmtDataTxt(f.data_demissao) : (f.status || "Ativo");
+    doc.text((cargoTxt || "—") + "  ·  " + statusTxt, margin, y);
+    y += 6;
+
+    tituloSecao("Dados pessoais");
+    camposEm2Colunas([
+      ["CPF", f.cpf], ["RG", f.rg],
+      ["Data de nascimento", fmtDataTxt(f.data_nascimento)], ["Sexo", f.sexo],
+      ["Estado civil", f.estado_civil], ["Escolaridade", f.escolaridade],
+      ["Nacionalidade", f.nacionalidade], ["Naturalidade", f.naturalidade],
+      ["Raca/Cor", f.raca_cor], ["Deficiencia (PcD)", f.deficiencia],
+      ["Nome da mae", f.nome_mae], ["Nome do pai", f.nome_pai]
+    ]);
+
+    tituloSecao("Contato e endereco");
+    camposEm2Colunas([
+      ["Telefone", f.telefone], ["Telefone recado", f.telefone_recado],
+      ["E-mail", f.email], ["CEP", f.cep],
+      ["Endereco", f.endereco], ["Complemento", f.complemento],
+      ["Bairro", f.bairro], ["Cidade", f.cidade]
+    ]);
+
+    if (f.contato_emergencia_nome || f.contato_emergencia_telefone) {
+      tituloSecao("Contato de emergencia");
+      camposEm2Colunas([
+        ["Nome", f.contato_emergencia_nome], ["Parentesco", f.contato_emergencia_parentesco],
+        ["Telefone", f.contato_emergencia_telefone], ["", ""]
+      ]);
+    }
+
+    tituloSecao("Documentos");
+    camposEm2Colunas([
+      ["CTPS", f.ctps], ["Serie", f.serie],
+      ["PIS/PASEP", f.pis], ["e-Social", f.e_social],
+      ["Matricula FGTS", f.matricula_fgts], ["Livro", f.livro],
+      ["CBO", f.cbo], ["Titulo de Eleitor", f.titulo_eleitor],
+      ["CNH", f.cnh], ["Categoria CNH", f.cnh_categoria]
+    ]);
+
+    tituloSecao("Vinculo trabalhista");
+    var cgFull = f.cargo_id ? getCargoById(f.cargo_id) : null;
+    camposEm2Colunas([
+      ["Cargo (descritivo)", cgFull ? cgFull.nome : (f.cargo || "—")],
+      ["Departamento", cgFull ? (cgFull.departamento || "—") : "—"],
+      ["Cadeia hierarquica", f.cargo_id ? buildCargoSuperiorChain(f.cargo_id) : "—"],
+      ["Centro de custo (ID)", f.centro_custo_id || "—"],
+      ["Data de admissao", fmtDataTxt(f.data_admissao)],
+      ["Data de demissao", fmtDataTxt(f.data_demissao)],
+      ["1a experiencia", fmtDataTxt(f.primeira_experiencia)],
+      ["2a experiencia", fmtDataTxt(f.segunda_experiencia)],
+      ["Data ASO", fmtDataTxt(f.data_aso)],
+      ["Vencimento ASO", fmtDataTxt(f.vencimento_aso)],
+      ["Salario base", fmtBRLnum(f.salario_base)],
+      ["Integracao", f.integracao]
+    ]);
+
+    tituloSecao("Dados bancarios");
+    camposEm2Colunas([
+      ["Banco", f.banco], ["Agencia", f.agencia],
+      ["Conta", f.conta], ["PIX", f.pix]
+    ]);
+
+    tituloSecao("Dependentes (" + deps.length + ")");
+    if (!deps.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Nenhum dependente cadastrado.", margin, y); y += 5;
+    } else {
+      deps.forEach(function (d) {
+        quebraPagina(8);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text("• " + escTxt(d.nome), margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        var detalhe = [
+          d.parentesco || "—",
+          d.data_nascimento ? "Nasc.: " + fmtDataTxt(d.data_nascimento) : null,
+          d.cpf ? "CPF: " + d.cpf : null,
+          d.dependente_ir ? "IR" : null,
+          d.dependente_sf ? "Sal.-Familia" : null
+        ].filter(Boolean).join(" · ");
+        doc.text(detalhe, margin + 4, y + 3.5);
+        y += 7;
+      });
+    }
+
+    tituloSecao("Beneficios vigentes (" + bens.length + ")");
+    if (!bens.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Nenhum beneficio ativo.", margin, y); y += 5;
+    } else {
+      bens.forEach(function (b) {
+        quebraPagina(7);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text("• " + escTxt(b.tipo), margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        doc.text(escTxt(b.descricao || "") + "  ·  " + fmtBRLnum(b.valor) + (b.data_inicio ? " · desde " + fmtDataTxt(b.data_inicio) : ""), margin + 4, y + 3.5);
+        y += 7;
+      });
+    }
+
+    tituloSecao("Historico disciplinar (" + meds.length + ")");
+    if (!meds.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Sem registros.", margin, y); y += 5;
+    } else {
+      meds.forEach(function (m) {
+        quebraPagina(8);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text(fmtDataTxt(m.data) + " — " + escTxt(m.tipo_medida || "—"), margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        var det = [
+          m.gravidade_infracao ? "Gravidade: " + m.gravidade_infracao : null,
+          m.dias_suspensao ? m.dias_suspensao + " dias" : null,
+          m.status_medida || null
+        ].filter(Boolean).join(" · ");
+        if (det) { doc.text(det, margin + 4, y + 3.5); y += 6.5; } else { y += 4; }
+        if (m.descricao_infracao) {
+          var lines = doc.splitTextToSize(escTxt(m.descricao_infracao), pageW - 2 * margin - 4);
+          doc.text(lines, margin + 4, y); y += lines.length * 3.4 + 1;
+        }
+      });
+    }
+
+    tituloSecao("Avaliacoes de desempenho (" + avals.length + ")");
+    if (!avals.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Sem registros.", margin, y); y += 5;
+    } else {
+      avals.forEach(function (a) {
+        quebraPagina(6);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text((a.data_avaliacao ? fmtDataTxt(a.data_avaliacao) : "—") + " — Nota: " + (a.nota || "—") + "/5", margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        var det = [
+          a.nota_tecnica != null ? "Tec " + a.nota_tecnica : null,
+          a.nota_qualidade != null ? "Qual " + a.nota_qualidade : null,
+          a.nota_comprometimento != null ? "Comp " + a.nota_comprometimento : null,
+          a.nota_equipe != null ? "Eq " + a.nota_equipe : null,
+          a.nota_iniciativa != null ? "Ini " + a.nota_iniciativa : null
+        ].filter(Boolean).join(" · ");
+        if (det) { doc.text(det, margin + 4, y + 3.5); y += 6.5; } else { y += 4; }
+      });
+    }
+
+    if (f.observacoes) {
+      tituloSecao("Observacoes");
+      doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      var lines = doc.splitTextToSize(escTxt(f.observacoes), pageW - 2 * margin);
+      lines.forEach(function (ln) { quebraPagina(4); doc.text(ln, margin, y); y += 4; });
+    }
+
+    var totalPgs = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= totalPgs; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7); doc.setTextColor(140, 120, 100);
+      doc.text("Ficha funcional gerada pelo Sistema Terra · documento interno · " + new Date().toLocaleString("pt-BR"), margin, pageH - 6);
+      doc.text("Pagina " + p + " de " + totalPgs, pageW - margin, pageH - 6, { align: "right" });
+    }
+
+    var safeName = (f.nome || "funcionario").toString().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").toLowerCase();
+    doc.save("ficha-" + safeName + "-" + (f.id) + ".pdf");
+    try { toast("Ficha gerada.", "ok"); } catch (e) {}
+  }).catch(function (e) {
+    alert("Erro ao gerar ficha: " + (e && e.message ? e.message : e));
+  });
+}
+
+// Listeners da toolbar Cargos
+(function () {
+  function bindOnce(id, ev, fn) {
+    var el = document.getElementById(id);
+    if (el && !el.__bound_terra) { el.addEventListener(ev, fn); el.__bound_terra = true; }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    bindOnce("cg-btn-novo", "click", function () { abrirModalCargo(null); });
+    bindOnce("cg-busca",   "input", function () { try { renderCargos(); } catch (e) {} });
+    bindOnce("cg-status",  "change", function () { try { renderCargos(); } catch (e) {} });
+    bindOnce("cg-dep",     "change", function () { try { renderCargos(); } catch (e) {} });
+  });
+})();
