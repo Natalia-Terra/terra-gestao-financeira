@@ -2114,6 +2114,10 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
    ========================================================= */
 .table-wrap.table-wrap-x {
   overflow-x: auto;
+  scrollbar-width: none;        /* Firefox: esconde a barra nativa (a barra de cima cobre o papel) */
+}
+.table-wrap.table-wrap-x::-webkit-scrollbar {
+  display: none;                /* Chrome/Safari/Edge */
 }
 .table-wrap.table-wrap-x .tabela {
   min-width: max-content;  /* não comprime colunas; deixa o scroll horizontal trabalhar */
