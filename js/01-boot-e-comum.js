@@ -581,6 +581,9 @@ function showPage(pageId) {
   if (pageId === "dre")            carregarDreSeNecessario();
   if (pageId === "rh_funcionarios") carregarFuncionariosSeNecessario();
   if (pageId === "rh_cargos")       carregarCargosSeNecessario();
+  if (pageId === "rh_ferias")       carregarFeriasSeNecessario();
+  if (pageId === "rh_atestados")    carregarAtestadosSeNecessario();
+  if (pageId === "rh_afastamentos") carregarAfastamentosSeNecessario();
   if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
   if (pageId === "rh_folha")        carregarFolhaSeNecessario();
   if (pageId === "rh_impostos")     carregarImpostosSeNecessario();

@@ -1,0 +1,13 @@
+-- M32: Onda B — Tempo & Ausências
+-- Aplicada em 2026-05-19 via MCP Supabase
+-- (1) ferias + ferias_parcelas (parcelamento até 3 — lei 13.467/17)
+-- (2) atestados (médico/odonto/acompanhamento/consulta — prazo CLT 48h)
+-- (3) afastamentos (14 tipos: INSS doença, INSS acidente, maternidade,
+--     paternidade, adoção, não-remunerada, militar, gala, nojo, sangue,
+--     mesário, juízo, alistamento, outros)
+--
+-- Integração com frequencia_mensal via JS (recalcularFrequenciaMensal):
+-- soma dias de atestados+afastamentos que tocam o mês de referência e
+-- UPSERT em frequencia_mensal.faltas_justificadas, preservando manuais.
+--
+-- Schema completo registrado no banco; ver pg_dump pra detalhes.

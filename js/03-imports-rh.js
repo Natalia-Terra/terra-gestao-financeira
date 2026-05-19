@@ -2054,12 +2054,22 @@ function gerarFichaFuncionarioPDF(f) {
     client.from("funcionarios_dependentes").select("*").eq("funcionario_id", f.id),
     client.from("beneficios").select("*").eq("funcionario_id", f.id).is("data_fim", null),
     client.from("medidas_disciplinares").select("*").eq("funcionario_id", f.id).order("data", { ascending: false }),
-    client.from("avaliacao_desempenho").select("*").eq("funcionario_id", f.id).order("data_avaliacao", { ascending: false })
+    client.from("avaliacao_desempenho").select("*").eq("funcionario_id", f.id).order("data_avaliacao", { ascending: false }),
+    client.from("ferias").select("*").eq("funcionario_id", f.id).order("periodo_aquisitivo_inicio", { ascending: false }),
+    client.from("ferias_parcelas").select("*").order("data_inicio", { ascending: true }),
+    client.from("atestados").select("*").eq("funcionario_id", f.id).order("data_inicio", { ascending: false }),
+    client.from("afastamentos").select("*").eq("funcionario_id", f.id).order("data_inicio", { ascending: false })
   ]).then(function (rs) {
     var deps  = (rs[0] && rs[0].data) || [];
     var bens  = (rs[1] && rs[1].data) || [];
     var meds  = (rs[2] && rs[2].data) || [];
     var avals = (rs[3] && rs[3].data) || [];
+    var feriasF = (rs[4] && rs[4].data) || [];
+    var parcelasAll = (rs[5] && rs[5].data) || [];
+    var ats   = (rs[6] && rs[6].data) || [];
+    var afs   = (rs[7] && rs[7].data) || [];
+    var parcelasPorFerias = {};
+    parcelasAll.forEach(function (p) { (parcelasPorFerias[p.ferias_id] = parcelasPorFerias[p.ferias_id] || []).push(p); });
 
     var doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     var pageW = 210, pageH = 297;
@@ -2270,6 +2280,73 @@ function gerarFichaFuncionarioPDF(f) {
       });
     }
 
+    tituloSecao("Ferias (" + feriasF.length + ")");
+    if (!feriasF.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Sem periodos de ferias cadastrados.", margin, y); y += 5;
+    } else {
+      feriasF.forEach(function (fe) {
+        quebraPagina(8);
+        var parc = parcelasPorFerias[fe.id] || [];
+        var goz = parc.filter(function(p){return !p.abono_pecuniario;}).reduce(function(a,p){return a+(p.dias||0);}, 0);
+        var abn = parc.filter(function(p){return p.abono_pecuniario;}).reduce(function(a,p){return a+(p.dias||0);}, 0);
+        var saldo = (fe.dias_direito || 30) - goz - abn;
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text(fmtDataTxt(fe.periodo_aquisitivo_inicio) + " a " + fmtDataTxt(fe.periodo_aquisitivo_fim) + " - " + (fe.status || "em_aberto"), margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        doc.text("Concessivo ate " + fmtDataTxt(fe.periodo_concessivo_fim) + " | Direito " + (fe.dias_direito||30) + "d | Gozado " + goz + "d | Abono " + abn + "d | Saldo " + saldo + "d", margin + 4, y + 3.5);
+        y += 7;
+        if (parc.length) {
+          parc.forEach(function (p) {
+            quebraPagina(4);
+            doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
+            doc.text("- Parcela: " + fmtDataTxt(p.data_inicio) + " a " + fmtDataTxt(p.data_fim) + " (" + p.dias + "d" + (p.abono_pecuniario ? " - abono" : "") + ")", margin + 8, y);
+            y += 3.5;
+          });
+        }
+      });
+    }
+
+    tituloSecao("Atestados (" + ats.length + ")");
+    if (!ats.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Sem atestados registrados.", margin, y); y += 5;
+    } else {
+      ats.forEach(function (at) {
+        quebraPagina(7);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        var dh = at.dias ? (at.dias + "d") : (at.hora_inicio && at.hora_fim ? (at.hora_inicio + "-" + at.hora_fim) : "");
+        doc.text(fmtDataTxt(at.data_inicio) + " - " + escTxt(at.tipo) + " (" + dh + ")", margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        var det = [
+          at.medico_nome || null,
+          at.medico_especialidade || null,
+          at.cid ? "CID " + at.cid : null,
+          at.status || null
+        ].filter(Boolean).join(" - ");
+        if (det) { doc.text(det, margin + 4, y + 3.5); y += 6.5; } else { y += 4; }
+      });
+    }
+
+    tituloSecao("Afastamentos (" + afs.length + ")");
+    if (!afs.length) {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120);
+      doc.text("Sem afastamentos registrados.", margin, y); y += 5;
+    } else {
+      afs.forEach(function (af) {
+        quebraPagina(7);
+        doc.setFontSize(9); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "bold");
+        doc.text(escTxt(af.tipo) + " - " + fmtDataTxt(af.data_inicio) + (af.data_fim ? " a " + fmtDataTxt(af.data_fim) : " (em curso)"), margin, y);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        var det = [
+          af.inss_numero_beneficio ? "INSS " + af.inss_numero_beneficio : null,
+          af.cat_numero ? "CAT " + af.cat_numero : null,
+          af.motivo ? af.motivo.substring(0, 80) : null
+        ].filter(Boolean).join(" - ");
+        if (det) { doc.text(det, margin + 4, y + 3.5); y += 6.5; } else { y += 4; }
+      });
+    }
+
     if (f.observacoes) {
       tituloSecao("Observacoes");
       doc.setFontSize(9); doc.setTextColor(40, 40, 40);
@@ -2358,3 +2435,675 @@ function setupTopScrollAll() {
 document.addEventListener("DOMContentLoaded", function () {
   setTimeout(setupTopScrollAll, 200);
 });
+
+// =========================================================================
+// ONDA B — FERIAS, ATESTADOS, AFASTAMENTOS
+// Adicionado em 2026-05-19.
+// =========================================================================
+
+var feriasLista = [];
+var feriasParcelasCache = {};
+var feriasCarregado = false;
+
+var atestadosLista = [];
+var atestadosCarregado = false;
+
+var afastamentosLista = [];
+var afastamentosCarregado = false;
+
+var AFASTAMENTO_TIPOS = [
+  'INSS - Auxílio-doença',
+  'INSS - Acidente de trabalho',
+  'Licença-maternidade',
+  'Licença-paternidade',
+  'Adoção',
+  'Licença não-remunerada',
+  'Serviço militar',
+  'Alistamento militar',
+  'Licença gala (casamento)',
+  'Licença nojo (luto)',
+  'Doação de sangue',
+  'Mesário/eleitor convocado',
+  'Comparecimento a juízo',
+  'Outros'
+];
+
+var ATESTADO_TIPOS = ['Médico','Odontológico','Acompanhamento de filho','Acompanhamento de familiar','Consulta','Outros'];
+
+function nomeFuncionarioById(id) {
+  var f = (funcionariosLista || []).find(function (x) { return x.id === Number(id); });
+  return f ? f.nome : ("#" + id);
+}
+
+function opcoesFuncionarioSelect() {
+  return [{ value: "", label: "— selecione —" }].concat(
+    (funcionariosLista || []).slice().sort(function (a, b) { return (a.nome||"").localeCompare(b.nome||""); })
+      .filter(function (f) { return !f.data_demissao; })
+      .map(function (f) { return { value: f.id, label: f.nome }; })
+  );
+}
+
+function diasEntreDatas(a, b) {
+  if (!a || !b) return 0;
+  var d1 = new Date(a + "T00:00:00");
+  var d2 = new Date(b + "T00:00:00");
+  return Math.round((d2 - d1) / 86400000) + 1;
+}
+
+// =========================================================================
+// FERIAS
+// =========================================================================
+
+function carregarFeriasSeNecessario() {
+  if (!funcionariosCarregado) { carregarFuncionariosSeNecessario(); }
+  if (feriasCarregado) { renderFerias(); return; }
+  Promise.all([
+    client.from("ferias").select("*").order("periodo_aquisitivo_inicio", { ascending: false }),
+    client.from("ferias_parcelas").select("*").order("data_inicio", { ascending: true })
+  ]).then(function (rs) {
+    if (rs[0].error) { document.getElementById("fe-tbody").innerHTML = '<tr><td colspan="9" class="tbl-vazio erro">Erro: '+escHtml(rs[0].error.message)+'</td></tr>'; return; }
+    feriasLista = rs[0].data || [];
+    feriasParcelasCache = {};
+    (rs[1].data || []).forEach(function (p) {
+      if (!feriasParcelasCache[p.ferias_id]) feriasParcelasCache[p.ferias_id] = [];
+      feriasParcelasCache[p.ferias_id].push(p);
+    });
+    feriasCarregado = true;
+    renderFerias();
+  });
+}
+
+function calcSaldoFerias(fe) {
+  var parcelas = feriasParcelasCache[fe.id] || [];
+  var gozado = parcelas.filter(function (p) { return !p.abono_pecuniario; }).reduce(function (a, p) { return a + (p.dias || 0); }, 0);
+  var abono  = parcelas.filter(function (p) { return p.abono_pecuniario; }).reduce(function (a, p) { return a + (p.dias || 0); }, 0);
+  var saldo = (fe.dias_direito || 30) - gozado - abono;
+  return { gozado: gozado, abono: abono, saldo: saldo };
+}
+
+function statusVisualFerias(fe) {
+  var s = fe.status;
+  if (s === 'em_gozo') return '<span class="badge-tipo solta">em gozo</span>';
+  if (s === 'gozado') return '<span class="badge-tipo">gozado</span>';
+  if (s === 'vencido') return '<span class="badge-tipo" style="background:#c44">vencido</span>';
+  if (s === 'prescrito') return '<span class="badge-tipo" style="background:#888">prescrito</span>';
+  return '<span class="badge-tipo">em aberto</span>';
+}
+
+function renderFerias() {
+  var tbody = document.getElementById("fe-tbody"); if (!tbody) return;
+  var busca = (document.getElementById("fe-busca").value || "").trim().toLowerCase();
+  var status = document.getElementById("fe-status").value;
+  var hoje = new Date().toISOString().slice(0,10);
+  var em60d = new Date(Date.now() + 60*86400000).toISOString().slice(0,10);
+
+  var filtradas = (feriasLista || []).filter(function (fe) {
+    if (status && fe.status !== status) return false;
+    var nome = nomeFuncionarioById(fe.funcionario_id);
+    return matchBusca(busca, [nome]);
+  });
+
+  var emAberto = 0, emGozo = 0, vencendo = 0, vencidas = 0;
+  (feriasLista || []).forEach(function (fe) {
+    if (fe.status === 'em_aberto') emAberto++;
+    if (fe.status === 'em_gozo') emGozo++;
+    if (fe.status === 'vencido') vencidas++;
+    if (fe.status === 'em_aberto' && fe.periodo_concessivo_fim && fe.periodo_concessivo_fim <= em60d && fe.periodo_concessivo_fim >= hoje) vencendo++;
+  });
+  valText(document.getElementById("fe-m-aberto"), fmtInt(emAberto));
+  valText(document.getElementById("fe-m-gozo"), fmtInt(emGozo));
+  valText(document.getElementById("fe-m-venc"), fmtInt(vencendo));
+  valText(document.getElementById("fe-m-vencido"), fmtInt(vencidas));
+  valText(document.getElementById("fe-lbl"), filtradas.length + " de " + (feriasLista || []).length);
+
+  preencherTbody(tbody, filtradas.map(function (fe) {
+    var calc = calcSaldoFerias(fe);
+    return '<tr>' +
+      '<td>' + escHtml(nomeFuncionarioById(fe.funcionario_id)) + '</td>' +
+      '<td>' + fmtData(fe.periodo_aquisitivo_inicio) + ' → ' + fmtData(fe.periodo_aquisitivo_fim) + '</td>' +
+      '<td>' + fmtData(fe.periodo_concessivo_fim) + '</td>' +
+      '<td class="num">' + fmtInt(fe.dias_direito) + '</td>' +
+      '<td class="num">' + fmtInt(calc.gozado) + '</td>' +
+      '<td class="num">' + fmtInt(calc.abono) + '</td>' +
+      '<td class="num"><strong>' + fmtInt(calc.saldo) + '</strong></td>' +
+      '<td>' + statusVisualFerias(fe) + '</td>' +
+      '<td><button class="btn-limpar" data-fe-edit="' + fe.id + '">Editar</button> <button class="btn-limpar" data-fe-par="' + fe.id + '" title="Parcelas de gozo">📅 Parcelas</button> <button class="btn-limpar" data-fe-del="' + fe.id + '" title="Excluir">🗑</button></td>' +
+    '</tr>';
+  }), 9);
+
+  tbody.querySelectorAll("[data-fe-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-fe-edit"));
+      var fe = feriasLista.find(function (x) { return x.id === id; });
+      if (fe) abrirModalFerias(fe);
+    });
+  });
+  tbody.querySelectorAll("[data-fe-par]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-fe-par"));
+      var fe = feriasLista.find(function (x) { return x.id === id; });
+      if (fe) abrirGerenciadorParcelasFerias(fe);
+    });
+  });
+  tbody.querySelectorAll("[data-fe-del]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var id = Number(btn.getAttribute("data-fe-del"));
+      if (!confirm("Excluir esse período (e todas as parcelas)?")) return;
+      client.from("ferias").delete().eq("id", id).then(function (r) {
+        if (r.error) { alert("Erro: " + r.error.message); return; }
+        feriasCarregado = false; carregarFeriasSeNecessario();
+      });
+    });
+  });
+
+  try { setupTopScrollFor(document.querySelector('[data-page="rh_ferias"] .table-wrap-x')); } catch (e) {}
+}
+
+function abrirModalFerias(fe) {
+  fe = fe || {};
+  var editar = !!fe.id;
+  abrirModal({
+    titulo: editar ? "Editar período aquisitivo" : "Novo período aquisitivo",
+    fields: [
+      { group: "Funcionário", name: "funcionario_id", label: "Funcionário", type: "select", valor: fe.funcionario_id || "", options: opcoesFuncionarioSelect(), required: true },
+      { group: "Período", name: "periodo_aquisitivo_inicio", label: "Início do período aquisitivo", type: "date", valor: fe.periodo_aquisitivo_inicio, required: true },
+      { group: "Período", name: "periodo_aquisitivo_fim", label: "Fim do período aquisitivo", type: "date", valor: fe.periodo_aquisitivo_fim, required: true },
+      { group: "Período", name: "periodo_concessivo_fim", label: "Fim do período concessivo", type: "date", valor: fe.periodo_concessivo_fim },
+      { group: "Direito", name: "dias_direito", label: "Dias de direito", type: "number", valor: fe.dias_direito || 30 },
+      { group: "Direito", name: "abono_dias", label: "Abono pecuniário (dias — máx 10)", type: "number", valor: fe.abono_dias || 0 },
+      { group: "Status", name: "status", label: "Status", type: "select", valor: fe.status || "em_aberto", options: [
+        {value:"em_aberto",label:"Em aberto"},{value:"em_gozo",label:"Em gozo"},{value:"gozado",label:"Gozado"},{value:"vencido",label:"Vencido"},{value:"prescrito",label:"Prescrito"}
+      ]},
+      { group: "Observações", name: "observacoes", label: "Observações", type: "textarea", valor: fe.observacoes }
+    ],
+    onSubmit: function (v, done) {
+      var payload = {
+        funcionario_id: Number(v.funcionario_id),
+        periodo_aquisitivo_inicio: v.periodo_aquisitivo_inicio,
+        periodo_aquisitivo_fim: v.periodo_aquisitivo_fim,
+        periodo_concessivo_fim: v.periodo_concessivo_fim || null,
+        dias_direito: Number(v.dias_direito) || 30,
+        abono_dias: Number(v.abono_dias) || 0,
+        status: v.status,
+        observacoes: v.observacoes || null
+      };
+      var q = editar
+        ? client.from("ferias").update(payload).eq("id", fe.id)
+        : client.from("ferias").insert(payload);
+      q.then(function (r) {
+        if (r.error) { done(r.error.message); return; }
+        feriasCarregado = false;
+        carregarFeriasSeNecessario();
+        done(null);
+      });
+    }
+  });
+}
+
+function abrirGerenciadorParcelasFerias(fe) {
+  var nome = nomeFuncionarioById(fe.funcionario_id);
+  client.from("ferias_parcelas").select("*").eq("ferias_id", fe.id).order("data_inicio", { ascending: true }).then(function (r) {
+    var lista = (r && r.data) || [];
+    var calc = calcSaldoFerias(fe);
+    var html = '<div style="margin-bottom:12px"><strong>' + escHtml(nome) + '</strong> · período: ' + fmtData(fe.periodo_aquisitivo_inicio) + ' → ' + fmtData(fe.periodo_aquisitivo_fim) + '<br>Direito: ' + fe.dias_direito + ' · Gozado: ' + calc.gozado + ' · Abono: ' + calc.abono + ' · <strong>Saldo: ' + calc.saldo + '</strong></div>';
+    if (!lista.length) {
+      html += '<div class="tbl-vazio">Nenhuma parcela registrada.</div>';
+    } else {
+      html += '<table class="tabela"><thead><tr><th>Início</th><th>Fim</th><th class="num">Dias</th><th>Abono?</th><th>Obs</th><th></th></tr></thead><tbody>';
+      lista.forEach(function (p) {
+        html += '<tr><td>' + fmtData(p.data_inicio) + '</td><td>' + fmtData(p.data_fim) + '</td><td class="num">' + p.dias + '</td><td>' + (p.abono_pecuniario ? "Sim" : "Não") + '</td><td>' + escHtml(p.observacoes || "—") + '</td><td><button class="btn-limpar" data-fp-del="' + p.id + '">🗑</button></td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    abrirModal({
+      titulo: "Parcelas — " + nome,
+      fields: [{ name: "_p", label: "", type: "text", valor: "" }],
+      onSubmit: function (v, done) {
+        if (!v.data_inicio || !v.data_fim) { done("Informe data início e fim."); return; }
+        var dias = diasEntreDatas(v.data_inicio, v.data_fim);
+        if (dias < 1) { done("Período inválido."); return; }
+        if (lista.length >= 3) { done("Máximo 3 parcelas por período (lei 13.467/17)."); return; }
+        var payload = {
+          ferias_id: fe.id,
+          data_inicio: v.data_inicio,
+          data_fim: v.data_fim,
+          dias: dias,
+          abono_pecuniario: v.abono_pecuniario === "1",
+          observacoes: v.observacoes || null
+        };
+        client.from("ferias_parcelas").insert(payload).then(function (r2) {
+          if (r2.error) { done(r2.error.message); return; }
+          fecharModal();
+          feriasCarregado = false; carregarFeriasSeNecessario();
+          setTimeout(function () { abrirGerenciadorParcelasFerias(fe); }, 100);
+        });
+      }
+    });
+
+    setTimeout(function () {
+      var el = document.getElementById("modal-fields"); if (!el) return;
+      el.innerHTML =
+        '<fieldset class="form-section"><legend>Parcelas registradas (' + lista.length + ' de 3)</legend>' + html + '</fieldset>' +
+        '<fieldset class="form-section"><legend>Adicionar nova parcela' + (lista.length>=3 ? ' (limite atingido)' : '') + '</legend>' +
+          '<div class="form-field"><label for="mf-data_inicio">Data início</label><input id="mf-data_inicio" name="data_inicio" type="date" ' + (lista.length>=3?'disabled':'') + ' /></div>' +
+          '<div class="form-field"><label for="mf-data_fim">Data fim</label><input id="mf-data_fim" name="data_fim" type="date" ' + (lista.length>=3?'disabled':'') + ' /></div>' +
+          '<div class="form-field"><label for="mf-abono_pecuniario">Abono pecuniário?</label><select id="mf-abono_pecuniario" name="abono_pecuniario" ' + (lista.length>=3?'disabled':'') + '><option value="0">Não (gozo)</option><option value="1">Sim (venda)</option></select></div>' +
+          '<div class="form-field form-field-wide"><label for="mf-observacoes">Observações</label><textarea id="mf-observacoes" name="observacoes" rows="2" ' + (lista.length>=3?'disabled':'') + '></textarea></div>' +
+        '</fieldset>';
+      el.querySelectorAll("[data-fp-del]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var id = Number(btn.getAttribute("data-fp-del"));
+          if (!confirm("Excluir essa parcela?")) return;
+          client.from("ferias_parcelas").delete().eq("id", id).then(function (r3) {
+            if (r3.error) { alert("Erro: " + r3.error.message); return; }
+            fecharModal();
+            feriasCarregado = false; carregarFeriasSeNecessario();
+            setTimeout(function () { abrirGerenciadorParcelasFerias(fe); }, 100);
+          });
+        });
+      });
+    }, 60);
+  });
+}
+
+// =========================================================================
+// ATESTADOS
+// =========================================================================
+
+function carregarAtestadosSeNecessario() {
+  if (!funcionariosCarregado) carregarFuncionariosSeNecessario();
+  if (atestadosCarregado) { renderAtestados(); return; }
+  client.from("atestados").select("*").order("data_inicio", { ascending: false }).then(function (r) {
+    if (r.error) { document.getElementById("at-tbody").innerHTML = '<tr><td colspan="10" class="tbl-vazio erro">Erro: '+escHtml(r.error.message)+'</td></tr>'; return; }
+    atestadosLista = r.data || [];
+    atestadosCarregado = true;
+    renderAtestados();
+  });
+}
+
+function calcPrazoAtestado(at) {
+  if (!at.data_entrega || !at.data_inicio) return null;
+  var dias = diasEntreDatas(at.data_inicio, at.data_entrega) - 1;
+  return { dias: dias, dentro: dias <= 2 };
+}
+
+function renderAtestados() {
+  var tbody = document.getElementById("at-tbody"); if (!tbody) return;
+  var busca = (document.getElementById("at-busca").value || "").trim().toLowerCase();
+  var tipo = document.getElementById("at-tipo").value;
+  var status = document.getElementById("at-status").value;
+
+  var filtrados = (atestadosLista || []).filter(function (at) {
+    if (tipo && at.tipo !== tipo) return false;
+    if (status && at.status !== status) return false;
+    var nome = nomeFuncionarioById(at.funcionario_id);
+    return matchBusca(busca, [nome, at.medico_nome, at.cid, at.medico_especialidade]);
+  });
+
+  var totalDias = 0, pendentes = 0, foraPrazo = 0;
+  (atestadosLista || []).forEach(function (at) {
+    totalDias += (at.dias || 0);
+    if (at.status === 'pendente') pendentes++;
+    var p = calcPrazoAtestado(at);
+    if (p && !p.dentro) foraPrazo++;
+  });
+  valText(document.getElementById("at-m-tot"), fmtInt((atestadosLista || []).length));
+  valText(document.getElementById("at-m-dias"), fmtInt(totalDias));
+  valText(document.getElementById("at-m-pend"), fmtInt(pendentes));
+  valText(document.getElementById("at-m-prazo"), fmtInt(foraPrazo));
+  valText(document.getElementById("at-lbl"), filtrados.length + " de " + (atestadosLista || []).length);
+
+  preencherTbody(tbody, filtrados.map(function (at) {
+    var dh = at.dias ? (at.dias + " dias") : (at.hora_inicio && at.hora_fim ? (at.hora_inicio + "–" + at.hora_fim) : "—");
+    var prazo = calcPrazoAtestado(at);
+    var prazoTxt = prazo ? (prazo.dentro ? '<span class="badge-tipo solta">no prazo</span>' : '<span class="badge-tipo" style="background:#c44">+' + prazo.dias + 'd</span>') : "—";
+    var statusBadge = at.status === 'validado' ? '<span class="badge-tipo solta">validado</span>'
+                    : at.status === 'recusado' ? '<span class="badge-tipo" style="background:#c44">recusado</span>'
+                    : '<span class="badge-tipo">pendente</span>';
+    return '<tr>' +
+      '<td>' + escHtml(nomeFuncionarioById(at.funcionario_id)) + '</td>' +
+      '<td>' + escHtml(at.tipo) + '</td>' +
+      '<td>' + fmtData(at.data_inicio) + '</td>' +
+      '<td class="num">' + dh + '</td>' +
+      '<td>' + (at.data_entrega ? fmtData(at.data_entrega) : "—") + '</td>' +
+      '<td>' + prazoTxt + '</td>' +
+      '<td>' + escHtml(at.medico_nome || "—") + (at.medico_especialidade ? '<br><small>'+escHtml(at.medico_especialidade)+'</small>' : '') + '</td>' +
+      '<td class="mono">' + escHtml(at.cid || "—") + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td><button class="btn-limpar" data-at-edit="' + at.id + '">Editar</button> <button class="btn-limpar" data-at-del="' + at.id + '" title="Excluir">🗑</button></td>' +
+    '</tr>';
+  }), 10);
+
+  tbody.querySelectorAll("[data-at-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-at-edit"));
+      var at = atestadosLista.find(function (x) { return x.id === id; });
+      if (at) abrirModalAtestado(at);
+    });
+  });
+  tbody.querySelectorAll("[data-at-del]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var id = Number(btn.getAttribute("data-at-del"));
+      if (!confirm("Excluir esse atestado?")) return;
+      client.from("atestados").delete().eq("id", id).then(function (r) {
+        if (r.error) { alert("Erro: " + r.error.message); return; }
+        atestadosCarregado = false; carregarAtestadosSeNecessario();
+      });
+    });
+  });
+
+  try { setupTopScrollFor(document.querySelector('[data-page="rh_atestados"] .table-wrap-x')); } catch (e) {}
+}
+
+function abrirModalAtestado(at) {
+  at = at || {};
+  var editar = !!at.id;
+  abrirModal({
+    titulo: editar ? "Editar atestado" : "Novo atestado",
+    fields: [
+      { group: "Funcionário", name: "funcionario_id", label: "Funcionário", type: "select", valor: at.funcionario_id || "", options: opcoesFuncionarioSelect(), required: true },
+      { group: "Tipo", name: "tipo", label: "Tipo do atestado", type: "select", valor: at.tipo || "Médico", options: ATESTADO_TIPOS, required: true },
+      { group: "Período", name: "data_inicio", label: "Data início", type: "date", valor: at.data_inicio, required: true },
+      { group: "Período", name: "dias", label: "Dias (deixar vazio se for de horas)", type: "number", valor: at.dias },
+      { group: "Período", name: "hora_inicio", label: "Hora início (se atestado de horas)", type: "text", valor: at.hora_inicio },
+      { group: "Período", name: "hora_fim", label: "Hora fim", type: "text", valor: at.hora_fim },
+      { group: "Entrega no RH", name: "data_entrega", label: "Data de entrega (prazo CLT 48h)", type: "date", valor: at.data_entrega },
+      { group: "Médico", name: "medico_nome", label: "Médico/Clínica", type: "text", valor: at.medico_nome },
+      { group: "Médico", name: "medico_crm", label: "CRM", type: "text", valor: at.medico_crm },
+      { group: "Médico", name: "medico_especialidade", label: "Especialidade", type: "text", valor: at.medico_especialidade },
+      { group: "Médico", name: "cid", label: "CID (opcional — sigiloso)", type: "text", valor: at.cid },
+      { group: "Status", name: "status", label: "Status", type: "select", valor: at.status || "pendente", options: [
+        {value:"pendente",label:"Pendente"},{value:"validado",label:"Validado"},{value:"recusado",label:"Recusado"}
+      ]},
+      { group: "Observações", name: "observacoes", label: "Observações", type: "textarea", valor: at.observacoes }
+    ],
+    onSubmit: function (v, done) {
+      if (!v.dias && !(v.hora_inicio && v.hora_fim)) { done("Informe os dias OU as horas (início e fim)."); return; }
+      var payload = {
+        funcionario_id: Number(v.funcionario_id),
+        tipo: v.tipo,
+        data_inicio: v.data_inicio,
+        dias: v.dias ? Number(v.dias) : null,
+        hora_inicio: v.hora_inicio || null,
+        hora_fim: v.hora_fim || null,
+        data_entrega: v.data_entrega || null,
+        medico_nome: v.medico_nome || null,
+        medico_crm: v.medico_crm || null,
+        medico_especialidade: v.medico_especialidade || null,
+        cid: v.cid || null,
+        status: v.status || "pendente",
+        observacoes: v.observacoes || null
+      };
+      var q = editar
+        ? client.from("atestados").update(payload).eq("id", at.id)
+        : client.from("atestados").insert(payload);
+      q.then(function (r) {
+        if (r.error) { done(r.error.message); return; }
+        atestadosCarregado = false; carregarAtestadosSeNecessario();
+        done(null);
+      });
+    }
+  });
+}
+
+// =========================================================================
+// AFASTAMENTOS
+// =========================================================================
+
+function carregarAfastamentosSeNecessario() {
+  if (!funcionariosCarregado) carregarFuncionariosSeNecessario();
+  if (afastamentosCarregado) { renderAfastamentos(); return; }
+  client.from("afastamentos").select("*").order("data_inicio", { ascending: false }).then(function (r) {
+    if (r.error) { document.getElementById("af-tbody").innerHTML = '<tr><td colspan="9" class="tbl-vazio erro">Erro: '+escHtml(r.error.message)+'</td></tr>'; return; }
+    afastamentosLista = r.data || [];
+    afastamentosCarregado = true;
+    popularSelectAfastamentoTipo();
+    renderAfastamentos();
+  });
+}
+
+function popularSelectAfastamentoTipo() {
+  var sel = document.getElementById("af-tipo"); if (!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">Todos os tipos</option>' + AFASTAMENTO_TIPOS.map(function (t) { return '<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>'; }).join("");
+  if (atual) sel.value = atual;
+}
+
+function renderAfastamentos() {
+  var tbody = document.getElementById("af-tbody"); if (!tbody) return;
+  var busca = (document.getElementById("af-busca").value || "").trim().toLowerCase();
+  var tipo = document.getElementById("af-tipo").value;
+  var sit = document.getElementById("af-situacao").value;
+
+  var filtrados = (afastamentosLista || []).filter(function (af) {
+    if (tipo && af.tipo !== tipo) return false;
+    if (sit === "ativo" && af.data_fim) return false;
+    if (sit === "encerrado" && !af.data_fim) return false;
+    var nome = nomeFuncionarioById(af.funcionario_id);
+    return matchBusca(busca, [nome, af.motivo, af.tipo]);
+  });
+
+  var ativos = 0, encerrados = 0, comCat = 0;
+  (afastamentosLista || []).forEach(function (af) {
+    if (af.data_fim) encerrados++; else ativos++;
+    if (af.cat_numero) comCat++;
+  });
+  valText(document.getElementById("af-m-ativo"), fmtInt(ativos));
+  valText(document.getElementById("af-m-encerrado"), fmtInt(encerrados));
+  valText(document.getElementById("af-m-cat"), fmtInt(comCat));
+  valText(document.getElementById("af-lbl"), filtrados.length + " de " + (afastamentosLista || []).length);
+
+  preencherTbody(tbody, filtrados.map(function (af) {
+    var dias = af.data_fim ? diasEntreDatas(af.data_inicio, af.data_fim) : "—";
+    return '<tr>' +
+      '<td>' + escHtml(nomeFuncionarioById(af.funcionario_id)) + '</td>' +
+      '<td>' + escHtml(af.tipo) + '</td>' +
+      '<td>' + fmtData(af.data_inicio) + '</td>' +
+      '<td>' + (af.data_fim ? fmtData(af.data_fim) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
+      '<td class="num">' + dias + '</td>' +
+      '<td class="mono">' + escHtml(af.inss_numero_beneficio || "—") + '</td>' +
+      '<td class="mono">' + escHtml(af.cat_numero || "—") + '</td>' +
+      '<td>' + escHtml((af.motivo || "—").substring(0, 60)) + '</td>' +
+      '<td><button class="btn-limpar" data-af-edit="' + af.id + '">Editar</button> <button class="btn-limpar" data-af-del="' + af.id + '" title="Excluir">🗑</button></td>' +
+    '</tr>';
+  }), 9);
+
+  tbody.querySelectorAll("[data-af-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-af-edit"));
+      var af = afastamentosLista.find(function (x) { return x.id === id; });
+      if (af) abrirModalAfastamento(af);
+    });
+  });
+  tbody.querySelectorAll("[data-af-del]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var id = Number(btn.getAttribute("data-af-del"));
+      if (!confirm("Excluir esse afastamento?")) return;
+      client.from("afastamentos").delete().eq("id", id).then(function (r) {
+        if (r.error) { alert("Erro: " + r.error.message); return; }
+        afastamentosCarregado = false; carregarAfastamentosSeNecessario();
+      });
+    });
+  });
+
+  try { setupTopScrollFor(document.querySelector('[data-page="rh_afastamentos"] .table-wrap-x')); } catch (e) {}
+}
+
+function abrirModalAfastamento(af) {
+  af = af || {};
+  var editar = !!af.id;
+  abrirModal({
+    titulo: editar ? "Editar afastamento" : "Novo afastamento",
+    fields: [
+      { group: "Funcionário", name: "funcionario_id", label: "Funcionário", type: "select", valor: af.funcionario_id || "", options: opcoesFuncionarioSelect(), required: true },
+      { group: "Tipo", name: "tipo", label: "Tipo do afastamento", type: "select", valor: af.tipo || AFASTAMENTO_TIPOS[0], options: AFASTAMENTO_TIPOS, required: true },
+      { group: "Período", name: "data_inicio", label: "Data início", type: "date", valor: af.data_inicio, required: true },
+      { group: "Período", name: "data_fim", label: "Data fim (vazio se ativo)", type: "date", valor: af.data_fim },
+      { group: "INSS/CAT", name: "inss_numero_beneficio", label: "Número do benefício INSS (B91, B31...)", type: "text", valor: af.inss_numero_beneficio },
+      { group: "INSS/CAT", name: "cat_numero", label: "Número da CAT (acidente trabalho)", type: "text", valor: af.cat_numero },
+      { group: "Motivo", name: "motivo", label: "Motivo/justificativa", type: "textarea", valor: af.motivo },
+      { group: "Motivo", name: "observacoes", label: "Observações adicionais", type: "textarea", valor: af.observacoes }
+    ],
+    onSubmit: function (v, done) {
+      var payload = {
+        funcionario_id: Number(v.funcionario_id),
+        tipo: v.tipo,
+        data_inicio: v.data_inicio,
+        data_fim: v.data_fim || null,
+        inss_numero_beneficio: v.inss_numero_beneficio || null,
+        cat_numero: v.cat_numero || null,
+        motivo: v.motivo || null,
+        observacoes: v.observacoes || null
+      };
+      var q = editar
+        ? client.from("afastamentos").update(payload).eq("id", af.id)
+        : client.from("afastamentos").insert(payload);
+      q.then(function (r) {
+        if (r.error) { done(r.error.message); return; }
+        afastamentosCarregado = false; carregarAfastamentosSeNecessario();
+        done(null);
+      });
+    }
+  });
+}
+
+// =========================================================================
+// LISTENERS — toolbars
+// =========================================================================
+(function () {
+  function bindOnce(id, ev, fn) {
+    var el = document.getElementById(id);
+    if (el && !el.__bound_terra) { el.addEventListener(ev, fn); el.__bound_terra = true; }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    bindOnce("fe-btn-novo", "click", function () { abrirModalFerias(null); });
+    bindOnce("fe-busca",   "input", function () { try { renderFerias(); } catch (e) {} });
+    bindOnce("fe-status",  "change", function () { try { renderFerias(); } catch (e) {} });
+
+    bindOnce("at-btn-novo", "click", function () { abrirModalAtestado(null); });
+    bindOnce("at-busca",   "input", function () { try { renderAtestados(); } catch (e) {} });
+    bindOnce("at-tipo",    "change", function () { try { renderAtestados(); } catch (e) {} });
+    bindOnce("at-status",  "change", function () { try { renderAtestados(); } catch (e) {} });
+
+    // botão extra na toolbar de Atestados
+    var atToolbar = document.querySelector('[data-page="rh_atestados"] .toolbar');
+    if (atToolbar && !document.getElementById("at-btn-freq")) {
+      var btnAt = document.createElement("button");
+      btnAt.id = "at-btn-freq"; btnAt.type = "button"; btnAt.className = "btn-limpar";
+      btnAt.textContent = "🔄 Atualizar Frequência";
+      btnAt.title = "Recalcula faltas justificadas em frequência_mensal a partir dos atestados/afastamentos";
+      btnAt.addEventListener("click", abrirRecalcularFrequencia);
+      atToolbar.insertBefore(btnAt, atToolbar.querySelector("#at-lbl"));
+    }
+    var afToolbar = document.querySelector('[data-page="rh_afastamentos"] .toolbar');
+    if (afToolbar && !document.getElementById("af-btn-freq")) {
+      var btnAf = document.createElement("button");
+      btnAf.id = "af-btn-freq"; btnAf.type = "button"; btnAf.className = "btn-limpar";
+      btnAf.textContent = "🔄 Atualizar Frequência";
+      btnAf.title = "Recalcula faltas justificadas em frequência_mensal a partir dos atestados/afastamentos";
+      btnAf.addEventListener("click", abrirRecalcularFrequencia);
+      afToolbar.insertBefore(btnAf, afToolbar.querySelector("#af-lbl"));
+    }
+
+    bindOnce("af-btn-novo", "click", function () { abrirModalAfastamento(null); });
+    bindOnce("af-busca",   "input", function () { try { renderAfastamentos(); } catch (e) {} });
+    bindOnce("af-tipo",    "change", function () { try { renderAfastamentos(); } catch (e) {} });
+    bindOnce("af-situacao","change", function () { try { renderAfastamentos(); } catch (e) {} });
+  });
+})();
+
+// =========================================================================
+// ONDA B — Integração com frequencia_mensal + Ficha PDF estendida
+// =========================================================================
+
+function diasInterseccaoMes(dataIni, dataFim, anoMes) {
+  // Retorna quantos dias do intervalo [dataIni, dataFim] caem em anoMes "YYYY-MM"
+  if (!dataIni) return 0;
+  var ano = parseInt(anoMes.substring(0, 4), 10);
+  var mes = parseInt(anoMes.substring(5, 7), 10);
+  var primeiroDoMes = new Date(ano, mes - 1, 1);
+  var ultimoDoMes = new Date(ano, mes, 0); // último dia
+  var ini = new Date(dataIni + "T00:00:00");
+  var fim = dataFim ? new Date(dataFim + "T00:00:00") : new Date();
+  var maxIni = ini > primeiroDoMes ? ini : primeiroDoMes;
+  var minFim = fim < ultimoDoMes ? fim : ultimoDoMes;
+  if (maxIni > minFim) return 0;
+  return Math.round((minFim - maxIni) / 86400000) + 1;
+}
+
+function recalcularFrequenciaMensal(funcionarioId, mesRef, cb) {
+  // Lê atestados + afastamentos do funcionário, soma dias dentro do mês,
+  // e UPSERT em frequencia_mensal (somando como faltas_justificadas).
+  Promise.all([
+    client.from("atestados").select("data_inicio,dias,hora_inicio,hora_fim,status").eq("funcionario_id", funcionarioId).neq("status","recusado"),
+    client.from("afastamentos").select("data_inicio,data_fim").eq("funcionario_id", funcionarioId)
+  ]).then(function (rs) {
+    var diasAtest = 0;
+    (rs[0].data || []).forEach(function (at) {
+      if (at.dias) {
+        var fim = null;
+        try { var d = new Date(at.data_inicio + "T00:00:00"); d.setDate(d.getDate() + at.dias - 1); fim = d.toISOString().slice(0,10); } catch(e) {}
+        diasAtest += diasInterseccaoMes(at.data_inicio, fim, mesRef);
+      }
+      // atestados de horas não viram falta inteira
+    });
+    var diasAfast = 0;
+    (rs[1].data || []).forEach(function (af) {
+      diasAfast += diasInterseccaoMes(af.data_inicio, af.data_fim, mesRef);
+    });
+    var totalJust = diasAtest + diasAfast;
+
+    // Buscar registro atual pra preservar manuais
+    client.from("frequencia_mensal").select("*").eq("funcionario_id", funcionarioId).eq("mes_ref", mesRef).then(function (r2) {
+      var atual = (r2.data && r2.data[0]) || null;
+      var payload = {
+        funcionario_id: funcionarioId,
+        mes_ref: mesRef,
+        faltas_justificadas: totalJust,
+        faltas_nao_justificadas: atual ? atual.faltas_nao_justificadas : 0,
+        atrasos_ate_30min: atual ? atual.atrasos_ate_30min : 0,
+        atrasos_acima_30min: atual ? atual.atrasos_acima_30min : 0,
+        observacoes: (atual && atual.observacoes) || ("Recalculado em " + new Date().toISOString().slice(0,10) + ": " + diasAtest + " dia(s) de atestado + " + diasAfast + " dia(s) de afastamento.")
+      };
+      var q = atual
+        ? client.from("frequencia_mensal").update(payload).eq("id", atual.id)
+        : client.from("frequencia_mensal").insert(payload);
+      q.then(function (r3) {
+        if (cb) cb(r3.error ? r3.error.message : null, totalJust);
+      });
+    });
+  });
+}
+
+function abrirRecalcularFrequencia() {
+  abrirModal({
+    titulo: "Atualizar frequência mensal a partir de atestados+afastamentos",
+    fields: [
+      { name: "funcionario_id", label: "Funcionário (vazio = todos os ativos)", type: "select", valor: "", options: [{value:"",label:"— todos os ativos —"}].concat(opcoesFuncionarioSelect().slice(1)) },
+      { name: "mes_ref", label: "Mês de referência (YYYY-MM)", type: "text", valor: new Date().toISOString().slice(0,7), required: true }
+    ],
+    onSubmit: function (v, done) {
+      if (!/^\d{4}-\d{2}$/.test(v.mes_ref)) { done("Use o formato YYYY-MM"); return; }
+      var alvos = v.funcionario_id ? [Number(v.funcionario_id)] : (funcionariosLista || []).filter(function (f) { return !f.data_demissao; }).map(function (f) { return f.id; });
+      var pendentes = alvos.length;
+      var erros = [];
+      var totais = 0;
+      if (!pendentes) { done("Sem funcionários ativos."); return; }
+      alvos.forEach(function (id) {
+        recalcularFrequenciaMensal(id, v.mes_ref, function (err, total) {
+          pendentes--;
+          if (err) erros.push(nomeFuncionarioById(id) + ": " + err);
+          else if (total > 0) totais++;
+          if (pendentes === 0) {
+            if (erros.length) done("Erros: " + erros.slice(0,3).join("; "));
+            else { done(null); try { toast("Frequência atualizada — " + totais + " funcionário(s) com dias justificados.", "ok"); } catch (e) {} }
+          }
+        });
+      });
+    }
+  });
+}

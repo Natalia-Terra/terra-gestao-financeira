@@ -280,6 +280,9 @@
               <button class="sb-sub" data-page="rh_impostos" type="button">Impostos</button>
               <button class="sb-sub" data-page="medidas_disciplinares" type="button">Medidas Disciplinares</button>
               <button class="sb-sub" data-page="avaliacao_desempenho" type="button">Avaliação de Desempenho</button>
+              <button class="sb-sub" data-page="rh_ferias" type="button">Férias</button>
+              <button class="sb-sub" data-page="rh_atestados" type="button">Atestados</button>
+              <button class="sb-sub" data-page="rh_afastamentos" type="button">Afastamentos</button>
               <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
               <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
@@ -1085,6 +1088,106 @@
               <table class="tabela">
                 <thead><tr><th>Cargo</th><th>Departamento</th><th>Superior imediato</th><th class="num">Pessoas no cargo</th><th>Status</th><th></th></tr></thead>
                 <tbody id="cg-tbody"><tr><td colspan="6" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Férias -->
+        <section class="page" data-page="rh_ferias" hidden>
+          <div class="page-header"><h1 class="page-title">Férias</h1><p class="page-sub">Períodos aquisitivos · parcelamento em até 3 (lei 13.467/17) · abono pecuniário</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Períodos abertos</div><div class="metric-value" id="fe-m-aberto">—</div><div class="metric-sub">sem gozo iniciado</div></div>
+            <div class="metric-card"><div class="metric-label">Em gozo</div><div class="metric-value" id="fe-m-gozo">—</div><div class="metric-sub">parcela ativa hoje</div></div>
+            <div class="metric-card"><div class="metric-label">Vencendo (60d)</div><div class="metric-value" id="fe-m-venc">—</div><div class="metric-sub">passam do concessivo</div></div>
+            <div class="metric-card"><div class="metric-label">Vencidos</div><div class="metric-value" id="fe-m-vencido">—</div><div class="metric-sub">passaram do concessivo</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="fe-busca" placeholder="Buscar funcionário…" />
+              <select id="fe-status" title="Status">
+                <option value="">Todos os status</option>
+                <option value="em_aberto">Em aberto</option>
+                <option value="em_gozo">Em gozo</option>
+                <option value="gozado">Gozado</option>
+                <option value="vencido">Vencido</option>
+                <option value="prescrito">Prescrito</option>
+              </select>
+              <button class="btn-ouro" id="fe-btn-novo" type="button">+ Novo período</button>
+              <span class="toolbar-label" id="fe-lbl"></span>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Funcionário</th><th>Período aquisitivo</th><th>Concessivo até</th><th class="num">Direito</th><th class="num">Gozado</th><th class="num">Abono</th><th class="num">Saldo</th><th>Status</th><th></th></tr></thead>
+                <tbody id="fe-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Atestados -->
+        <section class="page" data-page="rh_atestados" hidden>
+          <div class="page-header"><h1 class="page-title">Atestados</h1><p class="page-sub">Médicos, odontológicos, acompanhamento · prazo CLT de 48h pra entrega</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="at-m-tot">—</div><div class="metric-sub">no período visível</div></div>
+            <div class="metric-card"><div class="metric-label">Dias totais</div><div class="metric-value" id="at-m-dias">—</div><div class="metric-sub">soma dos dias</div></div>
+            <div class="metric-card"><div class="metric-label">Pendentes</div><div class="metric-value" id="at-m-pend">—</div><div class="metric-sub">aguardando validação</div></div>
+            <div class="metric-card"><div class="metric-label">Fora do prazo</div><div class="metric-value" id="at-m-prazo">—</div><div class="metric-sub">entrega > 48h</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="at-busca" placeholder="Buscar funcionário, médico ou CID…" />
+              <select id="at-tipo" title="Tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Médico">Médico</option>
+                <option value="Odontológico">Odontológico</option>
+                <option value="Acompanhamento de filho">Acompanhamento de filho</option>
+                <option value="Acompanhamento de familiar">Acompanhamento de familiar</option>
+                <option value="Consulta">Consulta</option>
+                <option value="Outros">Outros</option>
+              </select>
+              <select id="at-status" title="Status">
+                <option value="">Todos os status</option>
+                <option value="pendente">Pendente</option>
+                <option value="validado">Validado</option>
+                <option value="recusado">Recusado</option>
+              </select>
+              <button class="btn-ouro" id="at-btn-novo" type="button">+ Novo atestado</button>
+              <span class="toolbar-label" id="at-lbl"></span>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Funcionário</th><th>Tipo</th><th>Início</th><th class="num">Dias/Horas</th><th>Entrega</th><th>Prazo</th><th>Médico</th><th>CID</th><th>Status</th><th></th></tr></thead>
+                <tbody id="at-tbody"><tr><td colspan="10" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Afastamentos -->
+        <section class="page" data-page="rh_afastamentos" hidden>
+          <div class="page-header"><h1 class="page-title">Afastamentos</h1><p class="page-sub">14 tipos · INSS auxílio-doença, acidente trabalho, maternidade, licenças legais</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Ativos</div><div class="metric-value" id="af-m-ativo">—</div><div class="metric-sub">sem data fim</div></div>
+            <div class="metric-card"><div class="metric-label">Encerrados</div><div class="metric-value" id="af-m-encerrado">—</div><div class="metric-sub">com data fim preenchida</div></div>
+            <div class="metric-card"><div class="metric-label">Acidente de trabalho</div><div class="metric-value" id="af-m-cat">—</div><div class="metric-sub">com CAT</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="af-busca" placeholder="Buscar funcionário ou motivo…" />
+              <select id="af-tipo" title="Tipo"><option value="">Todos os tipos</option></select>
+              <select id="af-situacao" title="Situação">
+                <option value="">Todas</option>
+                <option value="ativo">Ativos</option>
+                <option value="encerrado">Encerrados</option>
+              </select>
+              <button class="btn-ouro" id="af-btn-novo" type="button">+ Novo afastamento</button>
+              <span class="toolbar-label" id="af-lbl"></span>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Funcionário</th><th>Tipo</th><th>Início</th><th>Fim</th><th class="num">Dias</th><th>Benefício INSS</th><th>CAT</th><th>Motivo</th><th></th></tr></thead>
+                <tbody id="af-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
