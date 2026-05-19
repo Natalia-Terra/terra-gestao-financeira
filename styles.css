@@ -2118,6 +2118,13 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
 .table-wrap.table-wrap-x .tabela {
   min-width: max-content;  /* não comprime colunas; deixa o scroll horizontal trabalhar */
 }
+/* Quando o container ganha overflow-x:auto, ele vira contexto de scroll e o
+   sticky thead conecta-se a ELE (que rola junto). Desliga o sticky dentro
+   de .table-wrap-x — o header da página + KPIs já cumprem o papel de orientação. */
+.table-wrap.table-wrap-x .tabela thead th {
+  position: static;
+  top: auto;
+}
 
 /* =========================================================
    TOOLBAR — refinar quebra de linha em telas médias (<1280px)
