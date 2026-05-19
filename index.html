@@ -283,6 +283,8 @@
               <button class="sb-sub" data-page="rh_ferias" type="button">Férias</button>
               <button class="sb-sub" data-page="rh_atestados" type="button">Atestados</button>
               <button class="sb-sub" data-page="rh_afastamentos" type="button">Afastamentos</button>
+              <button class="sb-sub" data-page="rh_pensoes" type="button">Pensão Alimentícia</button>
+              <button class="sb-sub" data-page="rh_imports_pdf" type="button">Importar PDFs Folha</button>
               <button class="sb-sub" data-page="rh_bonus_config" type="button">Bônus — Configuração</button>
               <button class="sb-sub" data-page="programa_bonus_individual" type="button">Bônus Individual</button>
             </div>
@@ -1188,6 +1190,65 @@
               <table class="tabela">
                 <thead><tr><th>Funcionário</th><th>Tipo</th><th>Início</th><th>Fim</th><th class="num">Dias</th><th>Benefício INSS</th><th>CAT</th><th>Motivo</th><th></th></tr></thead>
                 <tbody id="af-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Pensão Alimentícia -->
+        <section class="page" data-page="rh_pensoes" hidden>
+          <div class="page-header"><h1 class="page-title">Pensão Alimentícia</h1><p class="page-sub">Cadastro de pensões com decisão judicial · rubricas Corsi 209/216/219</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Ativas</div><div class="metric-value" id="pe-m-ativas">—</div><div class="metric-sub">com data fim aberta</div></div>
+            <div class="metric-card"><div class="metric-label">Total mensal estimado</div><div class="metric-value" id="pe-m-total">—</div><div class="metric-sub">soma dos % aplicados (informativo)</div></div>
+          </div>
+          <div class="card fat-card">
+            <div class="toolbar">
+              <input class="input-search" type="text" id="pe-busca" placeholder="Buscar funcionário ou beneficiário…" />
+              <select id="pe-status" title="Status">
+                <option value="ativas">Ativas</option>
+                <option value="inativas">Inativas</option>
+                <option value="">Todas</option>
+              </select>
+              <button class="btn-ouro" id="pe-btn-novo" type="button">+ Nova pensão</button>
+              <span class="toolbar-label" id="pe-lbl"></span>
+            </div>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Funcionário</th><th>Beneficiário</th><th>Parentesco</th><th>Rubrica</th><th class="num">%</th><th class="num">Valor fixo</th><th>Início</th><th>Status</th><th></th></tr></thead>
+                <tbody id="pe-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- RH — Importação PDFs da Folha -->
+        <section class="page" data-page="rh_imports_pdf" hidden>
+          <div class="page-header"><h1 class="page-title">Importar PDFs da Folha</h1><p class="page-sub">5 fontes oficiais · detecção automática de tipo · CPF cruzando com cadastro</p></div>
+          <div class="grid-metrics">
+            <div class="metric-card"><div class="metric-label">Folha mensal</div><div class="metric-value" id="im-m-folha">—</div><div class="metric-sub">extratos importados (todos os meses)</div></div>
+            <div class="metric-card"><div class="metric-label">Eventos IRRF</div><div class="metric-value" id="im-m-irrf">—</div><div class="metric-sub">linhas por tipo de evento</div></div>
+            <div class="metric-card"><div class="metric-label">Guias FGTS</div><div class="metric-value" id="im-m-fgts">—</div><div class="metric-sub">guias GFD importadas</div></div>
+            <div class="metric-card"><div class="metric-label">Frequência</div><div class="metric-value" id="im-m-freq">—</div><div class="metric-sub">registros mensais via M19</div></div>
+          </div>
+
+          <div class="card fat-card">
+            <h2 style="margin-top:0;color:var(--ouro-esc)">Anexe um ou mais PDFs (a detecção é automática)</h2>
+            <p class="page-sub" style="margin-top:0">Aceito: Folha de Pagamento detalhada (Corsi), Encargos IRRF, Demonstrativo GFD (FGTS), Demonstrativo Consignado, Fechamentos Ponto (M19). Tipos identificados pelo cabeçalho.</p>
+            <div class="toolbar" style="margin-top:12px">
+              <input type="file" id="im-arquivos" accept="application/pdf" multiple style="padding:8px;border:1px solid var(--borda2);border-radius:6px;background:var(--bg2)" />
+              <button class="btn-ouro" id="im-btn-processar" type="button">📥 Processar</button>
+              <span class="toolbar-label" id="im-lbl"></span>
+            </div>
+            <div id="im-status" style="margin-top:12px"></div>
+          </div>
+
+          <div class="card fat-card" style="margin-top:16px">
+            <h2 style="margin-top:0;color:var(--ouro-esc)">Histórico de importações</h2>
+            <div class="table-wrap table-wrap-x">
+              <table class="tabela">
+                <thead><tr><th>Quando</th><th>Tipo</th><th>Arquivo</th><th>Competência</th><th class="num">Inseridos</th><th class="num">Atualizados</th><th class="num">Erros</th></tr></thead>
+                <tbody id="im-hist-tbody"><tr><td colspan="7" class="tbl-vazio">Sem importações ainda.</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -2536,6 +2597,7 @@
   <!-- html2canvas + jsPDF para a tela de Organograma → PDF -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
   <script src="config.js"></script>
   <!-- M1 v2 — app.js dividido em 8 módulos (ordem importa: overrides + duplicações dependem disso) -->
   <script src="js/01-boot-e-comum.js"></script>
@@ -2546,4 +2608,5 @@
   <script src="js/06-bancos-fluxo.js"></script>
   <script src="js/07-saidas-dash-rico.js"></script>
   <script src="js/08-extensoes-bonus-backup.js"></script>
+  <script src="js/09-importacoes-pdf.js" defer></script>
 <

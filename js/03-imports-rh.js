@@ -956,7 +956,7 @@ function renderFuncionarios() {
       '<td>' + fmtData(f.data_admissao) + '</td>' +
       '<td>' + (f.data_demissao ? fmtData(f.data_demissao) : '<span class="badge-tipo solta">ativo</span>') + '</td>' +
       '<td class="num">' + fmtBRL(f.salario_base) + '</td>' +
-      '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button> <button class="btn-limpar" data-fn-ficha="' + f.id + '" title="Baixar Ficha Funcional (PDF)">📋 Ficha</button> <button class="btn-limpar" data-fn-deps="' + f.id + '" title="Dependentes">👨‍👩‍👧 Deps</button> <button class="btn-limpar" data-fn-del="' + f.id + '" title="Excluir">🗑 Excluir</button></td>' +
+      '<td><button class="btn-limpar" data-fn-edit="' + f.id + '">Editar</button> <button class="btn-limpar" data-fn-ficha="' + f.id + '" title="Baixar Ficha Funcional (PDF)">📋 Ficha</button> <button class="btn-limpar" data-fn-holerite="' + f.id + '" title="Holerite por mês">💰 Holerite</button> <button class="btn-limpar" data-fn-deps="' + f.id + '" title="Dependentes">👨‍👩‍👧 Deps</button> <button class="btn-limpar" data-fn-del="' + f.id + '" title="Excluir">🗑 Excluir</button></td>' +
     '</tr>';
   }), 9);
 
@@ -972,6 +972,15 @@ function renderFuncionarios() {
       var id = Number(btn.getAttribute("data-fn-ficha"));
       var f = funcionariosLista.find(function (x) { return x.id === id; });
       if (f) gerarFichaFuncionarioPDF(f);
+    });
+  });
+  tbody.querySelectorAll("[data-fn-holerite]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = Number(btn.getAttribute("data-fn-holerite"));
+      var f = funcionariosLista.find(function (x) { return x.id === id; });
+      if (!f) return;
+      var mes = prompt("Competência do holerite (YYYY-MM):", new Date().toISOString().slice(0,7));
+      if (mes && /^\d{4}-\d{2}$/.test(mes)) gerarHoleritePDF(f, mes);
     });
   });
   tbody.querySelectorAll("[data-fn-deps]").forEach(function (btn) {

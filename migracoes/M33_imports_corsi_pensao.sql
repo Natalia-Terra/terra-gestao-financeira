@@ -1,0 +1,10 @@
+-- M33: Onda C — Imports da Contabilidade + Pensão Alimentícia
+-- Aplicada em 2026-05-19 via MCP Supabase
+-- Tabelas novas pra suportar 5 parsers de PDF + cadastro manual de pensão:
+--   - folha_ir_eventos    (Encargos IRRF por tipo de evento — granularidade DIRF)
+--   - folha_fgts_guia + folha_fgts_guia_itens   (GFD/FGTS oficial da Caixa)
+--   - consignados + consignados_parcelas  (empréstimo consignado por contrato)
+--   - pensoes_alimenticias  (cadastro com decisão judicial; rubricas 209/216/219)
+--   - folha_imports_log    (histórico de cada PDF importado)
+-- RLS + triggers + audit ligados conforme padrão Terra.
+-- Schema completo registrado no banco; ver pg_dump pra detalhes.

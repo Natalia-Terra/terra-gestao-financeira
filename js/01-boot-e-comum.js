@@ -584,6 +584,8 @@ function showPage(pageId) {
   if (pageId === "rh_ferias")       carregarFeriasSeNecessario();
   if (pageId === "rh_atestados")    carregarAtestadosSeNecessario();
   if (pageId === "rh_afastamentos") carregarAfastamentosSeNecessario();
+  if (pageId === "rh_pensoes")      carregarPensoesSeNecessario();
+  if (pageId === "rh_imports_pdf")  carregarImportsSeNecessario();
   if (pageId === "rh_beneficios")   carregarBeneficiosSeNecessario();
   if (pageId === "rh_folha")        carregarFolhaSeNecessario();
   if (pageId === "rh_impostos")     carregarImpostosSeNecessario();
