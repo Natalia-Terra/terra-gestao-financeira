@@ -56,12 +56,14 @@
   --t-fast: 120ms ease;
   --t-base: 180ms ease;
 
-  /* Dimensões do shell */
+  /* Dimensões do shell — responsivas */
   --topbar-row1-h:  64px;
   --topbar-row2-h:  40px;
   --topbar-h:       104px;
   --sidebar-w:      230px;
   --sidebar-w-col:   56px;
+  --main-max-w:     1600px;     /* limita largura útil em monitores grandes */
+  --main-pad-x:     clamp(14px, 2.4vw, 40px);  /* padding lateral fluido */
 }
 
 * { box-sizing: border-box; }
@@ -86,13 +88,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none; /* já temos border-color + box-shadow específicos */
 }
 
+html {
+  font-size: clamp(13.5px, 0.35vw + 12.5px, 16px);  /* escala suave 1280-1920px */
+}
 html, body {
   margin: 0;
   padding: 0;
   background: var(--bg);
   color: var(--text);
   font-family: 'Quattrocento Sans', 'Quattrocento', Georgia, serif;
-  font-size: 15px;
+  font-size: 1rem;  /* herda do html responsivo */
   line-height: 1.55;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -664,8 +669,11 @@ small, .text-small { font-size: 12.5px; }
    ========================================================= */
 
 .main {
-  padding: 24px 32px 48px;
+  padding: 24px var(--main-pad-x) 48px;
   min-width: 0;
+  width: 100%;
+  max-width: var(--main-max-w);
+  margin: 0 auto;       /* centraliza em monitores grandes */
 }
 
 .page-header { margin-bottom: 20px; }
@@ -1536,7 +1544,7 @@ small, .text-small { font-size: 12.5px; }
    TABELA
    ========================================================= */
 
-.fat-card { padding: 16px 18px; }
+.fat-card { padding: 16px 18px; min-width: 0; }
 
 .table-wrap {
   overflow-x: clip;       /* clip não cria contexto de scroll → sticky thead se conecta ao body */
@@ -2515,4 +2523,86 @@ td.acoes-compact {
   gap: 4px;
   align-items: center;
   justify-content: flex-start;
+}
+
+
+/* =========================================================
+   BREAKPOINTS RESPONSIVOS — adicionados em 19/05/2026
+   Garante boa proporção em laptops 1366, 1440, desktops 1920 e ultrawides
+   ========================================================= */
+
+/* Notebooks pequenos (1024-1366px): sidebar mais estreita pra dar mais ar ao main */
+@media (max-width: 1366px) {
+  :root {
+    --sidebar-w: 200px;
+    --main-pad-x: clamp(12px, 1.8vw, 28px);
+  }
+  .topbar { padding: 0 16px; }
+  .grid-metrics { gap: 12px; }
+  .metric-card { padding: 12px 14px; }
+  .metric-value { font-size: 22px; }
+}
+
+/* Tablet/notebook estreito (768-1024px): sidebar colapsa automaticamente */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-w: 56px;     /* força sidebar enxuta */
+    --sidebar-w-col: 56px;
+  }
+  .sidebar .sb-label { display: none; }
+  .sidebar .sb-group-items { display: none; }
+  .sidebar.colapsada-mobile-show .sb-label,
+  .sidebar.colapsada-mobile-show .sb-group-items { display: revert; }
+  .topbar-pagina-titulo { font-size: 18px; }
+  .topbar-pagina-sub { display: none; }
+  .grid-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  }
+  .toolbar { gap: 8px; }
+}
+
+/* Mobile (até 768px): empilha sidebar como drawer; main ocupa tudo */
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    left: 0; top: var(--topbar-h);
+    height: calc(100vh - var(--topbar-h));
+    width: var(--sidebar-w);
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 4px 0 12px rgba(0,0,0,.08);
+  }
+  .sidebar.aberta-mobile { transform: translateX(0); }
+  .main { padding: 16px 12px 32px; }
+  .page-title { font-size: 22px !important; }
+  .grid-metrics {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px;
+  }
+  .metric-value { font-size: 18px !important; }
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .toolbar select, .toolbar input { width: 100%; }
+}
+
+/* Ultrawide (acima de 1920px): só centraliza, sem expandir além do max-width */
+@media (min-width: 1920px) {
+  :root {
+    --main-max-w: 1720px;
+  }
+}
+
+/* Garantir min-width:0 em todos os containers críticos pra tabelas
+   gigantes não empurrarem o layout pra fora */
+.app-shell,
+.layout,
+.main,
+.card,
+.fat-card,
+.tabela {
+  min-width: 0;
 }
