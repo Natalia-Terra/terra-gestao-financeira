@@ -1577,8 +1577,8 @@ small, .text-small { font-size: 12.5px; }
 .tabela thead th { border-right: 0; border-left: 0; }
 .tabela tbody tr:nth-child(even) td { background: var(--bg2); }
 .tabela tbody tr:hover td {
-  background: var(--bg4);
-  box-shadow: inset 3px 0 0 var(--ouro);
+  background: #DBCDB7;
+  transition: background 80ms ease;
 }
 
 .tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
