@@ -994,6 +994,7 @@ function renderFuncionarios() {
       });
     });
   });
+  try { setupTopScrollFor(document.querySelector('[data-page="rh_funcionarios"] .table-wrap-x')); } catch (e) {}
 }
 
 function abrirModalFuncionario(f) {
@@ -1908,6 +1909,7 @@ function renderCargos() {
       });
     });
   });
+  try { setupTopScrollFor(document.querySelector('[data-page="rh_cargos"] .table-wrap-x')); } catch (e) {}
 }
 
 function abrirModalCargo(c) {
@@ -2304,3 +2306,55 @@ function gerarFichaFuncionarioPDF(f) {
     bindOnce("cg-dep",     "change", function () { try { renderCargos(); } catch (e) {} });
   });
 })();
+
+// =========================================================================
+// Helper: barra de rolagem horizontal acima da tabela
+// (sincronizada com a barra nativa do .table-wrap-x)
+// =========================================================================
+function setupTopScrollFor(wrapEl) {
+  if (!wrapEl) return;
+  if (wrapEl.__topScrollBound) {
+    // já existe — só atualiza a largura interna
+    var topInner = wrapEl.previousSibling && wrapEl.previousSibling.firstChild;
+    if (topInner) {
+      var tbl = wrapEl.querySelector("table");
+      topInner.style.width = (tbl ? tbl.scrollWidth : wrapEl.scrollWidth) + "px";
+    }
+    return;
+  }
+  var top = document.createElement("div");
+  top.className = "table-scroll-top";
+  var inner = document.createElement("div");
+  top.appendChild(inner);
+  wrapEl.parentNode.insertBefore(top, wrapEl);
+
+  function syncWidth() {
+    var tbl = wrapEl.querySelector("table");
+    inner.style.width = (tbl ? tbl.scrollWidth : wrapEl.scrollWidth) + "px";
+  }
+  syncWidth();
+
+  var syncing = false;
+  top.addEventListener("scroll", function () {
+    if (syncing) { syncing = false; return; }
+    syncing = true;
+    wrapEl.scrollLeft = top.scrollLeft;
+  });
+  wrapEl.addEventListener("scroll", function () {
+    if (syncing) { syncing = false; return; }
+    syncing = true;
+    top.scrollLeft = wrapEl.scrollLeft;
+  });
+  window.addEventListener("resize", syncWidth);
+  wrapEl.__topScrollBound = true;
+  wrapEl.__topScrollSync = syncWidth;
+}
+
+function setupTopScrollAll() {
+  document.querySelectorAll(".table-wrap-x").forEach(setupTopScrollFor);
+}
+
+// Liga após boot e expõe pra ser chamado após cada re-render
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(setupTopScrollAll, 200);
+});

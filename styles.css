@@ -2125,6 +2125,28 @@ tr.linha-clicavel:hover td:first-child { color: var(--ouro-esc); font-weight: 60
   position: static;
   top: auto;
 }
+/* Barra de rolagem horizontal posicionada ACIMA da tabela (espelho do
+   overflow-x:auto da .table-wrap-x). Renderiza logo abaixo da toolbar/KPIs,
+   pra usuário não precisar rolar a página inteira pra encontrar o scroll. */
+.table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--borda);
+}
+.table-scroll-top > div {
+  height: 1px;
+}
+.table-scroll-top::-webkit-scrollbar { height: 12px; }
+.table-scroll-top::-webkit-scrollbar-thumb {
+  background: var(--ouro);
+  border-radius: 6px;
+}
+.table-scroll-top::-webkit-scrollbar-track {
+  background: var(--bg3);
+  border-radius: 6px;
+}
 
 /* =========================================================
    TOOLBAR — refinar quebra de linha em telas médias (<1280px)
