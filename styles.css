@@ -2606,3 +2606,127 @@ td.acoes-compact {
 .tabela {
   min-width: 0;
 }
+
+
+/* ============================================================
+   CORRECOES 25/05 - Funcionarios, Cargos, Modal
+   ============================================================ */
+
+/* Header fixo da tabela de funcionarios e outras com .thead-sticky */
+.thead-sticky th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg2, #FBF7F0);
+  box-shadow: 0 1px 0 var(--borda2, #d3c5b3);
+}
+
+/* Inputs/textareas/selects em foco - fundo branco para sinalizar edicao */
+.modal-fields input:focus,
+.modal-fields textarea:focus,
+.modal-fields select:focus,
+.modal-detalhe input:focus,
+.modal-detalhe textarea:focus,
+.modal-detalhe select:focus {
+  background: #FFFFFF !important;
+  border-color: var(--ouro, #B8860B) !important;
+  box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.18) !important;
+  outline: none;
+}
+
+/* Ficha cadastral - grid revisado para evitar "encavalar linhas" */
+.modal-content .form-section {
+  border: 1px solid var(--borda2, #d3c5b3);
+  border-radius: 8px;
+  padding: 14px 18px 8px;
+  margin-bottom: 18px;
+  background: var(--bg2, #FBF7F0);
+}
+.modal-content .form-section legend {
+  font-weight: 700;
+  color: var(--marrom-esc, #4A2F1A);
+  padding: 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+.modal-content .form-field {
+  margin-bottom: 14px;
+}
+.modal-content .form-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--marrom-med, #7A5740);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.modal-content .form-field input,
+.modal-content .form-field select,
+.modal-content .form-field textarea {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--borda2, #d3c5b3);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg, #FDFAF6);
+  transition: background 0.15s, border-color 0.15s;
+}
+.modal-content .form-field textarea { min-height: 64px; resize: vertical; }
+.modal-content .form-field-wide { grid-column: 1 / -1; }
+
+/* Grid de 2 colunas para form-fields dentro de uma form-section (melhor uso do espaco) */
+.modal-content fieldset.form-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 18px;
+}
+.modal-content fieldset.form-section legend { grid-column: 1 / -1; }
+.modal-content fieldset.form-section .form-field-wide { grid-column: 1 / -1; }
+
+@media (max-width: 720px) {
+  .modal-content fieldset.form-section { grid-template-columns: 1fr; }
+}
+
+/* Garante que TODO o sistema use Quattrocento (alguns componentes escapavam) */
+html, body, button, input, select, textarea, .toolbar, .toolbar-label, .badge-tipo,
+.btn-ouro, .btn-limpar, .page-header, .metric-card, .modal-content, .tabela {
+  font-family: 'Quattrocento', Georgia, serif !important;
+}
+
+/* Row sub (subtitulo do nome - e-social) */
+.tabela .row-sub {
+  font-size: 11px;
+  color: var(--marrom-med, #7A5740);
+  font-weight: normal;
+  font-style: italic;
+}
+
+/* Organograma - card pendente (laranja claro) e oficializado (verde claro) */
+.org-card.org-pendente {
+  border: 2px dashed #E0A800 !important;
+  background: linear-gradient(135deg, #FFF8E1 0%, #FFF3CD 100%) !important;
+}
+.org-card.org-oficializado {
+  border-color: #66BB6A !important;
+}
+
+.org-prof-select {
+  width: 100%;
+  padding: 4px 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.95);
+  color: #3a2510;
+}
+
+/* Multiselect box (subordinados em Cargos) */
+.multiselect-box label:hover {
+  background: var(--bg2, #FBF7F0);
+}
+
+/* Modal extra buttons spacing */
+#modal-extra-btns { margin-right: 8px; }

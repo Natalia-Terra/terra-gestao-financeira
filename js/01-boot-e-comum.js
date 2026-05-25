@@ -473,6 +473,9 @@ function enhanceLargeSelect(sel, opts) {
 function autoEnhanceLargeSelects(root) {
   var scope = root || document;
   scope.querySelectorAll("select").forEach(function (s) {
+    // FIX 25/05: nao aplicar dentro de .toolbar (causa "filtro estourando")
+    // Selects de toolbar mantem dropdown nativo - ja tem busca por teclado.
+    if (s.closest(".toolbar")) return;
     try { enhanceLargeSelect(s); } catch (e) {}
   });
 }
@@ -1607,3 +1610,110 @@ function carregarDespesasSeNecessario() {
     sel.addEventListener("change", renderDespesas);
   }
 }
+
+
+// =========================================================================
+// ALERTA ASO - Configuracao (25/05)
+// =========================================================================
+
+function carregarConfigAlertaAso() {
+  var input = document.getElementById("aso-cfg-email");
+  if (!input) return;
+  client.from("config_sistema").select("valor").eq("chave", "alerta_aso_destinatario").maybeSingle().then(function (r) {
+    if (r && r.data && r.data.valor) input.value = r.data.valor;
+  });
+  carregarAlertasAso();
+}
+
+function carregarAlertasAso() {
+  var tbody = document.getElementById("aso-tbody");
+  if (!tbody) return;
+  client.from("alertas_aso").select("*").order("vencimento_aso", { ascending: true }).then(function (r) {
+    if (r.error) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio erro">Erro: ' + escHtml(r.error.message) + '</td></tr>';
+      return;
+    }
+    var lista = r.data || [];
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="tbl-vazio">Nenhum alerta pendente. Otimo - todos os ASOs estao em dia.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function (a) {
+      var dias = a.dias_restantes;
+      var corDias = dias <= 7 ? "color:#C62828;font-weight:700" : (dias <= 15 ? "color:#E65100;font-weight:700" : "color:#856404");
+      var statusEmail = a.email_enviado
+        ? '<span style="color:#1B5E20">Enviado ' + (a.email_enviado_em ? new Date(a.email_enviado_em).toLocaleDateString("pt-BR") : "") + '</span>'
+        : (a.email_destinatario
+            ? '<span style="color:#856404">Pendente envio</span>'
+            : '<span style="color:#C62828">Sem destinatario configurado</span>');
+      return '<tr>' +
+        '<td><strong>' + escHtml(a.funcionario_nome) + '</strong></td>' +
+        '<td>' + (a.vencimento_aso ? new Date(a.vencimento_aso + "T00:00:00").toLocaleDateString("pt-BR") : "-") + '</td>' +
+        '<td style="' + corDias + '">' + dias + ' dia(s)</td>' +
+        '<td>' + statusEmail + '</td>' +
+        '<td>' + (a.gerado_em ? new Date(a.gerado_em).toLocaleDateString("pt-BR") : "-") + '</td>' +
+      '</tr>';
+    }).join("");
+  });
+}
+
+function salvarConfigAlertaAso() {
+  var input = document.getElementById("aso-cfg-email");
+  if (!input) return;
+  var email = (input.value || "").trim();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    try { toast("Email invalido.", "erro"); } catch (e) { alert("Email invalido."); }
+    return;
+  }
+  client.from("config_sistema").update({ valor: email || null, atualizado_em: new Date().toISOString() })
+    .eq("chave", "alerta_aso_destinatario").then(function (r) {
+      if (r.error) { try { toast("Erro: " + r.error.message, "erro"); } catch (e) { alert(r.error.message); } return; }
+      try { toast(email ? "Email salvo: " + email : "Email removido.", "ok"); } catch (e) {}
+    });
+}
+
+function gerarAlertasAsoAgora() {
+  if (!confirm("Gerar alertas agora? Vai varrer todos os funcionarios ativos com ASO vencendo em 30 dias.")) return;
+  client.rpc("gerar_alertas_aso_diario").then(function (r) {
+    if (r.error) {
+      try { toast("Erro: " + r.error.message, "erro"); } catch (e) { alert(r.error.message); }
+      return;
+    }
+    var qtd = (r.data || []).length;
+    try { toast("Varredura concluida: " + qtd + " alerta(s) gerado(s) ou atualizado(s).", "ok"); } catch (e) {}
+    carregarAlertasAso();
+  });
+}
+
+// Hook na navegacao - quando entrar em cfg_alerta_aso, carrega dados e liga botoes
+(function () {
+  var bound = false;
+  function bindAsoHandlers() {
+    if (bound) return;
+    var sec = document.querySelector('[data-page="cfg_alerta_aso"]');
+    if (!sec) return;
+    var btnSalvar = document.getElementById("aso-cfg-salvar");
+    var btnGerar = document.getElementById("aso-btn-gerar-agora");
+    if (btnSalvar) btnSalvar.addEventListener("click", salvarConfigAlertaAso);
+    if (btnGerar) btnGerar.addEventListener("click", gerarAlertasAsoAgora);
+    bound = true;
+  }
+  // Observa mudancas de visibilidade na pagina
+  document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(bindAsoHandlers, 800);
+  });
+  // Tambem liga quando a pagina abre via showPage
+  if (typeof window !== "undefined") {
+    var origShow = window.showPage;
+    if (origShow && !origShow._asoWrapped) {
+      window.showPage = function (pid) {
+        var r = origShow.apply(this, arguments);
+        if (pid === "cfg_alerta_aso") {
+          setTimeout(function () { bindAsoHandlers(); carregarConfigAlertaAso(); }, 100);
+        }
+        return r;
+      };
+      window.showPage._asoWrapped = true;
+    }
+  }
+})();

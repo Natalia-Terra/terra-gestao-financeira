@@ -1037,10 +1037,10 @@
         <!-- RH — Funcionários -->
         <section class="page" data-page="rh_funcionarios" hidden>
           <div class="page-header"><h1 class="page-title">Funcionários</h1><p class="page-sub">Cadastro da equipe da Terra</p></div>
-          <div class="grid-metrics">
-            <div class="metric-card"><div class="metric-label">Ativos</div><div class="metric-value" id="fn-m-ativos">—</div><div class="metric-sub">sem data de demissão</div></div>
-            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="fn-m-tot">—</div><div class="metric-sub">inclui desligados</div></div>
-            <div class="metric-card"><div class="metric-label">Folha mensal base</div><div class="metric-value" id="fn-m-folha">—</div><div class="metric-sub">soma salario_base (ativos)</div></div>
+          <div class="grid-metrics grid-metrics-compact" style="grid-template-columns:minmax(180px,240px);margin-bottom:14px">
+            <div class="metric-card metric-card-compact" style="min-height:auto;padding:10px 14px"><div class="metric-label" style="font-size:11px">Ativos</div><div class="metric-value" id="fn-m-ativos" style="font-size:22px;line-height:1.1">—</div><div class="metric-sub" style="font-size:10px">sem data de demissão</div></div>
+            <!-- Total e Folha removidos (estavam em "metric-value" id="fn-m-tot" e "fn-m-folha") -->
+            <span id="fn-m-tot" hidden>—</span><span id="fn-m-folha" hidden>—</span>
           </div>
           <div class="card fat-card">
             <div class="toolbar">
@@ -1059,8 +1059,8 @@
             </div>
             <div class="table-wrap table-wrap-x">
               <table class="tabela">
-                <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Centro de Custo</th><th>Posição (organograma)</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
-                <tbody id="fn-tbody"><tr><td colspan="9" class="tbl-vazio">Carregando…</td></tr></tbody>
+                <thead class="thead-sticky"><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Admissão</th><th>Demissão</th><th class="num">Salário base</th><th></th></tr></thead>
+                <tbody id="fn-tbody"><tr><td colspan="7" class="tbl-vazio">Carregando…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1080,6 +1080,8 @@
               <select id="cg-status" title="Status">
                 <option value="ativos">Ativos</option>
                 <option value="inativos">Inativos</option>
+                <option value="rascunho">Rascunhos</option>
+                <option value="publicado">Publicados</option>
                 <option value="">Todos</option>
               </select>
               <select id="cg-dep" title="Departamento"><option value="">Todos os departamentos</option></select>
@@ -1491,6 +1493,11 @@
               <div class="config-card-icon">🔔</div>
               <div class="config-card-titulo">Alertas</div>
               <div class="config-card-sub">Caixa de entrada de eventos importantes</div>
+            </button>
+            <button class="config-card" type="button" data-subpage="cfg_alerta_aso">
+              <div class="config-card-icon">🩺</div>
+              <div class="config-card-titulo">Alerta ASO</div>
+              <div class="config-card-sub">Email automatico diario para ASOs que vencem em 30 dias</div>
             </button>
             <button class="config-card" type="button" data-subpage="cfg_aud_regras">
               <div class="config-card-icon">⚙️</div>
@@ -1963,6 +1970,39 @@
               <table class="tabela">
                 <thead><tr><th>Nome</th><th>Tabela</th><th>Ação</th><th>Condição</th><th>Destinatário</th><th>Severidade</th><th>Ativa?</th><th>Ações</th></tr></thead>
                 <tbody id="alr-tbody"><tr><td colspan="8" class="tbl-vazio">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Alerta ASO (correcao 25/05) -->
+        <section class="page" data-page="cfg_alerta_aso" hidden>
+          <div class="page-header">
+            <button class="btn-limpar btn-voltar" type="button" data-goto="configuracao">&larr; Configuracao</button>
+            <h1 class="page-title">🩺 Alerta ASO</h1>
+            <p class="page-sub">Alerta diario para ASOs que vencem nos proximos 30 dias. Cron roda 8h horario de Brasilia.</p>
+          </div>
+          <div class="card fat-card">
+            <h3 style="margin-top:0;color:var(--marrom-esc,#4A2F1A)">Email destinatario</h3>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+              <div style="flex:1;min-width:280px">
+                <label for="aso-cfg-email" style="display:block;font-size:11px;color:var(--marrom-med,#7A5740);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Email que recebera os alertas</label>
+                <input id="aso-cfg-email" type="email" placeholder="ex: rh@terraconttemporanea.com.br" style="width:100%;padding:8px 11px;border:1px solid var(--borda2,#d3c5b3);border-radius:6px;font-family:inherit;font-size:13px;background:var(--bg,#FDFAF6)" />
+              </div>
+              <button class="btn-ouro" id="aso-cfg-salvar" type="button">Salvar email</button>
+              <button class="btn-limpar" id="aso-btn-gerar-agora" type="button" title="Roda a varredura imediatamente">Gerar alertas agora</button>
+            </div>
+            <p style="margin:14px 0 0;color:var(--marrom-med,#7A5740);font-size:12px">
+              Apos salvar, a varredura sera executada automaticamente todos os dias as 8h. Voce pode tambem rodar agora pra testar.
+            </p>
+          </div>
+
+          <div class="card fat-card" style="margin-top:18px">
+            <h3 style="margin-top:0;color:var(--marrom-esc,#4A2F1A)">Alertas pendentes (ASOs vencendo)</h3>
+            <div class="table-wrap">
+              <table class="tabela">
+                <thead><tr><th>Funcionario</th><th>Vencimento ASO</th><th>Dias restantes</th><th>Status email</th><th>Gerado em</th></tr></thead>
+                <tbody id="aso-tbody"><tr><td colspan="5" class="tbl-vazio">Carregando&hellip;</td></tr></tbody>
               </table>
             </div>
           </div>
