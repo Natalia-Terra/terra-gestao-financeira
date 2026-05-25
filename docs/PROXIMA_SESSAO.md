@@ -1,44 +1,35 @@
 # Próxima Sessão
 
-**Atualizado em:** 2026-05-13 (após M5 backup + M1 refator)
-**Source-of-truth principal:** `docs/HANDOFF_2026-05-13.md` (este arquivo é só o resumo das ações imediatas).
+**Atualizado em:** 2026-05-25 (após pacote de Correções 25/05 — Cargos+Organograma+Funcionários+Alerta ASO)
+**Source-of-truth principal:** `docs/HANDOFF_2026-05-25.md`
 
-## ⚡ Primeira coisa a fazer: smoke test do refator M1
+## ⚡ Primeira coisa a fazer: testar o pacote 25/05
 
-O `app.js` foi dividido em 8 arquivos hoje (commit `cbdb9c7`). Antes de avançar com qualquer feature nova, validar que nada quebrou:
+Seguir `docs/CHECKLIST_TESTE_25-05.md` na URL https://terra-gestao-financeira.vercel.app (commit `dd9f7f8`). Cobre 5 tópicos + regressões.
 
-1. **Login** funciona? (deve abrir o shell normalmente)
-2. **Navegação** entre seções funciona? Sidebar abre todas as telas?
-3. **Botão "+ Novo"** em cada tabela abre o modal correto?
-4. **Importar XLSX** funciona em pelo menos 1 template?
-5. **Reset Completo** abre o modal de confirmação? (não precisa executar)
-6. **Backup automatizado** (Configuração > 💾 Backups) gera e baixa o JSON?
+**Setup prévio:**
+1. Editar um funcionário e setar **Cargo = "Analista de RH Generalista"** (id=2) — libera o botão Oficializar do organograma.
+2. Ctrl+F5 pra garantir JS/CSS novos.
 
-Se tudo OK → seguir com features.
-Se algo quebrar → `git revert cbdb9c7` desfaz tudo num push, investigar offline.
+## Pendências em aberto após a sessão 25/05
 
-## 🔧 Itens em aberto (prioridade alta)
+### Curto prazo (próxima sessão)
 
-### 1. SMTP Resend em produção
-Depende de Juliana fazer config 5min no Supabase Studio. Passo a passo em `docs/CONFIGURACAO_AUTH.md`.
+1. **Tópicos 4+ do documento de correções** — a Juliana enviou só os 3 primeiros (Organograma, Cargos, Funcionários). Quando vier o restante (`Correções Sistema_Terra.docx` parte 2), continuar daqui.
 
-### 2. Bug #2 — Coluna Email vazia na tela Usuários
-Cosmético. Edge Function `gerenciar-usuarios` precisa retornar `id → email`. Já houve tentativa de fix com permission denied — talvez reattempt agora.
+2. **Envio real do email do Alerta ASO** — o cron está gerando os alertas todos os dias às 8h, mas o envio em si depende de provedor (Resend / SendGrid / SMTP customizado). Decidir provedor com a Juliana, configurar a API key, criar edge function `alerta-aso-enviar` que lê `alertas_aso WHERE email_enviado=false` e despacha.
 
-### 3. M19 Fase 3 — Parser PDF Folha de Ponto
-Input recebido (`Fechamentos Ponto 04.2026.pdf`). Decisões registradas. Falta confirmar match por CPF e implementar parser.
+3. **Vincular alguém ao cargo Analista de RH Generalista** (cargo id=2 existe vazio). Sem isso, só perfil master vê o botão Oficializar.
 
-## 🟡 Backlog (média prioridade)
+### Médio prazo (backlog)
 
-- pg_cron para backup automático diário (M5 fase 2)
-- Refator-de-refator: agrupar funções por domínio puro com namespacing (M1 hoje preservou ordem original, não fez agrupamento ideal)
-- Logo Terra nos emails (hoje só texto)
-- Botão "Resetar senha" direto na tela Usuários
+4. **Validação visual da Quattrocento universal** — aplicada via `!important` em CSS, mas pode ter componente bem específico (Chart.js, datepickers nativos) que ainda escapa. Reportar conforme aparecer durante uso.
 
-## ⏸️ Fora de escopo (decisão 08/05)
+5. **DRE, Auditoria, ícones da sidebar** — pendências antigas que continuam abertas (`docs/PENDENCIAS.md`).
 
-- ❌ Integração Conta Azul / Bling / outros hubs fiscais
-- ❌ Open Banking (Pluggy/Belvo)
-- ❌ Funil de vendas / CRM
-- ❌ Gestão de produção / PCP
-- ⏸️ Frente 5 — Alçada multi-nível (futuro breve)
+## Como retomar
+
+1. Clone novo: `git clone https://github.com/Natalia-Terra/terra-gestao-financeira`.
+2. PAT do GitHub não persiste entre sandboxes — solicitar à Juliana no início da próxima sessão.
+3. Supabase project_id: `zvvdpdldjmzuzieinxwa` (Terra-Gestão-Financeira).
+4. Deploy automático via push na `main` (Vercel é conta externa, validação via hash do conteúdo servido).
