@@ -476,6 +476,11 @@
     try{
       css(); var s=secao(); botao();
       if(s && !s.hidden && !s._auto){ s._auto=true; abrir(); }
+      /* o app restaura a ultima pagina antes desta secao existir; assumimos a restauracao */
+      if(s && s.hidden && !s._rest){
+        var lp=null; try{ lp=localStorage.getItem("terra:ultimaPagina"); }catch(e){}
+        if(lp===PAGE){ s._rest=true; try{ window.showPage(PAGE); }catch(e){} abrir(); }
+      }
     }catch(e){}
   }
   function start(){ boot(); var n=0, iv=setInterval(function(){ boot(); if(++n>=20) clearInterval(iv); },500); }
