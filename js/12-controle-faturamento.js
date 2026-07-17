@@ -118,6 +118,12 @@
       +'<div id="cf-scroll"><div id="cf-vazio">Carregando…</div></div>'
       +'</div>';
     m.appendChild(s);
+    try{
+      if(window.MutationObserver){
+        new MutationObserver(function(){ if(!s.hidden) abrir(); })
+          .observe(s,{attributes:true, attributeFilter:["hidden"]});
+      }
+    }catch(e){}
     return s;
   }
 
@@ -417,7 +423,12 @@
     carregar(false);
   }
 
-  function boot(){ try{ css(); secao(); botao(); }catch(e){} }
+  function boot(){
+    try{
+      css(); var s=secao(); botao();
+      if(s && !s.hidden && !s._auto){ s._auto=true; abrir(); }
+    }catch(e){}
+  }
   function start(){ boot(); var n=0, iv=setInterval(function(){ boot(); if(++n>=20) clearInterval(iv); },500); }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",start); else start();
 })();
