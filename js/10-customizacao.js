@@ -54,7 +54,8 @@
       ".terra-modal-b td{border:1px solid #E4D9C8;padding:6px 8px;vertical-align:top;}" +
       ".terra-modal-b tr:nth-child(even) td{background:#F5EFE6;}" +
       ".terra-ok{color:#1A6B45;font-weight:600;}.terra-warn{color:#7A4800;font-weight:600;}" +
-      ".terra-no{color:#8B2020;font-weight:600;}";
+      ".terra-no{color:#8B2020;font-weight:600;}" +
+      ".terra-nota{background:#F6EEDF;border-left:3px solid #9A6B12;padding:9px 12px;border-radius:6px;font-size:.9em;margin:8px 0 14px;line-height:1.45;}";
     var s = document.createElement("style");
     s.id = "terra-cust-css";
     s.textContent = css;
@@ -134,25 +135,25 @@
     '<p>Este é o roteiro de <strong>qual relatório alimenta qual informação</strong>. ' +
     'Importe na ordem indicada — alguns dependem de outros.</p>' +
     '<h3>Bases obrigatórias (na ordem)</h3>' +
+    '<p class="terra-nota">A antiga planilha <em>Bíblia</em> saiu desta lista: ela foi <strong>decomissionada</strong>. ' +
+    'Os dados dela (<code>movimentos</code>, <code>saldo_reconhecer</code>) já estão carregados e agora vivem no ' +
+    'próprio sistema — você não precisa mais enviá-la. Origem histórica, para registro: ' +
+    '<code>30032026_Gestão Faturamento e Receita.xlsx</code>, abas <em>Mov Financeiro</em> e <em>Saldo a Reconhecer</em>.</p>' +
     '<table><thead><tr><th>#</th><th>Arquivo / relatório</th><th>Importação (tela)</th>' +
     '<th>Alimenta (tabelas)</th><th>Status</th></tr></thead><tbody>' +
-    '<tr><td>1</td><td>Bíblia — aba <em>Mov Financeiro</em> + <em>Saldo a Reconhecer</em> ' +
-      '(<code>30032026_Gestão Faturamento e Receita.xlsx</code>)</td>' +
-      '<td>Histórico Mov Financeiro / Saldo</td><td>movimentos, saldo_reconhecer</td>' +
-      '<td class="terra-ok">✔ carregado</td></tr>' +
-    '<tr><td>2</td><td><strong>Dashboard de Orçamentos.xlsx</strong> (sistema interno)</td>' +
+    '<tr><td>1</td><td><strong>Dashboard de Orçamentos.xlsx</strong> (sistema interno)</td>' +
       '<td>Dashboard de Orçamentos</td><td>ordens_servico, os_custos_planejados, orcamento_items</td>' +
       '<td class="terra-no">✘ falta</td></tr>' +
-    '<tr><td>3</td><td>Orçamento Aprovado por Parceiro (Aerolito, .xls)</td>' +
+    '<tr><td>2</td><td>Orçamento Aprovado por Parceiro (Aerolito, .xls)</td>' +
       '<td>Orçamentos</td><td>orcamentos</td><td class="terra-ok">✔ carregado</td></tr>' +
-    '<tr><td>4</td><td>Saída de Estoque Por Período.xlsx</td>' +
+    '<tr><td>3</td><td>Saída de Estoque Por Período.xlsx</td>' +
       '<td>Saída de Estoque (CPV-Matéria Prima)</td>' +
       '<td>estoque_detalhes, estoque_resumo, os_evolucao_mensal, custo_direto_competencia</td>' +
       '<td class="terra-warn">◐ parcial</td></tr>' +
-    '<tr><td>5</td><td>A Pagar x A Receber - Dt. Baixa.xlsx</td>' +
+    '<tr><td>4</td><td>A Pagar x A Receber - Dt. Baixa.xlsx</td>' +
       '<td>A Pagar x A Receber (Dt. Baixa)</td><td>movimentos_caixa</td>' +
       '<td class="terra-no">✘ falta</td></tr>' +
-    '<tr><td>6</td><td>Notas Fiscais (sistema fiscal)</td>' +
+    '<tr><td>5</td><td>Notas Fiscais (sistema fiscal)</td>' +
       '<td>Notas Fiscais</td><td>notas_fiscais, nf_os</td>' +
       '<td class="terra-no">✘ falta</td></tr>' +
     '</tbody></table>' +
@@ -160,7 +161,7 @@
     '(#2) antes das <em>Notas Fiscais</em> (#6) — a tela de NF cruza cada nota com as OSs do orçamento.</p>' +
     '<h3>Base × Telas que ela liga</h3>' +
     '<table><thead><tr><th>Base</th><th>Telas que passam a ter dado</th></tr></thead><tbody>' +
-    '<tr><td>Bíblia (Mov Financeiro)</td><td>Lançamentos, Despesas</td></tr>' +
+    '<tr><td>Movimentos (base histórica — já no sistema)</td><td>Lançamentos, Despesas, Controle de Faturamento</td></tr>' +
     '<tr><td>Dashboard de Orçamentos</td><td>Dashboard de Orçamentos, Dashboard de Faturamento (rico), Custo por OS</td></tr>' +
     '<tr><td>Orçamento Aprovado</td><td>Vendas, Gestão de Faturamento, Dashboard de Faturamento</td></tr>' +
     '<tr><td>Saída de Estoque</td><td>Custo por OS, Custo Direto Via OS, Dashboard de Faturamento (Custo MP)</td></tr>' +
