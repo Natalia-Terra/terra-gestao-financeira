@@ -326,7 +326,15 @@
     }).join("");
     h+='</div>';
     var sc=document.getElementById("cf-scroll");
-    if(sc) sc.innerHTML=h;
+    if(sc){ sc.innerHTML=h; ajustarAltura(); }
+  }
+
+  function ajustarAltura(){
+    try{
+      var sc=document.getElementById("cf-scroll"); if(!sc) return;
+      var top=sc.getBoundingClientRect().top;
+      sc.style.maxHeight=Math.max(260, window.innerHeight - top - 18)+"px";
+    }catch(e){}
   }
 
   function abrir(){
@@ -338,6 +346,7 @@
         if(el) el.addEventListener(id==="cf-busca"?"input":"change",function(){ if(orcs) pintar(); });
       });
       var rl=document.getElementById("cf-reload"); if(rl) rl.addEventListener("click",function(){ carregar(true); });
+      window.addEventListener("resize", ajustarAltura);
       var lp=document.getElementById("cf-limpar"); if(lp) lp.addEventListener("click",function(){ fAnos=[]; fMeses=[]; opcoes(); pintar(); });
       [].forEach.call(document.querySelectorAll("#cf-modo button"),function(b){
         b.addEventListener("click",function(){
