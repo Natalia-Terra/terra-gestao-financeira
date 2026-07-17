@@ -54,10 +54,17 @@
       "#cf-modo button:first-child{border-radius:8px 0 0 8px;}#cf-modo button:last-child{border-radius:0 8px 8px 0;border-left:0;}",
       "#cf-modo button.on{background:#3C2A18;color:#F1E6D2;border-color:#3C2A18;font-weight:700;}",
       "#cf-dica{font-size:12px;color:#6E4E22;background:#F3EADB;border-left:3px solid #9A6B12;padding:7px 11px;border-radius:0 8px 8px 0;margin:10px 0;}",
-      ".cf-chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}",
-      ".cf-chip{font:inherit;font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid #D8C9AE;background:#FBF7F0;color:#6E4E22;cursor:pointer;}",
-      ".cf-chip.on{background:#9A6B12;border-color:#9A6B12;color:#fff;font-weight:700;}",
-      ".cf-flabel{font-size:11px;color:#8A6A38;margin-right:2px;min-width:42px;display:inline-block;}",
+      "#cf-periodo{display:flex;gap:8px;align-items:center;margin:10px 0 2px;flex-wrap:wrap;}",
+      "#cf-periodo>button{font:inherit;font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid #D8C9AE;background:#FBF7F0;color:#6E4E22;cursor:pointer;}",
+      ".cf-dd{position:relative;}",
+      ".cf-dd-b{font:inherit;font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid #D8C9AE;background:#FBF7F0;color:#241606;cursor:pointer;display:inline-flex;align-items:center;gap:10px;min-width:150px;justify-content:space-between;}",
+      ".cf-dd.on .cf-dd-b{border-color:#9A6B12;box-shadow:0 0 0 2px rgba(154,107,18,.18);}",
+      ".cf-dd-c{color:#8A6A38;font-size:10px;}",
+      ".cf-dd-m{display:none;position:absolute;z-index:50;top:calc(100% + 4px);left:0;min-width:190px;max-height:260px;overflow:auto;background:#FBF7F0;border:1px solid #D8C9AE;border-radius:10px;box-shadow:0 8px 24px rgba(46,32,18,.18);padding:6px;}",
+      ".cf-dd.aberto .cf-dd-m{display:block;}",
+      ".cf-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:12.5px;color:#241606;cursor:pointer;}",
+      ".cf-opt:hover{background:#F1E9DC;}",
+      ".cf-opt input{width:14px;height:14px;accent-color:#9A6B12;cursor:pointer;}",
       "#cf-cards .cf-g{margin-bottom:10px;}",
       "#cf-cards .cf-gh{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;}",
       "#cf-cards .cf-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,190px));gap:8px;}",
@@ -92,9 +99,11 @@
         +'<button type="button" data-m="competencia">Competência (movimento no mês)</button>'
       +'</div>'
       +'<div id="cf-dica"></div>'
-      +'<div class="cf-chips" style="margin-bottom:6px;"><span class="cf-flabel">Ano</span><span id="cf-anos" class="cf-chips"></span></div>'
-      +'<div class="cf-chips" style="margin-bottom:6px;"><span class="cf-flabel">Mês</span><span id="cf-meses" class="cf-chips"></span>'
-        +'<button type="button" id="cf-limpar" class="cf-chip" style="margin-left:6px;">limpar período</button></div>'
+      +'<div id="cf-periodo">'
+        +'<div class="cf-dd" id="cf-dd-ano"><button type="button" class="cf-dd-b"><span class="cf-dd-t">Ano: todos</span><span class="cf-dd-c">▾</span></button><div class="cf-dd-m" id="cf-anos"></div></div>'
+        +'<div class="cf-dd" id="cf-dd-mes"><button type="button" class="cf-dd-b"><span class="cf-dd-t">Mês: todos</span><span class="cf-dd-c">▾</span></button><div class="cf-dd-m" id="cf-meses"></div></div>'
+        +'<button type="button" id="cf-limpar">limpar período</button>'
+      +'</div>'
       +'<div id="cf-filtros">'
         +'<input id="cf-busca" type="text" placeholder="Buscar cliente ou orçamento" style="min-width:220px;">'
         +'<select id="cf-fr"><option value="">Status recebimento: todos</option></select>'
@@ -166,29 +175,30 @@
     var box=document.getElementById("cf-anos");
     if(box){
       box.innerHTML=anosDisponiveis().map(function(a){
-        return '<button type="button" class="cf-chip'+(fAnos.indexOf(a)>-1?' on':'')+'" data-ano="'+a+'">'+a+'</button>';
+        return '<label class="cf-opt"><input type="checkbox" data-ano="'+a+'"'+(fAnos.indexOf(a)>-1?' checked':'')+'>'+a+'</label>';
       }).join("");
-      [].forEach.call(box.querySelectorAll("[data-ano]"),function(b){
-        b.addEventListener("click",function(){
-          var a=parseInt(b.getAttribute("data-ano"),10); var i=fAnos.indexOf(a);
-          if(i>-1) fAnos.splice(i,1); else fAnos.push(a);
-          opcoes(); pintar();
+      [].forEach.call(box.querySelectorAll("[data-ano]"),function(cb){
+        cb.addEventListener("change",function(){
+          var a=parseInt(cb.getAttribute("data-ano"),10); var i=fAnos.indexOf(a);
+          if(cb.checked){ if(i<0) fAnos.push(a); } else if(i>-1) fAnos.splice(i,1);
+          rotulos(); pintar();
         });
       });
     }
     var bm=document.getElementById("cf-meses");
     if(bm){
       bm.innerHTML=MES.map(function(nm,i){
-        return '<button type="button" class="cf-chip'+(fMeses.indexOf(i+1)>-1?' on':'')+'" data-mes="'+(i+1)+'">'+nm+'</button>';
+        return '<label class="cf-opt"><input type="checkbox" data-mes="'+(i+1)+'"'+(fMeses.indexOf(i+1)>-1?' checked':'')+'>'+nm+'</label>';
       }).join("");
-      [].forEach.call(bm.querySelectorAll("[data-mes]"),function(b){
-        b.addEventListener("click",function(){
-          var m=parseInt(b.getAttribute("data-mes"),10); var i=fMeses.indexOf(m);
-          if(i>-1) fMeses.splice(i,1); else fMeses.push(m);
-          opcoes(); pintar();
+      [].forEach.call(bm.querySelectorAll("[data-mes]"),function(cb){
+        cb.addEventListener("change",function(){
+          var m=parseInt(cb.getAttribute("data-mes"),10); var i=fMeses.indexOf(m);
+          if(cb.checked){ if(i<0) fMeses.push(m); } else if(i>-1) fMeses.splice(i,1);
+          rotulos(); pintar();
         });
       });
     }
+    rotulos();
     if(orcs){
       function fill(id,campo,lbl){
         var el=document.getElementById(id); if(!el) return;
@@ -208,6 +218,35 @@
     var fr=document.getElementById("cf-fr"), ff=document.getElementById("cf-ff");
     if(fr) fr.style.display = modo==="safra"?"":"none";
     if(ff) ff.style.display = modo==="safra"?"":"none";
+  }
+
+  function rotulos(){
+    try{
+      var da=document.querySelector("#cf-dd-ano .cf-dd-t");
+      if(da) da.textContent = fAnos.length? ("Ano: "+fAnos.slice().sort().join(", ")) : "Ano: todos";
+      var dm=document.querySelector("#cf-dd-mes .cf-dd-t");
+      if(dm) dm.textContent = !fMeses.length ? "Mês: todos"
+        : (fMeses.length<=3 ? ("Mês: "+fMeses.slice().sort(function(a,b){return a-b;}).map(function(m){return MES[m-1];}).join(", "))
+                            : ("Mês: "+fMeses.length+" selecionados"));
+      var ca=document.getElementById("cf-dd-ano"); if(ca) ca.classList.toggle("on", fAnos.length>0);
+      var cm=document.getElementById("cf-dd-mes"); if(cm) cm.classList.toggle("on", fMeses.length>0);
+    }catch(e){}
+  }
+
+  function ligarDropdowns(){
+    ["cf-dd-ano","cf-dd-mes"].forEach(function(id){
+      var dd=document.getElementById(id); if(!dd||dd._dd) return; dd._dd=true;
+      dd.querySelector(".cf-dd-b").addEventListener("click",function(ev){
+        ev.stopPropagation();
+        var aberto=dd.classList.contains("aberto");
+        document.querySelectorAll(".cf-dd").forEach(function(x){x.classList.remove("aberto");});
+        if(!aberto) dd.classList.add("aberto");
+      });
+      dd.querySelector(".cf-dd-m").addEventListener("click",function(ev){ ev.stopPropagation(); });
+    });
+    if(!document._ddDoc){ document._ddDoc=true;
+      document.addEventListener("click",function(){ document.querySelectorAll(".cf-dd").forEach(function(x){x.classList.remove("aberto");}); });
+    }
   }
 
   function noPeriodo(dstr){
@@ -366,6 +405,7 @@
       var rl=document.getElementById("cf-reload"); if(rl) rl.addEventListener("click",function(){ carregar(true); });
       window.addEventListener("resize", ajustarAltura);
       var lp=document.getElementById("cf-limpar"); if(lp) lp.addEventListener("click",function(){ fAnos=[]; fMeses=[]; opcoes(); pintar(); });
+      ligarDropdowns();
       [].forEach.call(document.querySelectorAll("#cf-modo button"),function(b){
         b.addEventListener("click",function(){
           modo=b.getAttribute("data-m"); soSemOrc=false;
