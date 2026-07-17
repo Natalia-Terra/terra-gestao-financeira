@@ -38,7 +38,7 @@
   ];
 
   var orcs=null, movs=null, carregando=false;
-  var modo="safra", fAnos=[], fMeses=[], soSemOrc=false;
+  var modo="safra", fAnos=[], fMeses=[], soSemOrc=false, fCol={};
 
   function b0(n){ return "R$ " + Math.round(n||0).toLocaleString("pt-BR"); }
   function b2(n){ return "R$ " + (Number(n)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -82,7 +82,18 @@
       "#cf-alerta button{font:inherit;font-size:11.5px;margin-left:8px;padding:3px 9px;border-radius:6px;border:1px solid #C99B4A;background:#fff;color:#7A4800;cursor:pointer;}",
       "#cf-filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;}",
       "#cf-filtros input,#cf-filtros select{font:inherit;font-size:12px;padding:6px 9px;border:1px solid #D8C9AE;border-radius:8px;background:#FBF7F0;color:#241606;}",
-      "#cf-vazio{padding:22px;text-align:center;color:#8A6A38;font-size:13px;}"
+      "#cf-vazio{padding:22px;text-align:center;color:#8A6A38;font-size:13px;}",
+      "#cf-scroll .cf-tot{position:sticky;top:52px;z-index:3;}",
+      ".cf-tot>div{background:#F6EBD2;border-top:1px solid #D8C9AE;border-bottom:2px solid #9A6B12;border-right:1px solid #E8DBC0;padding:6px 8px;font-weight:700;font-size:11.5px;color:#4A3316;}",
+      ".cf-th{position:relative;}",
+      ".cf-fun{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;padding:2px 3px;border-radius:4px;line-height:1;opacity:.5;}",
+      ".cf-fun:hover{opacity:1;background:rgba(0,0,0,.06);}",
+      ".cf-fun.on{opacity:1;color:#9A6B12;background:rgba(154,107,18,.16);}",
+      ".cf-fun svg{width:11px;height:11px;display:block;}",
+      ".cf-pop{display:none;position:absolute;z-index:60;top:100%;right:0;min-width:200px;max-height:260px;overflow:auto;background:#FBF7F0;border:1px solid #D8C9AE;border-radius:10px;box-shadow:0 8px 24px rgba(46,32,18,.2);padding:8px;}",
+      ".cf-th.aberto .cf-pop{display:block;}",
+      ".cf-pop input[type=text]{width:100%;font:inherit;font-size:12px;padding:6px 8px;border:1px solid #D8C9AE;border-radius:6px;background:#fff;color:#241606;}",
+      ".cf-pop .cf-lim{margin-top:6px;width:100%;font:inherit;font-size:11.5px;padding:5px;border:1px solid #D8C9AE;border-radius:6px;background:#F1E9DC;color:#6E4E22;cursor:pointer;}"
     ].join("");
     document.head.appendChild(t);
   }
@@ -113,11 +124,16 @@
         +'<button id="cf-reload" type="button" style="font:inherit;font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid #D8C9AE;background:#FBF7F0;color:#241606;cursor:pointer;">Atualizar</button>'
       +'</div>'
       +'<div id="cf-alerta"></div>'
-      +'<div id="cf-cards"></div>'
       +'<div id="cf-xbar"><div id="cf-xbar-in"></div></div>'
       +'<div id="cf-scroll"><div id="cf-vazio">Carregando…</div></div>'
       +'</div>';
     m.appendChild(s);
+    try{
+      if(window.MutationObserver){
+        new MutationObserver(function(){ if(!s.hidden) abrir(); })
+          .observe(s,{attributes:true, attributeFilter:["hidden"]});
+      }
+    }catch(e){}
     return s;
   }
 
@@ -265,6 +281,7 @@
       if(fr && r.status_recebimento!==fr) return false;
       if(ff && r.status_faturamento!==ff) return false;
       if(q && (((r.nome||"")+" "+(r.orcamento||"")).toLowerCase().indexOf(q)<0)) return false;
+      if(!passaColunas(r)) return false;
       return true;
     });
   }
@@ -282,10 +299,20 @@
       if(f) mapa[k][f]+=(Number(m.valor)||0);
       if(k==="SEM_ORC"){ semOrc.n++; semOrc.t+=(Number(m.valor)||0); }
     });
-    var arr=Object.keys(mapa).map(function(k){return mapa[k];});
+    var arr=Object.keys(mapa).map(function(k){return mapa[k];}).filter(passaColunas);
     arr.sort(function(a,b){ if(a._semorc) return 1; if(b._semorc) return -1; return b.venda-a.venda; });
     arr._semOrc=semOrc;
     return arr;
+  }
+
+  function passaColunas(r){
+    for(var k in fCol){
+      var v=(fCol[k]||"").trim().toLowerCase();
+      if(!v) continue;
+      var cel=r[k]; if(cel===null||cel===undefined) cel="";
+      if(String(cel).toLowerCase().indexOf(v)<0) return false;
+    }
+    return true;
   }
 
   function chip(s){
@@ -309,9 +336,9 @@
     rows.forEach(function(r){ Object.keys(soma).forEach(function(k){ soma[k]+=Number(r[k])||0; }); });
 
     var cont=document.getElementById("cf-cont");
-    if(cont) cont.textContent = safra
+    if(cont) cont.innerHTML = (safra
       ? rows.length+" de "+(orcs||[]).length+" orçamentos"
-      : rows.length+" orçamento(s) com movimento no período";
+      : rows.length+" orçamento(s) com movimento") + ' · Venda <b style="color:#241606">'+b0(soma.venda)+'</b>';
 
     var al=document.getElementById("cf-alerta");
     if(al){
@@ -325,23 +352,6 @@
       } else al.style.display="none";
     }
 
-    var cards=document.getElementById("cf-cards");
-    if(cards){
-      var html='<div class="cf-g"><div class="cf-cards">'
-        +'<div class="cf-cd" style="background:#F3EADB;"><div class="cf-cl" style="color:#6E4E22;">'+(safra?"Orçamentos":"Orçamentos c/ mov.")+'</div><div class="cf-cv">'+rows.length+'</div></div>'
-        +'<div class="cf-cd" style="background:'+G.ident[2]+';border:1px solid '+G.ident[0]+';"><div class="cf-cl" style="color:'+G.ident[1]+';">Venda</div><div class="cf-cv">'+b0(soma.venda)+'</div></div>'
-        +'</div></div>';
-      CARDS.forEach(function(g){
-        var c=G[g[0]];
-        var its=g[2].filter(function(it){ return safra || Math.abs(soma[it[1]]||0)>0.5 || ["adiantamento","recebimento","nota_fiscal","venda_sem_nf","entrega_sem_nf"].indexOf(it[1])>-1; });
-        if(!its.length) return;
-        html+='<div class="cf-g"><span class="cf-gh" style="background:'+c[0]+';color:'+c[1]+';">'+g[1]+'</span><div class="cf-cards">'
-          +its.map(function(it){ return '<div class="cf-cd" style="background:'+c[2]+';border:1px solid '+c[0]+';"><div class="cf-cl" style="color:'+c[1]+';">'+it[0]+'</div><div class="cf-cv">'+b0(soma[it[1]])+'</div></div>'; }).join("")
-          +'</div></div>';
-      });
-      cards.innerHTML=html;
-    }
-
     var tmpl=COLS.map(function(c){return c[1]+"px";}).join(" ");
     var total=COLS.reduce(function(a,c){return a+c[1];},0);
     var bcols=[], start=0;
@@ -351,7 +361,21 @@
       + BANDS.map(function(b){var c=G[b[1]];return '<div style="background:'+c[0]+';color:'+c[1]+';text-align:center;padding:5px 4px;border-right:2px solid #ECE3D5;">'+b[0]+'</div>';}).join("")
       +'</div>'
       +'<div class="cf-head" style="display:grid;grid-template-columns:'+tmpl+';font-size:11px;">'
-      + COLS.map(function(c){var g=G[c[2]];return '<div style="background:'+g[2]+';color:'+g[1]+';padding:6px 8px;border-right:1px solid #ECE3D5;font-weight:700;'+(c[3]===1?"text-align:right;":"")+'">'+c[0]+'</div>';}).join("")
+      + COLS.map(function(c){
+          var g=G[c[2]], filtravel=(c[3]!==1), ativo=!!(fCol[c[4]]||"").trim();
+          return '<div class="cf-th" data-col="'+c[4]+'" style="background:'+g[2]+';color:'+g[1]+';padding:6px 8px;border-right:1px solid #ECE3D5;font-weight:700;'+(c[3]===1?"text-align:right;":"")+'">'
+            + '<span style="'+(filtravel?"padding-right:14px;display:inline-block;":"")+'">'+c[0]+'</span>'
+            + (filtravel ? '<button type="button" class="cf-fun'+(ativo?' on':'')+'" title="Filtrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg></button>'
+                        + '<div class="cf-pop"><input type="text" placeholder="Filtrar '+c[0]+'" value="'+(fCol[c[4]]||"").replace(/"/g,"&quot;")+'"><button type="button" class="cf-lim">limpar</button></div>' : "")
+            + '</div>';
+        }).join("")
+      +'</div>'
+      +'<div class="cf-tot" style="display:grid;grid-template-columns:'+tmpl+';">'
+      + COLS.map(function(c,i){
+          if(c[3]===1) return '<div style="text-align:right;">'+b0(soma[c[4]])+'</div>';
+          if(i===0) return '<div style="color:#8A6A38;font-weight:700;">TOTAIS ('+rows.length+')</div>';
+          return '<div></div>';
+        }).join("")
       +'</div>';
     if(!rows.length) h+='<div id="cf-vazio">Nenhum registro com esse filtro.</div>';
     h+= rows.map(function(r,ri){
@@ -368,7 +392,38 @@
     }).join("");
     h+='</div>';
     var sc=document.getElementById("cf-scroll");
-    if(sc){ sc.innerHTML=h; ajustarAltura(); }
+    if(sc){ sc.innerHTML=h; ligarFunis(); ajustarAltura(); }
+  }
+
+  function ligarFunis(){
+    try{
+      [].forEach.call(document.querySelectorAll("#cf-scroll .cf-th"),function(th){
+        var bt=th.querySelector(".cf-fun"); if(!bt) return;
+        var col=th.getAttribute("data-col");
+        var inp=th.querySelector(".cf-pop input");
+        var lim=th.querySelector(".cf-lim");
+        bt.addEventListener("click",function(ev){
+          ev.stopPropagation();
+          var ab=th.classList.contains("aberto");
+          [].forEach.call(document.querySelectorAll("#cf-scroll .cf-th"),function(x){x.classList.remove("aberto");});
+          if(!ab){ th.classList.add("aberto"); if(inp) setTimeout(function(){inp.focus();},30); }
+        });
+        th.querySelector(".cf-pop").addEventListener("click",function(ev){ ev.stopPropagation(); });
+        if(inp){
+          var t=null;
+          inp.addEventListener("input",function(){
+            clearTimeout(t);
+            t=setTimeout(function(){ fCol[col]=inp.value; pintar(); },250);
+          });
+        }
+        if(lim) lim.addEventListener("click",function(){ fCol[col]=""; pintar(); });
+      });
+      if(!document._funDoc){ document._funDoc=true;
+        document.addEventListener("click",function(){
+          [].forEach.call(document.querySelectorAll("#cf-scroll .cf-th"),function(x){x.classList.remove("aberto");});
+        });
+      }
+    }catch(e){}
   }
 
   function ajustarAltura(){
@@ -417,7 +472,12 @@
     carregar(false);
   }
 
-  function boot(){ try{ css(); secao(); botao(); }catch(e){} }
+  function boot(){
+    try{
+      css(); var s=secao(); botao();
+      if(s && !s.hidden && !s._auto){ s._auto=true; abrir(); }
+    }catch(e){}
+  }
   function start(){ boot(); var n=0, iv=setInterval(function(){ boot(); if(++n>=20) clearInterval(iv); },500); }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",start); else start();
 })();
